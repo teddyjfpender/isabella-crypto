@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This harness evaluates the effectiveness of Isabelle/HOL skills for lattice cryptography code generation. It measures whether an agent, given appropriate skills and prompts, can produce:
+This harness evaluates the effectiveness of Isabella (Isabelle + Lattice) skills for lattice cryptography code generation. It measures whether an agent, given appropriate skills and prompts, can produce:
 
 1. **Valid Isabelle theories** that compile without errors
 2. **Correct formalizations** that capture the intended mathematical concepts

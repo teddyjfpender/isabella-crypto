@@ -1,6 +1,8 @@
-# Isabella Crypto
+# Isabella
 
-Isabelle/HOL formalization of lattice cryptography with Haskell code generation.
+**Isab**elle + Latt**ice** Cryptography = **Isabella**
+
+Formally verified lattice-based cryptography in Isabelle/HOL with executable Haskell code generation.
 
 ## Overview
 
