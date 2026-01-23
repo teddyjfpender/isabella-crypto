@@ -429,9 +429,16 @@ if [[ -n "$SCHEMA_FILE" ]]; then
         log_verbose "Adding schema preamble"
         FULL_PROMPT+="Return JSON only with shape {\"code\": string, \"notes\": string}. Put the complete Isabelle theory in \"code\". Put any caveats or explanation in \"notes\" (empty string ok). Do not include Markdown or code fences.
 
-IMPORTANT: The theory name MUST be \"${SESSION_NAME}\" to match the expected filename. Start with:
+CRITICAL REQUIREMENTS:
+1. The theory name MUST be \"${SESSION_NAME}\" to match the expected filename
+2. Do NOT use \`sorry\` or \`oops\` - ALL proofs must be COMPLETE
+3. Use proof methods: auto, simp, blast, arith, induct, cases
+4. If a proof is hard, simplify the lemma or break into smaller lemmas
+
+Start with:
   theory ${SESSION_NAME}
-    imports ...
+    imports Main \"HOL-Library.Code_Target_Numeral\"
+  begin
 
 "
     else

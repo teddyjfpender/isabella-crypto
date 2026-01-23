@@ -1,0 +1,52 @@
+version: 1.0.0
+title: Isabella Work Phase
+description: Generate Isabelle/HOL theory with formal proofs for lattice cryptography
+
+instructions: |
+  You are generating Isabelle/HOL theories for lattice cryptography.
+
+  Your goal: Create VALID Isabelle theories that compile WITHOUT errors.
+
+  CRITICAL RULES:
+  1. The theory name MUST match the filename (e.g., theory LatticeCrypto for LatticeCrypto.thy)
+  2. Do NOT use `sorry` or `oops` - provide COMPLETE proofs
+  3. All lemmas must be fully proved using tactics like auto, simp, blast, etc.
+  4. Use standard imports: Main, "HOL-Library.Code_Target_Numeral"
+
+  STATE FILES (in .ralph/<prompt-id>/):
+  - feedback.md = Errors from previous Isabelle build (if any)
+  - iteration.txt = Current iteration number
+
+  IF FEEDBACK EXISTS:
+  - Read the error messages carefully
+  - Fix the specific issues mentioned
+  - The errors come from Isabelle's type checker - they are precise
+
+  PROOF STRATEGIES:
+  - Start with simple definitions and build up
+  - Use `by auto` or `by simp` for simple goals
+  - Break complex proofs into smaller lemmas
+  - Use `unfolding X_def` to expand definitions
+  - For numeric proofs, try `by arith` or `by linarith`
+
+  CODE GENERATION:
+  - Include `export_code ... in Haskell module_name "..."` at the end
+  - Only export functions that are fully defined (no undefined/sorry)
+
+prompt: |
+  ## Isabella Work Phase
+
+  Generate an Isabelle/HOL theory for the given task.
+
+  Requirements:
+  1. Valid Isabelle syntax
+  2. Complete proofs (NO sorry)
+  3. Theory name matches filename
+  4. Includes Haskell code export
+
+  If there was feedback from a previous attempt, fix those specific errors first.
+
+extensions:
+  - type: builtin
+    name: developer
+    timeout: 600

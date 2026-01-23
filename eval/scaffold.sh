@@ -159,7 +159,7 @@ else
     log_info "Creating ROOT file..."
     cat > "$ROOT_FILE" <<EOF
 session "${SESSION_NAME}" = "${PARENT_SESSION}" +
-  options [document = false, timeout = 600, quick_and_dirty = true]
+  options [document = false, timeout = 600]
   sessions
     "HOL-Library"
   theories
