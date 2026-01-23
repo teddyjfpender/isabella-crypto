@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def read_file_content(path: str, max_bytes: int = 50000) -> str | None:
+def read_file_content(path: str, max_bytes: int = 50000) -> "str | None":
     """Read file content, truncating if too long."""
     if not path or path == "":
         return None

@@ -50,7 +50,7 @@ def compute_duration(started_at: str, ended_at: str) -> int:
         return 0
 
 
-def read_file_content(path: str, max_lines: int = 100) -> str | None:
+def read_file_content(path: str, max_lines: int = 100) -> "str | None":
     """Read file content for inclusion in verify.json."""
     if not path:
         return None

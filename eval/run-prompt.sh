@@ -405,6 +405,8 @@ ROOTEOF
             log_success "Project scaffolded"
         else
             log_info "ROOT file already exists, skipping scaffold"
+            # Ensure work directory exists even when skipping scaffold
+            mkdir -p "$WORK_DIR"
         fi
     else
         log_info "[DRY-RUN] Would scaffold project in ${WORK_DIR}"
@@ -425,9 +427,13 @@ SKILLS_STRING=""
 if [[ -n "$SCHEMA_FILE" ]]; then
     if [[ -f "$SCHEMA_FILE" ]]; then
         log_verbose "Adding schema preamble"
-        FULL_PROMPT+='Return JSON only with shape {"code": string, "notes": string}. Put the complete Isabelle theory in "code". Put any caveats or explanation in "notes" (empty string ok). Do not include Markdown or code fences.
+        FULL_PROMPT+="Return JSON only with shape {\"code\": string, \"notes\": string}. Put the complete Isabelle theory in \"code\". Put any caveats or explanation in \"notes\" (empty string ok). Do not include Markdown or code fences.
 
-'
+IMPORTANT: The theory name MUST be \"${SESSION_NAME}\" to match the expected filename. Start with:
+  theory ${SESSION_NAME}
+    imports ...
+
+"
     else
         log_warn "Schema file not found: ${SCHEMA_FILE}"
     fi
@@ -511,19 +517,28 @@ run_ai_command() {
     case "$PROVIDER" in
         openai)
             # OpenAI Codex CLI
-            # Uses: codex exec -m MODEL [-o OUTPUT_FILE] [PROMPT or - for stdin]
+            # Uses: codex exec -m MODEL [-c config] [PROMPT or - for stdin]
+            # Skills are loaded from .codex/skills/ directory
             if command -v codex &> /dev/null; then
+                local skills_dir="${PROJECT_ROOT}/.codex/skills"
+                local codex_opts=(-m "$MODEL")
+
+                # Add skills directory config if it exists
+                if [[ -d "$skills_dir" ]]; then
+                    codex_opts+=(-c "skills.additional_paths=[\"${skills_dir}\"]")
+                fi
+
                 if [[ "$stream" == "true" ]]; then
                     # For streaming, we pipe through tee
                     echo "$prompt" | codex exec \
-                        -m "$MODEL" \
+                        "${codex_opts[@]}" \
                         - \
                         2>"$stderr_file" | tee "$output_file"
                     return ${PIPESTATUS[1]}
                 else
                     # Non-streaming: capture output directly
                     echo "$prompt" | codex exec \
-                        -m "$MODEL" \
+                        "${codex_opts[@]}" \
                         - \
                         2>"$stderr_file" > "$output_file"
                     return $?
@@ -561,7 +576,7 @@ run_ai_command() {
 if [[ "$DRY_RUN" == "false" ]]; then
     log_info "Provider: ${PROVIDER}"
     log_info "Model: ${MODEL}"
-    log_info "Sending prompt..."
+    log_info "Sending prompt (${PROMPT_BYTES} bytes)..."
 
     if [[ "$TAIL_OUTPUT" == "true" ]]; then
         log_info "Streaming output (--tail mode):"
@@ -576,25 +591,46 @@ if [[ "$DRY_RUN" == "false" ]]; then
         run_ai_command "$FULL_PROMPT" "$ASSISTANT_OUTPUT" "$AI_STDERR" "true"
         AI_EXIT_CODE=$?
     else
-        # Capture output without streaming, but show progress
-        log_ai "Working..."
+        # Capture output without streaming, but show progress with elapsed time
+        log_ai "Generating theory..."
 
-        # Run in background and show spinner
+        # Run in background and show spinner with elapsed time
         run_ai_command "$FULL_PROMPT" "$ASSISTANT_OUTPUT" "$AI_STDERR" "false" &
         AI_PID=$!
 
-        # Show spinner while waiting
+        # Show spinner with elapsed time while waiting
         SPIN_CHARS='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
         SPIN_IDX=0
+        LAST_STATUS_TIME=$AI_START
         while kill -0 $AI_PID 2>/dev/null; do
             SPIN_CHAR="${SPIN_CHARS:$SPIN_IDX:1}"
-            echo -ne "\r${DIM}[$(date '+%H:%M:%S')]${NC} ${GREEN}[AI]${NC} ${SPIN_CHAR} Generating theory...  "
+            ELAPSED=$(($(date +%s) - AI_START))
+            MINS=$((ELAPSED / 60))
+            SECS=$((ELAPSED % 60))
+
+            # Format elapsed time
+            if [[ $MINS -gt 0 ]]; then
+                ELAPSED_STR="${MINS}m ${SECS}s"
+            else
+                ELAPSED_STR="${SECS}s"
+            fi
+
+            echo -ne "\r${DIM}[$(date '+%H:%M:%S')]${NC} ${GREEN}[AI]${NC} ${SPIN_CHAR} Generating theory... ${DIM}(${ELAPSED_STR} elapsed)${NC}    "
             SPIN_IDX=$(( (SPIN_IDX + 1) % ${#SPIN_CHARS} ))
+
+            # Print periodic status update every 30 seconds
+            CURRENT_TIME=$(date +%s)
+            if [[ $((CURRENT_TIME - LAST_STATUS_TIME)) -ge 30 ]]; then
+                echo ""  # New line
+                log_ai "Still working... (${ELAPSED_STR} elapsed)"
+                LAST_STATUS_TIME=$CURRENT_TIME
+            fi
+
             sleep 0.1
         done
         wait $AI_PID
         AI_EXIT_CODE=$?
-        echo -ne "\r"  # Clear spinner line
+        echo -ne "\r\033[K"  # Clear spinner line completely
     fi
     set -e
 
@@ -603,6 +639,7 @@ if [[ "$DRY_RUN" == "false" ]]; then
 
     if [[ "$TAIL_OUTPUT" == "true" ]]; then
         echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+        log_ai "Response complete (${AI_DURATION}s)"
     fi
 
     if [[ $AI_EXIT_CODE -ne 0 ]]; then
@@ -630,28 +667,19 @@ RUN_ENDED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Write run metadata
 RUN_JSON="${RUN_RESULTS_DIR}/run.json"
 if [[ "$DRY_RUN" == "false" ]]; then
-    # Export environment variables for write_run_metadata.py
-    export RUN_PROMPT_ID="$PROMPT_ID"
-    export RUN_PROMPT_PATH="$PROMPT_FILE"
-    export RUN_PROMPT_USED="$COMBINED_PROMPT_FILE"
-    export RUN_SKILLS="$SKILLS_STRING"
-    export RUN_DISABLE_SKILLS="$( [[ "$DISABLE_SKILLS" == "true" ]] && echo "1" || echo "0" )"
-    export RUN_SCHEMA_PATH="${SCHEMA_FILE:-}"
-    export RUN_WORK_DIR="$WORK_DIR"
-    export RUN_OUT_FILE="$OUT_FILE"
-    export RUN_RESULTS_DIR="$RUN_RESULTS_DIR"
-    export RUN_PROVIDER="$PROVIDER"
-    export RUN_MODEL="$MODEL"
-    export RUN_CODEX_EXIT="$AI_EXIT_CODE"
-    export RUN_STARTED_AT="$RUN_STARTED_AT"
-    export RUN_ENDED_AT="$RUN_ENDED_AT"
-    export RUN_CODEX_JSONL="$AI_JSONL"
-    export RUN_CODEX_STDERR="$AI_STDERR"
-    export RUN_LAST_MESSAGE="$ASSISTANT_OUTPUT"
-    export RUN_SESSION_NAME="$SESSION_NAME"
-
     if [[ -x "${SCRIPT_DIR}/write_run_metadata.py" ]]; then
-        python3 "${SCRIPT_DIR}/write_run_metadata.py" "$RUN_JSON"
+        python3 "${SCRIPT_DIR}/write_run_metadata.py" "$RUN_JSON" \
+            --prompt-id "$PROMPT_ID" \
+            --prompt-path "$PROMPT_FILE" \
+            --skill "$SKILLS_STRING" \
+            --work-dir "$WORK_DIR" \
+            --model "$MODEL" \
+            --exit-code "$AI_EXIT_CODE" \
+            --started-at "$RUN_STARTED_AT" \
+            --completed-at "$RUN_ENDED_AT" \
+            --duration "$((AI_DURATION * 1000))" \
+            --extra "{\"provider\": \"$PROVIDER\", \"session_name\": \"$SESSION_NAME\"}" \
+            --quiet
         log_verbose "Wrote run metadata via Python script"
     else
         # Fallback: write JSON directly
@@ -683,6 +711,9 @@ fi
 # Extract code from output
 if [[ "$DRY_RUN" == "false" ]] && [[ -f "$ASSISTANT_OUTPUT" ]] && [[ -s "$ASSISTANT_OUTPUT" ]]; then
     log_info "Extracting theory code..."
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$OUT_FILE")"
 
     CODE_EXTRACTED=false
 
@@ -734,6 +765,18 @@ if [[ "$DRY_RUN" == "false" ]] && [[ -f "$ASSISTANT_OUTPUT" ]] && [[ -s "$ASSIST
     else
         THEORY_LINES=$(wc -l < "$OUT_FILE" | tr -d ' ')
         log_info "Theory file: ${OUT_FILE} (${THEORY_LINES} lines)"
+    fi
+
+    # Post-process: Fix theory name to match filename if needed
+    EXPECTED_THEORY_NAME=$(basename "$OUT_FILE" .thy)
+    if grep -q "^theory " "$OUT_FILE" 2>/dev/null; then
+        ACTUAL_THEORY_NAME=$(grep "^theory " "$OUT_FILE" | head -1 | sed 's/theory \([^ ]*\).*/\1/')
+        if [[ "$ACTUAL_THEORY_NAME" != "$EXPECTED_THEORY_NAME" ]]; then
+            log_warn "Theory name mismatch: '$ACTUAL_THEORY_NAME' -> '$EXPECTED_THEORY_NAME'"
+            sed -i.bak "s/^theory ${ACTUAL_THEORY_NAME}/theory ${EXPECTED_THEORY_NAME}/" "$OUT_FILE"
+            rm -f "${OUT_FILE}.bak"
+            log_success "Fixed theory name to match filename"
+        fi
     fi
 elif [[ "$DRY_RUN" == "false" ]]; then
     log_warn "No output from Claude to extract"

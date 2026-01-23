@@ -6,6 +6,9 @@
 **/*.thy~
 **/heap/
 
+# Export
+export
+
 # Isabelle document output
 **/document/output/
 **/*.aux
