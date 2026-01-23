@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Isabelle Code Output",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "Generated Isabelle theory source code."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional reasoning, caveats, or explanation of the approach."
+    }
+  },
+  "required": ["code", "notes"]
+}

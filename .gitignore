@@ -1,0 +1,53 @@
+# Isabelle build artifacts
+.isabelle/
+**/output/
+**/.session/
+**/browser_info/
+**/*.thy~
+**/heap/
+
+# Isabelle document output
+**/document/output/
+**/*.aux
+**/*.log
+**/*.out
+**/*.toc
+**/*.pdf
+
+# Eval working directories
+eval/work/
+eval/results/
+
+# Haskell build artifacts
+haskell/**/.stack-work/
+haskell/**/dist-newstyle/
+haskell/**/*.hi
+haskell/**/*.o
+haskell/**/*.dyn_hi
+haskell/**/*.dyn_o
+haskell/**/cabal.project.local
+haskell/**/cabal.project.local~
+
+# Generated Haskell (keep the directory, ignore generated files)
+haskell/lattice-crypto/src/Generated/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Editor artifacts
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Packaged skills (built artifacts)
+# dist/*.skill
