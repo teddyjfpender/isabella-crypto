@@ -370,10 +370,13 @@ echo ""
 # Record start time
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# Create directories
+# Create directories and clean stale results
 if [[ "$DRY_RUN" == "false" ]]; then
     mkdir -p "$WORK_DIR"
     mkdir -p "$RUN_RESULTS_DIR"
+    # Clean stale verify.json to avoid confusion
+    rm -f "${RUN_RESULTS_DIR}/verify.json"
+    rm -f "${RUN_RESULTS_DIR}/steps.jsonl"
     log_verbose "Created directories"
 fi
 
@@ -832,7 +835,8 @@ log_info "Prompt: ${BOLD}${PROMPT_ID}${NC}"
 log_info "Results: ${RUN_RESULTS_DIR}"
 log_info "Theory: ${OUT_FILE}"
 
-if [[ -f "${RUN_RESULTS_DIR}/verify.json" ]]; then
+# Only show verify status if we actually ran verification
+if [[ "$NO_VERIFY" == "false" ]] && [[ -f "${RUN_RESULTS_DIR}/verify.json" ]]; then
     VERIFY_STATUS=$(jq -r '.status // "unknown"' "${RUN_RESULTS_DIR}/verify.json" 2>/dev/null || echo "unknown")
     VERIFY_COUNTS=$(jq -r '"pass=\(.counts.pass // 0) fail=\(.counts.fail // 0) skip=\(.counts.skipped // 0)"' "${RUN_RESULTS_DIR}/verify.json" 2>/dev/null || echo "")
 
@@ -849,6 +853,9 @@ if [[ -f "${RUN_RESULTS_DIR}/verify.json" ]]; then
             echo -e "  ${RED}Failed steps: ${FAILED_STEPS}${NC}"
         fi
     fi
+elif [[ "$NO_VERIFY" == "true" ]]; then
+    echo ""
+    echo -e "  ${YELLOW}⊘ VERIFICATION SKIPPED${NC} (--no-verify)"
 fi
 
 echo ""
