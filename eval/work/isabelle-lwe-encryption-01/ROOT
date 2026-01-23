@@ -1,0 +1,6 @@
+session "LatticeCrypto" = "HOL" +
+  options [document = false, timeout = 600]
+  sessions
+    "HOL-Library"
+  theories
+    LatticeCrypto
