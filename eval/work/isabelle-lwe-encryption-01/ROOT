@@ -4,3 +4,5 @@ session "LatticeCrypto" = "HOL" +
     "HOL-Library"
   theories
     LatticeCrypto
+  export_files (in "generated") [1]
+    "*:**.hs"

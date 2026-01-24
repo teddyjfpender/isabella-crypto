@@ -164,6 +164,8 @@ session "${SESSION_NAME}" = "${PARENT_SESSION}" +
     "HOL-Library"
   theories
     ${THEORY_NAME}
+  export_files (in "generated") [1]
+    "*:**.hs"
 EOF
     log_success "Created ROOT file: ${ROOT_FILE}"
 fi

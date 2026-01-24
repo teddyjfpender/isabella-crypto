@@ -41,33 +41,29 @@ npm install -g @openai/codex
 
 ```
 isabella-crypto/
-├── isabelle/               # Isabelle theories
-│   ├── ROOT               # Session configuration
-│   └── theories/          # Theory files
-│       ├── Lattice_Basics.thy
-│       ├── Polynomial_Ring.thy
-│       └── LWE.thy
-├── haskell/               # Haskell library
-│   ├── cabal.project
-│   └── lattice-crypto/
-│       ├── lattice-crypto.cabal
+├── haskell/               # Verified Haskell library
+│   ├── collect.sh         # Collect generated code
+│   └── isabella/          # The library
+│       ├── isabella.cabal
 │       └── src/
+│           ├── Lattice.hs
+│           └── Lattice/
+│               ├── LWE.hs
+│               └── LWE_Regev.hs
+├── eval/                  # Evaluation harness
+│   ├── run-prompt.sh      # Single-shot runner
+│   ├── verify.sh          # Isabelle verification
+│   ├── scaffold.sh        # Project scaffolding
+│   ├── prompts/           # Test prompts
+│   └── work/              # Generated theories
+├── ralph/                 # Ralph loop orchestrator
+│   └── isabella-loop.sh   # Main iterative runner
 ├── skills/                # Agent skills for Isabelle
 │   ├── isabelle-basics/
 │   ├── isabelle-proofs/
 │   ├── isabelle-code-generation/
 │   ├── isabelle-lattice-crypto/
 │   └── ...
-├── eval/                  # Evaluation harness
-│   ├── run-prompt.sh      # Single-shot runner
-│   ├── verify.sh          # Isabelle verification
-│   ├── scaffold.sh        # Project scaffolding
-│   ├── debug.sh           # Debugging workflow
-│   └── prompts/           # Test prompts
-├── ralph/                 # Ralph loop orchestrator
-│   ├── isabella-loop.sh   # Main iterative runner
-│   ├── ralph-work.yaml    # Work phase config
-│   └── ralph-review.yaml  # Review phase config
 └── dist/                  # Packaged skills
 ```
 
@@ -83,17 +79,29 @@ isabelle build -d . -v LatticeCrypto
 ### Exporting Haskell Code
 
 ```bash
-cd isabelle
-isabelle build -e -d . LatticeCrypto
+# After ralph loop completes successfully, collect the generated code:
+haskell/collect.sh
 ```
 
-Generated Haskell files will be in `haskell/lattice-crypto/src/Generated/`.
+Generated Haskell modules will be collected into `haskell/isabella/src/Lattice/`.
 
 ### Building Haskell Library
 
 ```bash
-cd haskell
-cabal build all
+cd haskell/isabella
+cabal build
+```
+
+### Using the Library
+
+```haskell
+import Lattice.LWE_Regev
+
+-- Encrypt a bit with LWE
+let ciphertext = lwe_encrypt publicKey q randomVector True
+
+-- Decrypt
+let plaintext = lwe_decrypt secretKey q ciphertext
 ```
 
 ## Ralph Loop (Recommended)
@@ -229,6 +237,10 @@ The theories cover:
 - **Polynomial Rings**: Z_q[X]/(X^n + 1) arithmetic for RLWE
 - **LWE**: Learning With Errors problem and encryption
 - **Ring-LWE**: More efficient variant using polynomial rings
+
+## About Generated Haskell Code
+
+The Haskell code in `haskell/isabella/` is extracted from Isabelle proofs, not hand-written. It produces GHC warnings (unused imports, incomplete patterns, etc.) but this is normal - the proofs guarantee correctness even where GHC's linter complains. See `haskell/isabella/README.md` for details.
 
 ## Contributing
 

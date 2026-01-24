@@ -1,8 +1,10 @@
 {-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
 
 module
-  Lattice.LWE(Int, Num, Lwe_params_ext, Lwe_public_key_ext, Lwe_secret_key_ext,
-               decode_bit, encode_bit, lwe_decrypt, lwe_encrypt)
+  Lattice.LWE_Regev(Int, Num, Lwe_ciphertext_ext, Lwe_public_key_ext,
+                     Lwe_secret_key_ext, transpose, vec_add, vec_mod,
+                     decode_bit, encode_bit, inner_prod, lwe_decrypt,
+                     mat_vec_mult, mat_transpose_vec_mult, lwe_encrypt)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
@@ -53,11 +55,9 @@ instance Semigroup_add Int where {
 instance Monoid_add Int where {
 };
 
-newtype Nat = Nat Integer;
-
 data Num = One | Bit0 Num | Bit1 Num;
 
-data Lwe_params_ext a = Lwe_params_ext Nat Int a;
+data Lwe_ciphertext_ext a = Lwe_ciphertext_ext [Int] Int a;
 
 data Lwe_public_key_ext a = Lwe_public_key_ext [[Int]] [Int] a;
 
@@ -85,14 +85,8 @@ _ : t -> [t];
 apsnd :: forall a b c. (a -> b) -> (c, a) -> (c, b);
 apsnd f (x, y) = (x, f y);
 
-sum_list :: forall a. (Monoid_add a) => [a] -> a;
-sum_list xs = foldr plus xs zero;
-
-times_int :: Int -> Int -> Int;
-times_int k l = Int_of_integer (integer_of_int k * integer_of_int l);
-
-vec_dot :: [Int] -> [Int] -> Int;
-vec_dot v w = sum_list (map (\ (a, b) -> times_int a b) (zip v w));
+vec_add :: [Int] -> [Int] -> [Int];
+vec_add xs ys = map (\ (a, b) -> plus_int a b) (zip xs ys);
 
 divmod_integer :: Integer -> Integer -> (Integer, Integer);
 divmod_integer k l =
@@ -126,15 +120,6 @@ modulo_int k l =
 vec_mod :: [Int] -> Int -> [Int];
 vec_mod v q = map (\ x -> modulo_int x q) v;
 
-uminus_int :: Int -> Int;
-uminus_int k = Int_of_integer (negate (integer_of_int k));
-
-less_int :: Int -> Int -> Bool;
-less_int k l = integer_of_int k < integer_of_int l;
-
-abs_int :: Int -> Int;
-abs_int i = (if less_int i zero_int then uminus_int i else i);
-
 divide_integer :: Integer -> Integer -> Integer;
 divide_integer k l = fst (divmod_integer k l);
 
@@ -142,38 +127,48 @@ divide_int :: Int -> Int -> Int;
 divide_int k l =
   Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
 
-lwe_q :: forall a. Lwe_params_ext a -> Int;
-lwe_q (Lwe_params_ext lwe_n lwe_q more) = lwe_q;
+less_eq_int :: Int -> Int -> Bool;
+less_eq_int k l = integer_of_int k <= integer_of_int l;
 
-minus_int :: Int -> Int -> Int;
-minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
+decode_bit :: Int -> Int -> Bool;
+decode_bit q d = less_eq_int (divide_int q (Int_of_integer (2 :: Integer))) d;
 
-decode_bit :: Lwe_params_ext () -> Int -> Bool;
-decode_bit params v =
-  let {
-    q = lwe_q params;
-    va = modulo_int v q;
-  } in less_int
-         (abs_int (minus_int va (divide_int q (Int_of_integer (2 :: Integer)))))
-         (divide_int q (Int_of_integer (4 :: Integer)));
+encode_bit :: Int -> Bool -> Int;
+encode_bit q b =
+  (if b then divide_int q (Int_of_integer (2 :: Integer)) else zero_int);
 
-encode_bit :: Lwe_params_ext () -> Bool -> Int;
-encode_bit params m =
-  (if m then divide_int (lwe_q params) (Int_of_integer (2 :: Integer))
-    else zero_int);
+sum_list :: forall a. (Monoid_add a) => [a] -> a;
+sum_list xs = foldr plus xs zero;
+
+times_int :: Int -> Int -> Int;
+times_int k l = Int_of_integer (integer_of_int k * integer_of_int l);
+
+inner_prod :: [Int] -> [Int] -> Int;
+inner_prod u v = sum_list (map (\ (a, b) -> times_int a b) (zip u v));
 
 sk_s :: forall a. Lwe_secret_key_ext a -> [Int];
 sk_s (Lwe_secret_key_ext sk_s more) = sk_s;
 
-lwe_decrypt ::
-  Lwe_params_ext () -> Lwe_secret_key_ext () -> ([Int], Int) -> Bool;
-lwe_decrypt params sk ct =
-  (case ct of {
-    (u, v) -> let {
-                q = lwe_q params;
-                a = modulo_int (minus_int v (vec_dot (sk_s sk) u)) q;
-              } in decode_bit params a;
-  });
+ct_v :: forall a. Lwe_ciphertext_ext a -> Int;
+ct_v (Lwe_ciphertext_ext ct_u ct_v more) = ct_v;
+
+ct_u :: forall a. Lwe_ciphertext_ext a -> [Int];
+ct_u (Lwe_ciphertext_ext ct_u ct_v more) = ct_u;
+
+minus_int :: Int -> Int -> Int;
+minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
+
+lwe_decrypt :: Lwe_secret_key_ext () -> Int -> Lwe_ciphertext_ext () -> Bool;
+lwe_decrypt sk q ct =
+  let {
+    a = modulo_int (minus_int (ct_v ct) (inner_prod (sk_s sk) (ct_u ct))) q;
+  } in decode_bit q a;
+
+mat_vec_mult :: [[Int]] -> [Int] -> [Int];
+mat_vec_mult a x = map (\ row -> inner_prod row x) a;
+
+mat_transpose_vec_mult :: [[Int]] -> [Int] -> [Int];
+mat_transpose_vec_mult a r = mat_vec_mult (transpose a) r;
 
 pk_b :: forall a. Lwe_public_key_ext a -> [Int];
 pk_b (Lwe_public_key_ext pk_A pk_b more) = pk_b;
@@ -181,16 +176,12 @@ pk_b (Lwe_public_key_ext pk_A pk_b more) = pk_b;
 pk_A :: forall a. Lwe_public_key_ext a -> [[Int]];
 pk_A (Lwe_public_key_ext pk_A pk_b more) = pk_A;
 
-mat_vec_mult :: [[Int]] -> [Int] -> [Int];
-mat_vec_mult a x = map (\ row -> vec_dot row x) a;
-
 lwe_encrypt ::
-  Lwe_params_ext () -> Lwe_public_key_ext () -> Bool -> [Int] -> ([Int], Int);
-lwe_encrypt params pk m r =
+  Lwe_public_key_ext () -> Int -> [Int] -> Bool -> Lwe_ciphertext_ext ();
+lwe_encrypt pk q r m =
   let {
-    q = lwe_q params;
-    u = vec_mod (mat_vec_mult (transpose (pk_A pk)) r) q;
-    a = modulo_int (plus_int (vec_dot (pk_b pk) r) (encode_bit params m)) q;
-  } in (u, a);
+    u = vec_mod (mat_transpose_vec_mult (pk_A pk) r) q;
+    v = modulo_int (plus_int (inner_prod (pk_b pk) r) (encode_bit q m)) q;
+  } in Lwe_ciphertext_ext u v ();
 
 }
