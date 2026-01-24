@@ -44,6 +44,14 @@ npm install -g @openai/codex
 
 ```
 isabella-crypto/
+├── Canon/                 # Lattice Crypto Canon (main verified library)
+│   ├── ROOT               # Isabelle session definitions
+│   ├── Prelude.thy        # Named theorems, mod utilities
+│   ├── Linear/            # Vector/matrix operations
+│   ├── Algebra/           # Z_q, encoding/decoding
+│   ├── Hardness/          # LWE, SIS definitions
+│   ├── Crypto/            # Encryption schemes
+│   └── ...
 ├── collect.sh             # Collect generated code (all languages)
 ├── build-js.sh            # Build JavaScript/TypeScript from OCaml
 ├── haskell/               # Verified Haskell library
@@ -67,15 +75,18 @@ isabella-crypto/
 │   ├── run-prompt.sh      # Single-shot runner
 │   ├── verify.sh          # Isabelle verification
 │   ├── scaffold.sh        # Project scaffolding
-│   ├── prompts/           # Test prompts
+│   ├── prompts/           # Test prompts (including canon-*)
 │   └── work/              # Generated theories
 ├── ralph/                 # Ralph loop orchestrator
-│   └── isabella-loop.sh   # Main iterative runner
+│   ├── isabella-loop.sh   # Iterative work-review runner
+│   └── step-loop.sh       # Step-based incremental runner
+├── plan/                  # Canon roadmap and progress tracking
 ├── skills/                # Agent skills for Isabelle
 │   ├── isabelle-basics/
 │   ├── isabelle-proofs/
 │   ├── isabelle-code-generation/
 │   ├── isabelle-lattice-crypto/
+│   ├── isabelle-canon/    # Canon-specific patterns
 │   └── ...
 └── dist/                  # Packaged skills
 ```
@@ -197,6 +208,56 @@ ralph/isabella-loop.sh \
 2. **Review Phase**: Isabelle builds the theory (strict mode, no `sorry`)
 3. **Feedback Loop**: If build fails, errors are fed back to AI for next iteration
 4. **Success**: Loop exits when proofs compile, then exports Haskell code
+
+## Lattice Crypto Canon
+
+The **Canon** is a layered Isabelle library for lattice cryptography, built incrementally with complete proofs.
+
+### Canon Structure
+
+| Session | Theories | Description |
+|---------|----------|-------------|
+| `Canon_Base` | Prelude, ListVec, Zq, Norms | Mathematical infrastructure |
+| `Canon_Hardness` | LWE_Def, SIS_Def, NormalForms | Hardness assumptions |
+| `Canon_Crypto` | Regev_PKE, Commit_SIS, Decomp | Cryptographic constructions |
+| `Canon_Rings` | PolyMod, ModuleLWE | Ring variants |
+| `Canon_ZK` | Sigma_Base | Zero-knowledge proofs |
+
+### Building the Canon
+
+```bash
+# Build the base layer
+isabelle build -d Canon Canon_Base
+
+# Build everything (once all theories exist)
+isabelle build -d Canon Canon_Full
+```
+
+### Step-Loop for Canon Development
+
+The **step-loop** builds Canon theories incrementally, verifying each step before proceeding:
+
+```bash
+# Standalone theory (no dependencies)
+ralph/step-loop.sh --prompt canon-prelude \
+    --output-dir Canon --theory-name Prelude --session Canon_Base
+
+# Theory with dependencies
+ralph/step-loop.sh --prompt canon-linear-listvec \
+    --output-dir Canon --theory-name ListVec --theory-path Linear \
+    --session Canon_Base \
+    --imports 'Canon_Base.Prelude' \
+    --parent-session Canon_Base --session-dir Canon
+```
+
+#### Step-Loop Features
+
+- **Step-by-step verification**: Each step is validated before proceeding
+- **Resume capability**: Run the same command to continue after interruption
+- **Session-based verification**: Test against Canon session for dependency checking
+- **Robust proof patterns**: Prompts include hardened proofs with explicit case splits
+
+See `ralph/README.md` for full step-loop documentation.
 
 ### Options
 

@@ -32,7 +32,7 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `Prelude.thy` | ⬜ | Prompt ready: canon-prelude |
+| `Prelude.thy` | ✅ | Complete with hardened proofs |
 | `Linear/ListVec.thy` | ⬜ | Prompt ready: canon-linear-listvec |
 | `Algebra/Zq.thy` | ⬜ | Prompt ready: canon-algebra-zq |
 | `Analysis/Norms.thy` | ⬜ | Prompt needed |
@@ -187,8 +187,8 @@
 
 | Session | Compiles | Tests | Notes |
 |---------|----------|-------|-------|
-| Canon_Base | ⬜ | ⬜ | |
-| Canon_Hardness | ⬜ | ⬜ | |
+| Canon_Base | ✅ | N/A | Prelude only (partial session) |
+| Canon_Hardness | ⬜ | ⬜ | Waiting for Canon_Base completion |
 | Canon_Crypto | ⬜ | ⬜ | |
 | Canon_Rings | ⬜ | ⬜ | |
 | Canon_ZK | ⬜ | ⬜ | |
@@ -202,4 +202,8 @@
 
 | Date | Decision |
 |------|----------|
-| | |
+| 2026-01-24 | Created Canon library structure with layered sessions |
+| 2026-01-24 | Implemented step-loop.sh for incremental theory development |
+| 2026-01-24 | Completed Prelude.thy with hardened proofs (explicit case splits, type annotations) |
+| 2026-01-24 | Added session-based verification to step-loop for dependent theories |
+| 2026-01-24 | Key insight: `(n::int)` type annotation required for mod/div simplification |
