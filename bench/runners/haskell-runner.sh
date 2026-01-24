@@ -44,10 +44,14 @@ genMatrix seed rows cols = [genVec (seed + i) cols | i <- [0..rows-1]]
 genBinaryVec :: Int -> Int -> [L.Int]
 genBinaryVec seed n = take n $ map (\\x -> L.Int_of_integer (fromIntegral (x \`mod\` 2))) $ randoms seed
 
--- Force full evaluation
-forceList :: [a] -> ()
-forceList [] = ()
-forceList (x:xs) = x \`seq\` forceList xs
+-- Force full evaluation of L.Int (extract and evaluate the Integer inside)
+forceInt :: L.Int -> ()
+forceInt (L.Int_of_integer i) = i \`seq\` ()
+
+-- Force full evaluation of a list of L.Int
+forceIntList :: [L.Int] -> ()
+forceIntList [] = ()
+forceIntList (x:xs) = forceInt x \`seq\` forceIntList xs
 
 main :: IO ()
 main = do
@@ -68,18 +72,20 @@ main = do
       !ctV = L.Int_of_integer 50
       !ct = L.Lwe_ciphertext_ext ctU ctV ()
 
-  -- Force data structures
-  let !_ = forceList v1
-      !_ = forceList v2
-      !_ = forceList (map forceList m)
+  -- Force data structures (deep evaluation)
+  let !_ = forceIntList v1
+      !_ = forceIntList v2
+      !_ = foldr (\\row acc -> forceIntList row \`seq\` acc) () m
 
   start <- getCPUTime
   case "${FUNC}" of
-    "inner_prod" -> let !result = L.inner_prod v1 v2 in return ()
-    "mat_vec_mult" -> let !result = L.mat_vec_mult m v1 in forceList result \`seq\` return ()
-    "vec_add" -> let !result = L.vec_add v1 v2 in forceList result \`seq\` return ()
-    "lwe_encrypt" -> let !result = L.lwe_encrypt pk q r True in return ()
-    "lwe_decrypt" -> let !result = L.lwe_decrypt sk q ct in return ()
+    "inner_prod" -> case L.inner_prod v1 v2 of
+                      L.Int_of_integer i -> i \`seq\` return ()
+    "mat_vec_mult" -> let !result = L.mat_vec_mult m v1 in forceIntList result \`seq\` return ()
+    "vec_add" -> let !result = L.vec_add v1 v2 in forceIntList result \`seq\` return ()
+    "lwe_encrypt" -> case L.lwe_encrypt pk q r True of
+                       L.Lwe_ciphertext_ext u v _ -> forceIntList u \`seq\` forceInt v \`seq\` return ()
+    "lwe_decrypt" -> let !result = L.lwe_decrypt sk q ct in result \`seq\` return ()
     _ -> error "Unknown function"
   end <- getCPUTime
 

@@ -20,11 +20,13 @@ if (!Isabella) {
   process.exit(1);
 }
 
-// Seeded random number generator
+// Seeded random number generator (using BigInt for precision)
 function seededRandom(seed) {
+  let s = seed;
   return function() {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed;
+    const curr = s;
+    s = Number((BigInt(s) * 1103515245n + 12345n) % 2147483648n);
+    return curr;
   };
 }
 

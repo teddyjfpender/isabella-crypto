@@ -29,6 +29,47 @@ Compares the same functions across all language targets:
 ./run-benchmarks.sh --iterations 20 --warmup 5
 ```
 
+### Function-Specific Examples
+
+**Quick benchmark (recommended):**
+
+```bash
+# All functions - 7 sizes up to 750, fast settings
+./run-benchmarks.sh \
+  --function "inner_prod,vec_add,mat_vec_mult,lwe_encrypt,lwe_decrypt" \
+  --sizes "10,50,100,200,350,500,750" \
+  --iterations 4 --warmup 1
+```
+
+**Individual functions:**
+
+```bash
+# inner_prod: Inner product of two vectors
+./run-benchmarks.sh --function inner_prod --sizes "10,50,100,200,350,500,750"
+
+# vec_add: Component-wise vector addition
+./run-benchmarks.sh --function vec_add --sizes "10,50,100,200,350,500,750"
+
+# mat_vec_mult: Matrix-vector multiplication
+./run-benchmarks.sh --function mat_vec_mult --sizes "10,50,100,200,350,500,750"
+
+# lwe_encrypt: LWE encryption (Regev scheme)
+./run-benchmarks.sh --function lwe_encrypt --sizes "10,50,100,200,350,500,750"
+
+# lwe_decrypt: LWE decryption
+./run-benchmarks.sh --function lwe_decrypt --sizes "10,50,100,200,350,500,750"
+```
+
+**Extended benchmark (thorough analysis, takes longer):**
+
+```bash
+# All functions with more iterations
+./run-benchmarks.sh \
+  --function "inner_prod,vec_add,mat_vec_mult,lwe_encrypt,lwe_decrypt" \
+  --sizes "10,50,100,250,500,750,1000" \
+  --iterations 5 --warmup 3
+```
+
 ## Functions Benchmarked
 
 | Function | Description | Complexity |
@@ -106,10 +147,10 @@ Each language needs its toolchain installed:
 
 | Language | Requirements |
 |----------|-------------|
-| Haskell | `ghc`, `runhaskell` |
+| Haskell | `ghc` (compilation with -O2) |
 | OCaml | `opam`, `ocamlfind`, `zarith` |
 | JavaScript | `node` (v18+) |
-| Scala | `scala` or `scala-cli` |
+| Scala | `scala-cli` (recommended) or `scala` |
 
 ## CI Integration
 
@@ -131,13 +172,34 @@ Benchmarks run in CI on tagged releases to track performance over time.
 
 ## Expected Performance
 
-Typical relative performance (OCaml = 1.0x baseline):
+> **Note:** Benchmarks last run on 2026-01-24 at 12:51 UTC on Darwin-arm64 (Apple Silicon).
+
+**O(n) functions** (inner_prod, vec_add, lwe_decrypt) at n=500:
 
 | Language | Relative Speed | Notes |
 |----------|---------------|-------|
 | OCaml | 1.0x | Fastest - native compiled with Zarith/GMP |
-| Haskell | 30-50x | Interpreted via runhaskell, arbitrary precision Integer |
-| JavaScript | 50-500x | js_of_ocaml compiled to JS, runs in Node.js |
-| Scala | ~100x | JVM startup + BigInt overhead |
+| Haskell | 5-9x | Compiled with GHC -O2 |
+| Scala | 5-8x | JVM with JIT warmup |
+| JavaScript | 60-110x | js_of_ocaml compiled to JS |
 
-Note: Haskell benchmarks use `runhaskell` (interpreted). Compiling with GHC + optimization would be significantly faster.
+**O(n²) functions** (mat_vec_mult, lwe_encrypt) at n=500:
+
+| Language | Relative Speed | Notes |
+|----------|---------------|-------|
+| Haskell | 1.0x | Fastest at larger sizes due to GHC optimizations |
+| Scala | 2-2.5x | Competitive with JIT warmup |
+| OCaml | 4-6x | Slower for matrix operations at scale |
+| JavaScript | 11-14x | Reasonable given JS overhead |
+
+**Key observations:**
+- OCaml dominates O(n) operations due to Zarith/GMP for arbitrary precision arithmetic
+- Haskell (compiled with -O2) becomes fastest for O(n²) operations at n > 200
+- Scala performs consistently in the middle across all functions
+- JavaScript is slowest but maintains reasonable scaling behavior
+
+**Technical notes:**
+- Haskell benchmarks use compiled code (`ghc -O2`) with proper deep evaluation forcing
+- Scala benchmarks run warmup + timed iterations inside a single JVM to exclude startup overhead
+- All languages use identical seeded RNG (LCG with BigInt precision) for fair comparison
+- Results verified: all implementations produce identical encryption outputs

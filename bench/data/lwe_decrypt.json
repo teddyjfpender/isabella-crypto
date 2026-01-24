@@ -1,0 +1,439 @@
+{
+  "function": "lwe_decrypt",
+  "platform": "Darwin-arm64",
+  "benchmark_config": {
+    "iterations": 4,
+    "warmup_iterations": 1,
+    "sizes": [
+      10,
+      50,
+      100,
+      200,
+      350,
+      500,
+      750
+    ]
+  },
+  "results": [
+    {
+      "language": "haskell",
+      "input_size": 10,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 7.9e-05,
+        "max": 0.000112,
+        "mean": 9.2e-05,
+        "median": 8.85e-05,
+        "stdev": 1.4764823060233401e-05
+      },
+      "timestamp": "2026-01-24T12:46:41Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 10,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.0,
+        "max": 9.54e-07,
+        "mean": 7.155000000000001e-07,
+        "median": 9.54e-07,
+        "stdev": 4.77e-07
+      },
+      "timestamp": "2026-01-24T12:46:43Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 10,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000299375,
+        "max": 0.000330917,
+        "mean": 0.00032239575,
+        "median": 0.0003296455,
+        "stdev": 1.5363856099625515e-05
+      },
+      "timestamp": "2026-01-24T12:46:44Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 10,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 3.79795e-05,
+        "max": 3.98755e-05,
+        "mean": 3.86565e-05,
+        "median": 3.83855e-05,
+        "stdev": 8.504077453394551e-07
+      },
+      "timestamp": "2026-01-24T12:46:46Z"
+    },
+    {
+      "language": "haskell",
+      "input_size": 50,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 8.2e-05,
+        "max": 9.9e-05,
+        "mean": 9.05e-05,
+        "median": 9.05e-05,
+        "stdev": 7.505553499465132e-06
+      },
+      "timestamp": "2026-01-24T12:46:49Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 50,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 1.907e-06,
+        "max": 3.099e-06,
+        "mean": 2.503e-06,
+        "median": 2.503e-06,
+        "stdev": 6.882015208740339e-07
+      },
+      "timestamp": "2026-01-24T12:46:51Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 50,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000362959,
+        "max": 0.000394584,
+        "mean": 0.0003801255,
+        "median": 0.0003814795,
+        "stdev": 1.3566378993674035e-05
+      },
+      "timestamp": "2026-01-24T12:46:52Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 50,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 6.87085e-05,
+        "max": 7.68545e-05,
+        "mean": 7.3906375e-05,
+        "median": 7.503125e-05,
+        "stdev": 3.5812642640786316e-06
+      },
+      "timestamp": "2026-01-24T12:46:55Z"
+    },
+    {
+      "language": "haskell",
+      "input_size": 100,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 8.2e-05,
+        "max": 0.000107,
+        "mean": 9.25e-05,
+        "median": 9.05e-05,
+        "stdev": 1.1733143937865361e-05
+      },
+      "timestamp": "2026-01-24T12:46:58Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 100,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 3.099e-06,
+        "max": 4.053e-06,
+        "mean": 3.8145e-06,
+        "median": 4.053e-06,
+        "stdev": 4.77e-07
+      },
+      "timestamp": "2026-01-24T12:46:59Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 100,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000473,
+        "max": 0.000541333,
+        "mean": 0.000506979,
+        "median": 0.0005067915,
+        "stdev": 2.8312835805219725e-05
+      },
+      "timestamp": "2026-01-24T12:47:00Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 100,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 6.15625e-05,
+        "max": 9.262499999999999e-05,
+        "mean": 7.1447875e-05,
+        "median": 6.5802e-05,
+        "stdev": 1.4274659706247518e-05
+      },
+      "timestamp": "2026-01-24T12:47:03Z"
+    },
+    {
+      "language": "haskell",
+      "input_size": 200,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 7.9e-05,
+        "max": 9.9e-05,
+        "mean": 8.649999999999999e-05,
+        "median": 8.4e-05,
+        "stdev": 8.660254037844385e-06
+      },
+      "timestamp": "2026-01-24T12:47:06Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 200,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 5.96e-06,
+        "max": 6.914e-06,
+        "mean": 6.4369999999999995e-06,
+        "median": 6.4369999999999995e-06,
+        "stdev": 5.507921568069033e-07
+      },
+      "timestamp": "2026-01-24T12:47:07Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 200,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000601042,
+        "max": 0.000612209,
+        "mean": 0.00060780225,
+        "median": 0.0006089789999999999,
+        "stdev": 4.757854514729645e-06
+      },
+      "timestamp": "2026-01-24T12:47:08Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 200,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 6.19165e-05,
+        "max": 8.1604e-05,
+        "mean": 7.296325e-05,
+        "median": 7.416625e-05,
+        "stdev": 9.523418945770826e-06
+      },
+      "timestamp": "2026-01-24T12:47:11Z"
+    },
+    {
+      "language": "haskell",
+      "input_size": 350,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 7.1e-05,
+        "max": 8.7e-05,
+        "mean": 7.675e-05,
+        "median": 7.45e-05,
+        "stdev": 7.320063751999249e-06
+      },
+      "timestamp": "2026-01-24T12:47:14Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 350,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 9.06e-06,
+        "max": 1.2875e-05,
+        "mean": 1.144425e-05,
+        "median": 1.1921e-05,
+        "stdev": 1.6518953508016179e-06
+      },
+      "timestamp": "2026-01-24T12:47:16Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 350,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000783,
+        "max": 0.000892459,
+        "mean": 0.00083275025,
+        "median": 0.0008277709999999999,
+        "stdev": 4.726111489991887e-05
+      },
+      "timestamp": "2026-01-24T12:47:16Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 350,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 9.256250000000001e-05,
+        "max": 9.56045e-05,
+        "mean": 9.390100000000001e-05,
+        "median": 9.371850000000001e-05,
+        "stdev": 1.4695537871521818e-06
+      },
+      "timestamp": "2026-01-24T12:47:19Z"
+    },
+    {
+      "language": "haskell",
+      "input_size": 500,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 8.2e-05,
+        "max": 9.1e-05,
+        "mean": 8.675e-05,
+        "median": 8.7e-05,
+        "stdev": 4.425306015783921e-06
+      },
+      "timestamp": "2026-01-24T12:47:22Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 500,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 1.4782e-05,
+        "max": 1.502e-05,
+        "mean": 1.49605e-05,
+        "median": 1.502e-05,
+        "stdev": 1.1900000000000005e-07
+      },
+      "timestamp": "2026-01-24T12:47:24Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 500,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.001085875,
+        "max": 0.001110916,
+        "mean": 0.00109969775,
+        "median": 0.001101,
+        "stdev": 1.0552890769042053e-05
+      },
+      "timestamp": "2026-01-24T12:47:24Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 500,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000109104,
+        "max": 0.0001235835,
+        "mean": 0.000118672,
+        "median": 0.00012100025,
+        "stdev": 6.547132031151757e-06
+      },
+      "timestamp": "2026-01-24T12:47:27Z"
+    },
+    {
+      "language": "haskell",
+      "input_size": 750,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.0001,
+        "max": 0.000114,
+        "mean": 0.0001095,
+        "median": 0.000112,
+        "stdev": 6.403124237432847e-06
+      },
+      "timestamp": "2026-01-24T12:47:30Z"
+    },
+    {
+      "language": "ocaml",
+      "input_size": 750,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 2.1935e-05,
+        "max": 2.5988e-05,
+        "mean": 2.3782499999999998e-05,
+        "median": 2.36035e-05,
+        "stdev": 2.035864189969459e-06
+      },
+      "timestamp": "2026-01-24T12:47:32Z"
+    },
+    {
+      "language": "javascript",
+      "input_size": 750,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.001419833,
+        "max": 0.001759292,
+        "mean": 0.00151703125,
+        "median": 0.0014445,
+        "stdev": 0.00016221320848885888
+      },
+      "timestamp": "2026-01-24T12:47:33Z"
+    },
+    {
+      "language": "scala",
+      "input_size": 750,
+      "iterations": 4,
+      "warmup_iterations": 1,
+      "timing": {
+        "unit": "seconds",
+        "min": 0.000179729,
+        "max": 0.00018518750000000002,
+        "mean": 0.000182541875,
+        "median": 0.00018262550000000002,
+        "stdev": 2.322249497613618e-06
+      },
+      "timestamp": "2026-01-24T12:47:36Z"
+    }
+  ]
+}

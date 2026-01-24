@@ -34,11 +34,11 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Default settings
-FUNCTIONS="inner_prod,mat_vec_mult,lwe_encrypt,lwe_decrypt"
+FUNCTIONS="inner_prod,vec_add,mat_vec_mult,lwe_encrypt,lwe_decrypt"
 LANGUAGES="haskell,ocaml,javascript,scala"
-SIZES="10,100,1000,5000"
-ITERATIONS=10
-WARMUP=3
+SIZES="10,50,100,200,350,500,750"
+ITERATIONS=4
+WARMUP=1
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

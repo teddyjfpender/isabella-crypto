@@ -19,7 +19,8 @@ if [[ ! -d "${OCAML_DIR}/_build" ]]; then
 fi
 
 # Create and run benchmark
-BENCH_FILE=$(mktemp /tmp/bench_XXXXXX.ml)
+TMPDIR="${TMPDIR:-/tmp}"
+BENCH_FILE="${TMPDIR}/bench_$$.ml"
 trap "rm -f $BENCH_FILE" EXIT
 
 cat > "$BENCH_FILE" << 'OCAML_CODE'

@@ -38,6 +38,11 @@ ocaml/**/*.install
 ocaml/**/.merlin
 ocaml/**/_opam/
 **/.opam-switch/
+# OCaml compiled files (from direct ocamlfind compilation)
+ocaml/**/*.cmi
+ocaml/**/*.cmx
+ocaml/**/*.cmo
+ocaml/**/*.o
 
 # --------------------------------------------
 # JavaScript Build Artifacts
