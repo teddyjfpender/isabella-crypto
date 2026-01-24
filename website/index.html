@@ -25,7 +25,7 @@
         <a href="benchmarks.html" class="nav-link">Benchmarks</a>
       </div>
       <div class="nav-actions">
-        <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+        <a href="#" data-github="" class="btn btn-secondary">GitHub</a>
         <a href="#get-started" class="btn btn-primary">Get Started</a>
       </div>
       <button class="nav-toggle" id="nav-toggle">
@@ -44,7 +44,7 @@
     <a href="codegen.html" class="mobile-link">Code Gen</a>
     <a href="benchmarks.html" class="mobile-link">Benchmarks</a>
     <div class="mobile-actions">
-      <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+      <a href="#" data-github="" class="btn btn-secondary">GitHub</a>
       <a href="#get-started" class="btn btn-primary">Get Started</a>
     </div>
   </div>
@@ -65,7 +65,7 @@
         </p>
         <div class="hero-actions">
           <a href="#get-started" class="btn btn-primary">Get Started</a>
-          <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">
+          <a href="#" data-github="" class="btn btn-secondary">
             <span>View on GitHub</span>
           </a>
         </div>
@@ -269,8 +269,8 @@
         </div>
         <div class="get-started-code">
           <div class="code-block">
-            <code>git clone https://github.com/your-repo/isabella.git</code>
-            <button class="copy-btn" data-copy="git clone https://github.com/your-repo/isabella.git">copy</button>
+            <code id="clone-cmd">git clone https://github.com/teddyjfpender/isabella-crypto.git</code>
+            <button class="copy-btn" data-copy="git clone https://github.com/teddyjfpender/isabella-crypto.git">copy</button>
           </div>
           <div class="code-block">
             <code>cd isabella && ./scripts/build.sh</code>
@@ -296,9 +296,9 @@
         <p class="footer-tagline">Formally verified lattice cryptography.</p>
       </div>
       <div class="footer-links">
-        <a href="https://github.com/your-repo/isabella">GitHub</a>
-        <a href="https://github.com/your-repo/isabella/blob/main/README.md">Documentation</a>
-        <a href="https://github.com/your-repo/isabella/issues">Issues</a>
+        <a href="#" data-github="">GitHub</a>
+        <a href="#" data-github="/blob/main/README.md">Documentation</a>
+        <a href="#" data-github="/issues">Issues</a>
       </div>
       <div class="footer-bottom">
         <p>MIT License</p>
@@ -306,6 +306,7 @@
     </div>
   </footer>
 
+  <script src="config.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

@@ -1,6 +1,13 @@
 // Isabella - Minimal interactions
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply GitHub links from config
+  if (typeof CONFIG !== 'undefined') {
+    document.querySelectorAll('a[data-github]').forEach(link => {
+      const path = link.dataset.github;
+      link.href = path ? `${CONFIG.github}${path}` : CONFIG.github;
+    });
+  }
   // Mobile menu toggle
   const navToggle = document.getElementById('nav-toggle');
   const mobileMenu = document.getElementById('mobile-menu');
