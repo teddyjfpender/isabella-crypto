@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Isabelle/HOL - Isabella</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-symbol">&gt;</span>
+        <span class="logo-text">isabella</span>
+      </a>
+      <div class="nav-links">
+        <a href="lattice.html" class="nav-link">Lattice</a>
+        <a href="isabelle.html" class="nav-link active">Isabelle</a>
+        <a href="ai.html" class="nav-link">AI</a>
+        <a href="codegen.html" class="nav-link">Code Gen</a>
+        <a href="benchmarks.html" class="nav-link">Benchmarks</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+      </div>
+      <button class="nav-toggle" id="nav-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="lattice.html" class="mobile-link">Lattice</a>
+    <a href="isabelle.html" class="mobile-link">Isabelle</a>
+    <a href="ai.html" class="mobile-link">AI</a>
+    <a href="codegen.html" class="mobile-link">Code Gen</a>
+    <a href="benchmarks.html" class="mobile-link">Benchmarks</a>
+    <div class="mobile-actions">
+      <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+    </div>
+  </div>
+
+  <!-- Page Header -->
+  <section class="page-header">
+    <div class="container">
+      <span class="section-label">Education</span>
+      <h1 class="page-title">Isabelle/HOL</h1>
+      <p class="page-subtitle">
+        A proof assistant for higher-order logic with machine-checked verification.
+      </p>
+    </div>
+  </section>
+
+  <!-- Content -->
+  <section class="content-section">
+    <div class="container">
+      <div class="content-grid">
+        <aside class="sidebar">
+          <nav class="sidebar-nav">
+            <span class="sidebar-label">Contents</span>
+            <a href="#what-is-isabelle" class="sidebar-link active">What is Isabelle?</a>
+            <a href="#why-formal" class="sidebar-link">Why Formal Proofs?</a>
+            <a href="#theories" class="sidebar-link">Theories</a>
+            <a href="#definitions" class="sidebar-link">Definitions</a>
+            <a href="#proofs" class="sidebar-link">Writing Proofs</a>
+            <a href="#extraction" class="sidebar-link">Code Extraction</a>
+          </nav>
+        </aside>
+
+        <main class="main-content">
+          <article class="article" id="what-is-isabelle">
+            <h2>What is Isabelle?</h2>
+            <p>
+              Isabelle is an interactive theorem prover developed at Cambridge and TU Munich.
+              It provides a framework for developing mathematical proofs that are verified by
+              a machine, eliminating the possibility of human error in proof checking.
+            </p>
+            <div class="callout">
+              <span class="callout-icon">#</span>
+              <div class="callout-content">
+                <strong>HOL = Higher-Order Logic</strong>
+                <p>
+                  Isabelle/HOL is the most widely used instance of Isabelle, built on
+                  Church's simple type theory with polymorphism and type classes.
+                </p>
+              </div>
+            </div>
+            <p>
+              Unlike paper proofs, Isabelle proofs cannot contain gaps or errors. Every step
+              must be justified by previously proven lemmas or axioms. The kernel that
+              checks proofs is intentionally kept small to minimize the trusted computing base.
+            </p>
+          </article>
+
+          <article class="article" id="why-formal">
+            <h2>Why Formal Proofs?</h2>
+            <p>
+              For cryptographic implementations, correctness is paramount. A subtle bug in
+              an encryption scheme could compromise all data it protects. Formal verification
+              provides mathematical certainty that an implementation matches its specification.
+            </p>
+            <div class="problem-list">
+              <div class="problem-card">
+                <h3>No Hidden Assumptions</h3>
+                <p>
+                  Every assumption must be stated explicitly. There's no "obviously true"
+                  in formal proofs - the machine won't accept it.
+                </p>
+              </div>
+              <div class="problem-card">
+                <h3>Complete Coverage</h3>
+                <p>
+                  Proofs must handle all cases. Unlike testing, which can only check
+                  specific inputs, formal proofs cover the entire input space.
+                </p>
+              </div>
+              <div class="problem-card">
+                <h3>Preserved Under Extraction</h3>
+                <p>
+                  When we extract code from proofs, the correctness guarantees carry
+                  through to the generated executable code.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="theories">
+            <h2>Theories</h2>
+            <p>
+              Isabelle organizes proofs into theory files. Each theory can import others,
+              building up a hierarchy of definitions and lemmas.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">LWE.thy</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">theory</span> LWE
+  <span class="kw">imports</span>
+    <span class="str">"HOL-Algebra.Ring"</span>
+    <span class="str">"Lattice_Basics"</span>
+    <span class="str">"Vector_Operations"</span>
+<span class="kw">begin</span>
+
+<span class="cm">(* Definitions and lemmas go here *)</span>
+
+<span class="kw">end</span></code></pre>
+              </div>
+            </div>
+            <p>
+              In Isabella, our theory hierarchy builds from basic vector operations up through
+              lattice foundations and finally to the LWE encryption scheme.
+            </p>
+          </article>
+
+          <article class="article" id="definitions">
+            <h2>Definitions</h2>
+            <p>
+              Definitions in Isabelle introduce new constants with specified types and
+              meanings. These form the building blocks of your formalization.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">definitions</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="cm">(* A simple function definition *)</span>
+<span class="kw">definition</span> inner_prod :: <span class="str">"int list => int list => int"</span>
+  <span class="kw">where</span> <span class="str">"inner_prod xs ys = sum_list (map2 (*) xs ys)"</span>
+
+<span class="cm">(* A recursive function *)</span>
+<span class="kw">fun</span> vec_add :: <span class="str">"int list => int list => int list"</span>
+  <span class="kw">where</span>
+    <span class="str">"vec_add [] [] = []"</span>
+  | <span class="str">"vec_add (x#xs) (y#ys) = (x+y) # vec_add xs ys"</span>
+
+<span class="cm">(* A datatype *)</span>
+<span class="kw">datatype</span> cipher = Cipher <span class="str">"int list"</span> <span class="str">"int"</span></code></pre>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="proofs">
+            <h2>Writing Proofs</h2>
+            <p>
+              Proofs in Isabelle use the Isar structured proof language. This makes
+              proofs readable and maintainable, unlike the older tactic-based style.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">proof</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">lemma</span> inner_prod_comm:
+  <span class="kw">shows</span> <span class="str">"inner_prod xs ys = inner_prod ys xs"</span>
+<span class="kw">proof</span> (induction xs ys rule: list_induct2)
+  <span class="kw">case</span> Nil
+  <span class="kw">then show</span> ?case <span class="kw">by</span> (simp add: inner_prod_def)
+<span class="kw">next</span>
+  <span class="kw">case</span> (Cons x xs y ys)
+  <span class="kw">then show</span> ?case <span class="kw">by</span> (simp add: inner_prod_def)
+<span class="kw">qed</span>
+
+<span class="cm">(* Or use automation *)</span>
+<span class="kw">lemma</span> inner_prod_comm':
+  <span class="str">"inner_prod xs ys = inner_prod ys xs"</span>
+  <span class="kw">by</span> (simp add: inner_prod_def mult.commute)</code></pre>
+              </div>
+            </div>
+            <div class="callout">
+              <span class="callout-icon">!</span>
+              <div class="callout-content">
+                <strong>No sorry Allowed</strong>
+                <p>
+                  The <code>sorry</code> command admits a lemma without proof. Isabella
+                  enforces that no theory contains <code>sorry</code> - all proofs must
+                  be complete.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="extraction">
+            <h2>Code Extraction</h2>
+            <p>
+              One of Isabelle's most powerful features is code extraction. You can
+              generate executable code in several languages directly from your
+              verified definitions.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">export</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="cm">(* Export to Haskell *)</span>
+<span class="kw">export_code</span>
+  lwe_keygen lwe_encrypt lwe_decrypt
+  <span class="kw">in</span> Haskell
+  <span class="kw">module_name</span> LWE
+  <span class="kw">file_prefix</span> lwe
+
+<span class="cm">(* Export to OCaml *)</span>
+<span class="kw">export_code</span>
+  lwe_keygen lwe_encrypt lwe_decrypt
+  <span class="kw">in</span> OCaml
+  <span class="kw">module_name</span> LWE
+  <span class="kw">file_prefix</span> lwe</code></pre>
+              </div>
+            </div>
+            <p>
+              The extracted code preserves the correctness properties proven in Isabelle.
+              This is the core value proposition of Isabella: verified specifications
+              that become real, usable implementations.
+            </p>
+            <div class="next-section">
+              <span class="next-label">Next</span>
+              <a href="ai.html" class="next-link">
+                AI-Assisted Proof Generation
+                <span class="next-arrow">&rarr;</span>
+              </a>
+            </div>
+          </article>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="logo-symbol">&gt;</span>
+          <span class="logo-text">isabella</span>
+        </div>
+        <p class="footer-tagline">Formally verified lattice cryptography.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/your-repo/isabella">GitHub</a>
+        <a href="https://github.com/your-repo/isabella/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/your-repo/isabella/issues">Issues</a>
+      </div>
+      <div class="footer-bottom">
+        <p>MIT License</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

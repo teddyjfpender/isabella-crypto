@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Isabella - Formally Verified Lattice Cryptography</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="#" class="nav-logo">
+        <span class="logo-symbol">&gt;</span>
+        <span class="logo-text">isabella</span>
+      </a>
+      <div class="nav-links">
+        <a href="lattice.html" class="nav-link">Lattice</a>
+        <a href="isabelle.html" class="nav-link">Isabelle</a>
+        <a href="ai.html" class="nav-link">AI</a>
+        <a href="codegen.html" class="nav-link">Code Gen</a>
+        <a href="benchmarks.html" class="nav-link">Benchmarks</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+        <a href="#get-started" class="btn btn-primary">Get Started</a>
+      </div>
+      <button class="nav-toggle" id="nav-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="lattice.html" class="mobile-link">Lattice</a>
+    <a href="isabelle.html" class="mobile-link">Isabelle</a>
+    <a href="ai.html" class="mobile-link">AI</a>
+    <a href="codegen.html" class="mobile-link">Code Gen</a>
+    <a href="benchmarks.html" class="mobile-link">Benchmarks</a>
+    <div class="mobile-actions">
+      <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+      <a href="#get-started" class="btn btn-primary">Get Started</a>
+    </div>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span>Isabelle + Lattice = Isabella</span>
+        </div>
+        <h1 class="hero-title">
+          Formally Verified<br>Lattice Cryptography
+        </h1>
+        <p class="hero-subtitle">
+          Machine-checked proofs for post-quantum cryptographic primitives.
+          Generate verified implementations in Haskell, OCaml, Scala, and more.
+        </p>
+        <div class="hero-actions">
+          <a href="#get-started" class="btn btn-primary">Get Started</a>
+          <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">
+            <span>View on GitHub</span>
+          </a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="terminal-window">
+          <div class="terminal-header">
+            <span class="terminal-title">isabelle</span>
+          </div>
+          <div class="terminal-body">
+            <pre><code><span class="kw">theory</span> LWE <span class="kw">imports</span> Lattice_Basics
+<span class="kw">begin</span>
+
+<span class="kw">definition</span> lwe_encrypt :: <span class="str">"params => key => msg => cipher"</span>
+  <span class="kw">where</span> <span class="str">"lwe_encrypt p pk m = (</span>
+    <span class="kw">let</span> a = fst pk;
+        b = snd pk;
+        r = sample_binary p;
+        u = mat_vec_mult a r;
+        v = inner_prod b r + encode m
+    <span class="kw">in</span> (u, v))"
+
+<span class="kw">lemma</span> lwe_correctness:
+  <span class="kw">assumes</span> <span class="str">"valid_key pk sk"</span>
+  <span class="kw">shows</span> <span class="str">"lwe_decrypt sk (lwe_encrypt p pk m) = m"</span>
+  <span class="cm">(* machine-checked proof *)</span>
+
+<span class="kw">end</span></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Verified from proof to production</h2>
+        <p class="section-subtitle">
+          Complete correctness guarantees through the entire pipeline.
+        </p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-header">
+            <span class="feature-icon">#</span>
+            <h3 class="feature-title">Formal Verification</h3>
+          </div>
+          <p class="feature-desc">
+            All cryptographic primitives are specified and proven correct in Isabelle/HOL.
+            No `sorry` statements. Every proof is machine-checked.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-header">
+            <span class="feature-icon">&gt;</span>
+            <h3 class="feature-title">Code Extraction</h3>
+          </div>
+          <p class="feature-desc">
+            Automatically extract verified implementations to Haskell, OCaml, SML, Scala,
+            and JavaScript. Same proof, multiple targets.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-header">
+            <span class="feature-icon">@</span>
+            <h3 class="feature-title">Post-Quantum Ready</h3>
+          </div>
+          <p class="feature-desc">
+            Built on lattice-based cryptography, believed to be secure against both
+            classical and quantum computers.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-header">
+            <span class="feature-icon">*</span>
+            <h3 class="feature-title">LWE Implementation</h3>
+          </div>
+          <p class="feature-desc">
+            Complete Learning With Errors (LWE) encryption with key generation,
+            encrypt, and decrypt operations. Ring-LWE support included.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-header">
+            <span class="feature-icon">%</span>
+            <h3 class="feature-title">Benchmarked</h3>
+          </div>
+          <p class="feature-desc">
+            Cross-language performance benchmarks comparing all extraction targets.
+            Know exactly what you're trading for verification.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-header">
+            <span class="feature-icon">~</span>
+            <h3 class="feature-title">AI-Assisted Proofs</h3>
+          </div>
+          <p class="feature-desc">
+            Ralph Loop orchestrator enables iterative proof generation with AI feedback.
+            Strict mode ensures all proofs compile.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Languages Section -->
+  <section class="languages" id="languages">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Targets</span>
+        <h2 class="section-title">One proof, six languages</h2>
+        <p class="section-subtitle">
+          Extract verified code to your target platform.
+        </p>
+      </div>
+      <div class="languages-grid">
+        <div class="language-card">
+          <span class="language-name">Haskell</span>
+          <span class="language-status">native</span>
+        </div>
+        <div class="language-card">
+          <span class="language-name">OCaml</span>
+          <span class="language-status">native</span>
+        </div>
+        <div class="language-card">
+          <span class="language-name">SML</span>
+          <span class="language-status">native</span>
+        </div>
+        <div class="language-card">
+          <span class="language-name">Scala</span>
+          <span class="language-status">native</span>
+        </div>
+        <div class="language-card">
+          <span class="language-name">JavaScript</span>
+          <span class="language-status">via ocaml</span>
+        </div>
+        <div class="language-card">
+          <span class="language-name">TypeScript</span>
+          <span class="language-status">via ocaml</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it Works Section -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Process</span>
+        <h2 class="section-title">From theory to executable</h2>
+        <p class="section-subtitle">
+          The verification pipeline ensures correctness at every step.
+        </p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">01</div>
+          <div class="step-content">
+            <h3 class="step-title">Specify</h3>
+            <p class="step-desc">Define cryptographic primitives as mathematical functions in Isabelle/HOL theories.</p>
+            <div class="code-block">
+              <code>definition inner_prod :: "int list => int list => int"</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">02</div>
+          <div class="step-content">
+            <h3 class="step-title">Prove</h3>
+            <p class="step-desc">Write machine-checked proofs of correctness. No axioms, no shortcuts.</p>
+            <div class="code-block">
+              <code>lemma correctness: "decrypt sk (encrypt pk m) = m"</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">03</div>
+          <div class="step-content">
+            <h3 class="step-title">Extract</h3>
+            <p class="step-desc">Generate executable code from verified proofs to your target language.</p>
+            <div class="code-block">
+              <code>export_code lwe_encrypt lwe_decrypt in Haskell</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Get Started Section -->
+  <section class="get-started" id="get-started">
+    <div class="container">
+      <div class="get-started-card">
+        <div class="get-started-content">
+          <h2 class="get-started-title">Get Started</h2>
+          <p class="get-started-desc">Clone the repository and build the theories with Isabelle.</p>
+        </div>
+        <div class="get-started-code">
+          <div class="code-block">
+            <code>git clone https://github.com/your-repo/isabella.git</code>
+            <button class="copy-btn" data-copy="git clone https://github.com/your-repo/isabella.git">copy</button>
+          </div>
+          <div class="code-block">
+            <code>cd isabella && ./scripts/build.sh</code>
+            <button class="copy-btn" data-copy="cd isabella && ./scripts/build.sh">copy</button>
+          </div>
+          <div class="code-block">
+            <code>./scripts/export-haskell.sh</code>
+            <button class="copy-btn" data-copy="./scripts/export-haskell.sh">copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="logo-symbol">&gt;</span>
+          <span class="logo-text">isabella</span>
+        </div>
+        <p class="footer-tagline">Formally verified lattice cryptography.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/your-repo/isabella">GitHub</a>
+        <a href="https://github.com/your-repo/isabella/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/your-repo/isabella/issues">Issues</a>
+      </div>
+      <div class="footer-bottom">
+        <p>MIT License</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

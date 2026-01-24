@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Generation - Isabella</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-symbol">&gt;</span>
+        <span class="logo-text">isabella</span>
+      </a>
+      <div class="nav-links">
+        <a href="lattice.html" class="nav-link">Lattice</a>
+        <a href="isabelle.html" class="nav-link">Isabelle</a>
+        <a href="ai.html" class="nav-link">AI</a>
+        <a href="codegen.html" class="nav-link active">Code Gen</a>
+        <a href="benchmarks.html" class="nav-link">Benchmarks</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+      </div>
+      <button class="nav-toggle" id="nav-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="lattice.html" class="mobile-link">Lattice</a>
+    <a href="isabelle.html" class="mobile-link">Isabelle</a>
+    <a href="ai.html" class="mobile-link">AI</a>
+    <a href="codegen.html" class="mobile-link">Code Gen</a>
+    <a href="benchmarks.html" class="mobile-link">Benchmarks</a>
+    <div class="mobile-actions">
+      <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+    </div>
+  </div>
+
+  <!-- Page Header -->
+  <section class="page-header">
+    <div class="container">
+      <span class="section-label">Extraction</span>
+      <h1 class="page-title">Code Generation</h1>
+      <p class="page-subtitle">
+        Extract verified implementations to Haskell, OCaml, Scala, and more.
+      </p>
+    </div>
+  </section>
+
+  <!-- Content -->
+  <section class="content-section">
+    <div class="container">
+      <div class="content-grid">
+        <aside class="sidebar">
+          <nav class="sidebar-nav">
+            <span class="sidebar-label">Languages</span>
+            <a href="#overview" class="sidebar-link active">Overview</a>
+            <a href="#haskell" class="sidebar-link">Haskell</a>
+            <a href="#ocaml" class="sidebar-link">OCaml</a>
+            <a href="#sml" class="sidebar-link">SML</a>
+            <a href="#scala" class="sidebar-link">Scala</a>
+            <a href="#javascript" class="sidebar-link">JavaScript</a>
+            <a href="#usage" class="sidebar-link">Usage Examples</a>
+          </nav>
+        </aside>
+
+        <main class="main-content">
+          <article class="article" id="overview">
+            <h2>Overview</h2>
+            <p>
+              Isabelle's code generation mechanism extracts executable code from verified
+              specifications. The extracted code preserves the correctness properties
+              proven in the theory - if your proof says decrypt(encrypt(m)) = m, the
+              generated code will satisfy that property.
+            </p>
+            <div class="language-grid-small">
+              <div class="lang-card">
+                <span class="lang-name">Haskell</span>
+                <span class="lang-type">Native</span>
+              </div>
+              <div class="lang-card">
+                <span class="lang-name">OCaml</span>
+                <span class="lang-type">Native</span>
+              </div>
+              <div class="lang-card">
+                <span class="lang-name">SML</span>
+                <span class="lang-type">Native</span>
+              </div>
+              <div class="lang-card">
+                <span class="lang-name">Scala</span>
+                <span class="lang-type">Native</span>
+              </div>
+              <div class="lang-card">
+                <span class="lang-name">JavaScript</span>
+                <span class="lang-type">Via OCaml</span>
+              </div>
+              <div class="lang-card">
+                <span class="lang-name">TypeScript</span>
+                <span class="lang-type">Via OCaml</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="haskell">
+            <h2>Haskell</h2>
+            <p>
+              Haskell extraction produces idiomatic functional code. Type classes map
+              naturally to Haskell's type class system.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">LWE.hs</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">module</span> LWE <span class="kw">where</span>
+
+<span class="kw">import</span> Prelude ((+), (*), (<span class="kw">$</span>), Int, map, sum, zipWith)
+
+<span class="cm">-- | Inner product of two integer vectors</span>
+inner_prod :: [Int] -> [Int] -> Int
+inner_prod xs ys = sum <span class="kw">$</span> zipWith (*) xs ys
+
+<span class="cm">-- | Vector addition</span>
+vec_add :: [Int] -> [Int] -> [Int]
+vec_add [] [] = []
+vec_add (x:xs) (y:ys) = (x + y) : vec_add xs ys
+
+<span class="cm">-- | Matrix-vector multiplication</span>
+mat_vec_mult :: [[Int]] -> [Int] -> [Int]
+mat_vec_mult rows v = map (\row -> inner_prod row v) rows
+
+<span class="cm">-- | LWE encryption</span>
+lwe_encrypt :: Params -> PublicKey -> Message -> Cipher
+lwe_encrypt p pk m = <span class="kw">let</span>
+    (a, b) = pk
+    r = sample_binary p
+    u = mat_vec_mult a r
+    v = inner_prod b r + encode m
+  <span class="kw">in</span> Cipher u v</code></pre>
+              </div>
+            </div>
+            <div class="code-block">
+              <code>./scripts/export-haskell.sh</code>
+              <button class="copy-btn" data-copy="./scripts/export-haskell.sh">copy</button>
+            </div>
+          </article>
+
+          <article class="article" id="ocaml">
+            <h2>OCaml</h2>
+            <p>
+              OCaml extraction leverages the language's efficient compiler and serves
+              as the basis for JavaScript/TypeScript targets via js_of_ocaml.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">lwe.ml</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">let rec</span> inner_prod xs ys =
+  <span class="kw">match</span> (xs, ys) <span class="kw">with</span>
+  | ([], []) -> 0
+  | (x :: xs', y :: ys') ->
+      (x * y) + inner_prod xs' ys'
+  | _ -> failwith <span class="str">"length mismatch"</span>
+
+<span class="kw">let rec</span> vec_add xs ys =
+  <span class="kw">match</span> (xs, ys) <span class="kw">with</span>
+  | ([], []) -> []
+  | (x :: xs', y :: ys') ->
+      (x + y) :: vec_add xs' ys'
+  | _ -> failwith <span class="str">"length mismatch"</span>
+
+<span class="kw">let</span> mat_vec_mult rows v =
+  List.map (<span class="kw">fun</span> row -> inner_prod row v) rows
+
+<span class="kw">let</span> lwe_encrypt p pk m =
+  <span class="kw">let</span> (a, b) = pk <span class="kw">in</span>
+  <span class="kw">let</span> r = sample_binary p <span class="kw">in</span>
+  <span class="kw">let</span> u = mat_vec_mult a r <span class="kw">in</span>
+  <span class="kw">let</span> v = inner_prod b r + encode m <span class="kw">in</span>
+  (u, v)</code></pre>
+              </div>
+            </div>
+            <div class="code-block">
+              <code>./scripts/export-ocaml.sh</code>
+              <button class="copy-btn" data-copy="./scripts/export-ocaml.sh">copy</button>
+            </div>
+          </article>
+
+          <article class="article" id="sml">
+            <h2>Standard ML</h2>
+            <p>
+              SML extraction produces code compatible with SML/NJ and MLton. This is
+              the original extraction target and has the most mature support.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">lwe.sml</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">structure</span> LWE = <span class="kw">struct</span>
+
+<span class="kw">fun</span> inner_prod [] [] = 0
+  | inner_prod (x::xs) (y::ys) =
+      (x * y) + inner_prod xs ys
+  | inner_prod _ _ = raise Fail <span class="str">"length mismatch"</span>
+
+<span class="kw">fun</span> vec_add [] [] = []
+  | vec_add (x::xs) (y::ys) =
+      (x + y) :: vec_add xs ys
+  | vec_add _ _ = raise Fail <span class="str">"length mismatch"</span>
+
+<span class="kw">fun</span> mat_vec_mult rows v =
+  map (<span class="kw">fn</span> row => inner_prod row v) rows
+
+<span class="kw">fun</span> lwe_encrypt p pk m =
+  <span class="kw">let</span>
+    <span class="kw">val</span> (a, b) = pk
+    <span class="kw">val</span> r = sample_binary p
+    <span class="kw">val</span> u = mat_vec_mult a r
+    <span class="kw">val</span> v = inner_prod b r + encode m
+  <span class="kw">in</span>
+    (u, v)
+  <span class="kw">end</span>
+
+<span class="kw">end</span></code></pre>
+              </div>
+            </div>
+            <div class="code-block">
+              <code>./scripts/export-sml.sh</code>
+              <button class="copy-btn" data-copy="./scripts/export-sml.sh">copy</button>
+            </div>
+          </article>
+
+          <article class="article" id="scala">
+            <h2>Scala</h2>
+            <p>
+              Scala extraction enables integration with JVM ecosystems. The generated
+              code uses immutable data structures and functional style.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">LWE.scala</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">object</span> LWE {
+
+  <span class="kw">def</span> inner_prod(xs: List[BigInt], ys: List[BigInt]): BigInt =
+    (xs, ys) <span class="kw">match</span> {
+      <span class="kw">case</span> (Nil, Nil) => BigInt(0)
+      <span class="kw">case</span> (x :: xs1, y :: ys1) =>
+        (x * y) + inner_prod(xs1, ys1)
+      <span class="kw">case</span> _ => sys.error(<span class="str">"length mismatch"</span>)
+    }
+
+  <span class="kw">def</span> vec_add(xs: List[BigInt], ys: List[BigInt]): List[BigInt] =
+    (xs, ys) <span class="kw">match</span> {
+      <span class="kw">case</span> (Nil, Nil) => Nil
+      <span class="kw">case</span> (x :: xs1, y :: ys1) =>
+        (x + y) :: vec_add(xs1, ys1)
+      <span class="kw">case</span> _ => sys.error(<span class="str">"length mismatch"</span>)
+    }
+
+  <span class="kw">def</span> mat_vec_mult(rows: List[List[BigInt]], v: List[BigInt]): List[BigInt] =
+    rows.map(row => inner_prod(row, v))
+
+  <span class="kw">def</span> lwe_encrypt(p: Params, pk: PublicKey, m: Message): Cipher = {
+    <span class="kw">val</span> (a, b) = pk
+    <span class="kw">val</span> r = sample_binary(p)
+    <span class="kw">val</span> u = mat_vec_mult(a, r)
+    <span class="kw">val</span> v = inner_prod(b, r) + encode(m)
+    Cipher(u, v)
+  }
+}</code></pre>
+              </div>
+            </div>
+            <div class="code-block">
+              <code>./scripts/export-scala.sh</code>
+              <button class="copy-btn" data-copy="./scripts/export-scala.sh">copy</button>
+            </div>
+          </article>
+
+          <article class="article" id="javascript">
+            <h2>JavaScript / TypeScript</h2>
+            <p>
+              JavaScript extraction uses js_of_ocaml to compile the OCaml output to
+              JavaScript. TypeScript type definitions are generated for type safety.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">lwe.js</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="cm">// Generated via js_of_ocaml from OCaml extraction</span>
+
+<span class="kw">function</span> inner_prod(xs, ys) {
+  <span class="kw">if</span> (xs.length === 0 && ys.length === 0) {
+    <span class="kw">return</span> 0n;
+  }
+  <span class="kw">const</span> [x, ...xs_rest] = xs;
+  <span class="kw">const</span> [y, ...ys_rest] = ys;
+  <span class="kw">return</span> (x * y) + inner_prod(xs_rest, ys_rest);
+}
+
+<span class="kw">function</span> vec_add(xs, ys) {
+  <span class="kw">if</span> (xs.length === 0 && ys.length === 0) {
+    <span class="kw">return</span> [];
+  }
+  <span class="kw">const</span> [x, ...xs_rest] = xs;
+  <span class="kw">const</span> [y, ...ys_rest] = ys;
+  <span class="kw">return</span> [(x + y), ...vec_add(xs_rest, ys_rest)];
+}
+
+<span class="kw">function</span> mat_vec_mult(rows, v) {
+  <span class="kw">return</span> rows.map(row => inner_prod(row, v));
+}
+
+<span class="kw">function</span> lwe_encrypt(p, pk, m) {
+  <span class="kw">const</span> [a, b] = pk;
+  <span class="kw">const</span> r = sample_binary(p);
+  <span class="kw">const</span> u = mat_vec_mult(a, r);
+  <span class="kw">const</span> v = inner_prod(b, r) + encode(m);
+  <span class="kw">return</span> { u, v };
+}</code></pre>
+              </div>
+            </div>
+            <div class="code-block">
+              <code>./scripts/export-js.sh</code>
+              <button class="copy-btn" data-copy="./scripts/export-js.sh">copy</button>
+            </div>
+          </article>
+
+          <article class="article" id="usage">
+            <h2>Usage Examples</h2>
+            <p>
+              Here's how to use the extracted code in your projects:
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">usage_haskell</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">import</span> LWE
+
+main :: IO ()
+main = <span class="kw">do</span>
+  <span class="kw">let</span> params = defaultParams
+  (pk, sk) <- lwe_keygen params
+
+  <span class="kw">let</span> message = encode <span class="str">"Hello, post-quantum world!"</span>
+  <span class="kw">let</span> cipher = lwe_encrypt params pk message
+  <span class="kw">let</span> decrypted = lwe_decrypt params sk cipher
+
+  putStrLn <span class="kw">$</span> <span class="str">"Decrypted: "</span> ++ show decrypted</code></pre>
+              </div>
+            </div>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">usage_typescript</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">import</span> { lwe_keygen, lwe_encrypt, lwe_decrypt } <span class="kw">from</span> <span class="str">'./lwe'</span>;
+
+<span class="kw">const</span> params = defaultParams();
+<span class="kw">const</span> { publicKey, secretKey } = lwe_keygen(params);
+
+<span class="kw">const</span> message = encode(<span class="str">"Hello, post-quantum world!"</span>);
+<span class="kw">const</span> cipher = lwe_encrypt(params, publicKey, message);
+<span class="kw">const</span> decrypted = lwe_decrypt(params, secretKey, cipher);
+
+console.log(<span class="str">`Decrypted: ${</span>decrypted<span class="str">}`</span>);</code></pre>
+              </div>
+            </div>
+            <div class="next-section">
+              <span class="next-label">Next</span>
+              <a href="benchmarks.html" class="next-link">
+                Performance Benchmarks
+                <span class="next-arrow">&rarr;</span>
+              </a>
+            </div>
+          </article>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="logo-symbol">&gt;</span>
+          <span class="logo-text">isabella</span>
+        </div>
+        <p class="footer-tagline">Formally verified lattice cryptography.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/your-repo/isabella">GitHub</a>
+        <a href="https://github.com/your-repo/isabella/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/your-repo/isabella/issues">Issues</a>
+      </div>
+      <div class="footer-bottom">
+        <p>MIT License</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

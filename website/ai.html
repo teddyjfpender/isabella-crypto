@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI-Assisted Proofs - Isabella</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-symbol">&gt;</span>
+        <span class="logo-text">isabella</span>
+      </a>
+      <div class="nav-links">
+        <a href="lattice.html" class="nav-link">Lattice</a>
+        <a href="isabelle.html" class="nav-link">Isabelle</a>
+        <a href="ai.html" class="nav-link active">AI</a>
+        <a href="codegen.html" class="nav-link">Code Gen</a>
+        <a href="benchmarks.html" class="nav-link">Benchmarks</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+      </div>
+      <button class="nav-toggle" id="nav-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="lattice.html" class="mobile-link">Lattice</a>
+    <a href="isabelle.html" class="mobile-link">Isabelle</a>
+    <a href="ai.html" class="mobile-link">AI</a>
+    <a href="codegen.html" class="mobile-link">Code Gen</a>
+    <a href="benchmarks.html" class="mobile-link">Benchmarks</a>
+    <div class="mobile-actions">
+      <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+    </div>
+  </div>
+
+  <!-- Page Header -->
+  <section class="page-header">
+    <div class="container">
+      <span class="section-label">Process</span>
+      <h1 class="page-title">AI-Assisted Proofs</h1>
+      <p class="page-subtitle">
+        How Ralph Loop orchestrates iterative proof generation with AI feedback.
+      </p>
+    </div>
+  </section>
+
+  <!-- Content -->
+  <section class="content-section">
+    <div class="container">
+      <div class="content-grid">
+        <aside class="sidebar">
+          <nav class="sidebar-nav">
+            <span class="sidebar-label">Contents</span>
+            <a href="#overview" class="sidebar-link active">Overview</a>
+            <a href="#ralph-loop" class="sidebar-link">Ralph Loop</a>
+            <a href="#skills" class="sidebar-link">Skills System</a>
+            <a href="#prompts" class="sidebar-link">Prompt Engineering</a>
+            <a href="#strict-mode" class="sidebar-link">Strict Mode</a>
+            <a href="#workflow" class="sidebar-link">Example Workflow</a>
+          </nav>
+        </aside>
+
+        <main class="main-content">
+          <article class="article" id="overview">
+            <h2>Overview</h2>
+            <p>
+              Writing formal proofs is notoriously difficult. Even experts spend significant
+              time on routine proof steps. Isabella's AI harness provides a way to accelerate
+              proof development while maintaining the full rigor of machine-checked verification.
+            </p>
+            <div class="callout">
+              <span class="callout-icon">*</span>
+              <div class="callout-content">
+                <strong>AI Generates, Isabelle Verifies</strong>
+                <p>
+                  The AI can suggest any proof it wants - Isabelle will only accept it
+                  if it's correct. This preserves full verification guarantees while
+                  dramatically speeding up development.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="ralph-loop">
+            <h2>Ralph Loop</h2>
+            <p>
+              Ralph Loop is the core orchestration engine that manages iterative proof
+              generation. It runs AI suggestions through Isabelle, captures errors, and
+              feeds them back to the AI for correction.
+            </p>
+            <div class="flow-diagram">
+              <div class="flow-step">
+                <span class="flow-number">1</span>
+                <span class="flow-label">Prompt</span>
+                <p>Generate proof attempt from specification</p>
+              </div>
+              <div class="flow-arrow">&rarr;</div>
+              <div class="flow-step">
+                <span class="flow-number">2</span>
+                <span class="flow-label">Generate</span>
+                <p>AI produces Isabelle/HOL code</p>
+              </div>
+              <div class="flow-arrow">&rarr;</div>
+              <div class="flow-step">
+                <span class="flow-number">3</span>
+                <span class="flow-label">Verify</span>
+                <p>Isabelle checks the proof</p>
+              </div>
+              <div class="flow-arrow">&rarr;</div>
+              <div class="flow-step">
+                <span class="flow-number">4</span>
+                <span class="flow-label">Feedback</span>
+                <p>Errors fed back for iteration</p>
+              </div>
+            </div>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">ralph_loop</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">struct</span> RalphLoop {
+    max_iterations: usize,
+    isabelle: IsabelleSession,
+    llm: LLMClient,
+    skills: SkillRegistry,
+}
+
+<span class="kw">impl</span> RalphLoop {
+    <span class="kw">async fn</span> run(&self, task: &ProofTask) -> Result&lt;Theory&gt; {
+        <span class="kw">let mut</span> context = Context::new(task);
+
+        <span class="kw">for</span> i <span class="kw">in</span> 0..self.max_iterations {
+            <span class="cm">// Generate proof attempt</span>
+            <span class="kw">let</span> code = self.llm.generate(&context).await?;
+
+            <span class="cm">// Verify with Isabelle</span>
+            <span class="kw">match</span> self.isabelle.check(&code).await {
+                Ok(()) => <span class="kw">return</span> Ok(code),
+                Err(e) => context.add_error(e),
+            }
+        }
+
+        Err(MaxIterationsExceeded)
+    }
+}</code></pre>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="skills">
+            <h2>Skills System</h2>
+            <p>
+              Skills are modular capabilities that the AI can invoke during proof generation.
+              Each skill encapsulates domain knowledge and common patterns.
+            </p>
+            <div class="problem-list">
+              <div class="problem-card">
+                <h3>proof_by_induction</h3>
+                <p>
+                  Generates structured induction proofs for recursive functions.
+                  Handles base cases and inductive steps with appropriate tactics.
+                </p>
+              </div>
+              <div class="problem-card">
+                <h3>simplify_algebra</h3>
+                <p>
+                  Applies algebraic simplification rules for ring and field operations.
+                  Useful for modular arithmetic in LWE proofs.
+                </p>
+              </div>
+              <div class="problem-card">
+                <h3>unfold_definition</h3>
+                <p>
+                  Strategically unfolds definitions to expose proof structure.
+                  Knows when unfolding helps vs. when to keep abstractions.
+                </p>
+              </div>
+              <div class="problem-card">
+                <h3>apply_lemma</h3>
+                <p>
+                  Searches for and applies relevant lemmas from the theory context.
+                  Handles instantiation of polymorphic lemmas.
+                </p>
+              </div>
+            </div>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">skill_definition</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="kw">skill</span> proof_by_induction {
+    <span class="kw">description</span>: <span class="str">"Generate induction proof structure"</span>
+
+    <span class="kw">input</span>: {
+        function: <span class="str">"Name of recursive function"</span>
+        property: <span class="str">"Property to prove"</span>
+    }
+
+    <span class="kw">template</span>: |
+        <span class="kw">proof</span> (induction {{induction_var}} rule: {{function}}.induct)
+          <span class="kw">case</span> {{base_case}}
+          <span class="kw">then show</span> ?case by {{base_tactic}}
+        <span class="kw">next</span>
+          <span class="kw">case</span> ({{inductive_case}})
+          <span class="kw">then show</span> ?case by {{ind_tactic}}
+        <span class="kw">qed</span>
+}</code></pre>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="prompts">
+            <h2>Prompt Engineering</h2>
+            <p>
+              Effective prompts are crucial for getting good proof attempts from the AI.
+              Isabella includes carefully designed prompts for different proof scenarios.
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">system_prompt</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code>You are an expert Isabelle/HOL proof assistant.
+
+<span class="kw">CONSTRAINTS:</span>
+- Never use 'sorry' - all proofs must be complete
+- Prefer structured Isar proofs over apply scripts
+- Use automation (auto, simp, blast) where appropriate
+- Break complex proofs into lemmas
+
+<span class="kw">CONTEXT:</span>
+The following theories are available:
+{{imported_theories}}
+
+The following lemmas may be useful:
+{{relevant_lemmas}}
+
+<span class="kw">ERROR HISTORY:</span>
+{{previous_errors}}
+
+<span class="kw">TASK:</span>
+Prove the following lemma:
+{{lemma_statement}}</code></pre>
+              </div>
+            </div>
+            <p>
+              The prompt system tracks error history across iterations, helping the AI
+              learn from failed attempts and try different approaches.
+            </p>
+          </article>
+
+          <article class="article" id="strict-mode">
+            <h2>Strict Mode</h2>
+            <p>
+              Strict mode enforces that every generated theory must compile successfully
+              in Isabelle before being accepted. This is the default for production use.
+            </p>
+            <div class="comparison-table">
+              <div class="table-header">
+                <span>Mode</span>
+                <span>Behavior</span>
+                <span>Use Case</span>
+              </div>
+              <div class="table-row">
+                <span>Strict</span>
+                <span>Reject on any error</span>
+                <span>Production</span>
+              </div>
+              <div class="table-row">
+                <span>Lenient</span>
+                <span>Accept partial proofs</span>
+                <span>Development</span>
+              </div>
+              <div class="table-row">
+                <span>Debug</span>
+                <span>Verbose error output</span>
+                <span>Troubleshooting</span>
+              </div>
+            </div>
+            <div class="callout">
+              <span class="callout-icon">!</span>
+              <div class="callout-content">
+                <strong>Zero Tolerance for sorry</strong>
+                <p>
+                  In strict mode, any use of <code>sorry</code> causes immediate rejection.
+                  The AI must find a complete proof or report failure.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="article" id="workflow">
+            <h2>Example Workflow</h2>
+            <p>
+              Here's a complete example of using Ralph Loop to generate a proof:
+            </p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <span class="terminal-title">session</span>
+              </div>
+              <div class="terminal-body">
+                <pre><code><span class="cm"># Initialize Ralph Loop</span>
+$ ralph init --theory LWE --strict
+
+<span class="cm"># Request proof generation</span>
+$ ralph prove "inner_prod_length"
+[iter 1] Generating proof attempt...
+[iter 1] Checking with Isabelle...
+[iter 1] Error: Type unification failed
+[iter 2] Generating proof attempt...
+[iter 2] Checking with Isabelle...
+[iter 2] Success!
+
+<span class="cm"># View generated proof</span>
+$ ralph show inner_prod_length
+<span class="kw">lemma</span> inner_prod_length:
+  <span class="kw">assumes</span> <span class="str">"length xs = length ys"</span>
+  <span class="kw">shows</span> <span class="str">"inner_prod xs ys = inner_prod ys xs"</span>
+  <span class="kw">by</span> (simp add: inner_prod_def mult.commute)
+
+<span class="cm"># Export the theory</span>
+$ ralph export --lang haskell</code></pre>
+              </div>
+            </div>
+            <div class="next-section">
+              <span class="next-label">Next</span>
+              <a href="codegen.html" class="next-link">
+                Code Generation
+                <span class="next-arrow">&rarr;</span>
+              </a>
+            </div>
+          </article>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="logo-symbol">&gt;</span>
+          <span class="logo-text">isabella</span>
+        </div>
+        <p class="footer-tagline">Formally verified lattice cryptography.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/your-repo/isabella">GitHub</a>
+        <a href="https://github.com/your-repo/isabella/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/your-repo/isabella/issues">Issues</a>
+      </div>
+      <div class="footer-bottom">
+        <p>MIT License</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

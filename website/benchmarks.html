@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benchmarks - Isabella</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-symbol">&gt;</span>
+        <span class="logo-text">isabella</span>
+      </a>
+      <div class="nav-links">
+        <a href="lattice.html" class="nav-link">Lattice</a>
+        <a href="isabelle.html" class="nav-link">Isabelle</a>
+        <a href="ai.html" class="nav-link">AI</a>
+        <a href="codegen.html" class="nav-link">Code Gen</a>
+        <a href="benchmarks.html" class="nav-link active">Benchmarks</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+      </div>
+      <button class="nav-toggle" id="nav-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="lattice.html" class="mobile-link">Lattice</a>
+    <a href="isabelle.html" class="mobile-link">Isabelle</a>
+    <a href="ai.html" class="mobile-link">AI</a>
+    <a href="codegen.html" class="mobile-link">Code Gen</a>
+    <a href="benchmarks.html" class="mobile-link">Benchmarks</a>
+    <div class="mobile-actions">
+      <a href="https://github.com/your-repo/isabella" class="btn btn-secondary">GitHub</a>
+    </div>
+  </div>
+
+  <!-- Page Header -->
+  <section class="page-header">
+    <div class="container">
+      <span class="section-label">Performance</span>
+      <h1 class="page-title">Benchmarks</h1>
+      <p class="page-subtitle">
+        Cross-language performance comparison of extracted implementations.
+      </p>
+    </div>
+  </section>
+
+  <!-- Benchmark Controls -->
+  <section class="benchmark-controls">
+    <div class="container">
+      <div class="controls-row">
+        <div class="control-group">
+          <label class="control-label">Function</label>
+          <select id="function-select" class="control-select">
+            <option value="inner_prod">inner_prod</option>
+            <option value="vec_add">vec_add</option>
+            <option value="mat_vec_mult">mat_vec_mult</option>
+            <option value="lwe_encrypt">lwe_encrypt</option>
+            <option value="lwe_decrypt">lwe_decrypt</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label class="control-label">Metric</label>
+          <select id="metric-select" class="control-select">
+            <option value="mean">Mean</option>
+            <option value="median">Median</option>
+            <option value="min">Min</option>
+            <option value="max">Max</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label class="control-label">Scale</label>
+          <select id="scale-select" class="control-select">
+            <option value="linear">Linear</option>
+            <option value="log">Logarithmic</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chart Section -->
+  <section class="chart-section">
+    <div class="container">
+      <div class="chart-container">
+        <div class="chart-header">
+          <h2 class="chart-title" id="chart-title">inner_prod Performance</h2>
+          <div class="chart-legend" id="chart-legend"></div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="benchmark-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Section -->
+  <section class="stats-section">
+    <div class="container">
+      <h2 class="section-title">Summary Statistics</h2>
+      <div class="stats-grid" id="stats-grid">
+        <!-- Stats cards will be populated by JavaScript -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Data Table -->
+  <section class="table-section">
+    <div class="container">
+      <h2 class="section-title">Raw Data</h2>
+      <div class="table-wrapper">
+        <table class="data-table" id="data-table">
+          <thead>
+            <tr>
+              <th>Language</th>
+              <th>Size</th>
+              <th>Min (ms)</th>
+              <th>Max (ms)</th>
+              <th>Mean (ms)</th>
+              <th>Median (ms)</th>
+              <th>StdDev</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Data rows will be populated by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="logo-symbol">&gt;</span>
+          <span class="logo-text">isabella</span>
+        </div>
+        <p class="footer-tagline">Formally verified lattice cryptography.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/your-repo/isabella">GitHub</a>
+        <a href="https://github.com/your-repo/isabella/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/your-repo/isabella/issues">Issues</a>
+      </div>
+      <div class="footer-bottom">
+        <p>MIT License</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+  <script src="benchmarks.js"></script>
+</body>
+</html>
