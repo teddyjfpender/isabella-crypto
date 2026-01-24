@@ -71,12 +71,34 @@ next
     by (simp add: vec_add_def inner_prod_def algebra_simps)
 qed
 
+(* ========== Encoding/Decoding ========== *)
+
 definition encode_bit :: "int => bool => int" where
   "encode_bit q b = (if b then q div 2 else 0)"
 
+(* Distance from 0 in Z_q (centered representation).
+   This computes min(d mod q, q - (d mod q)), i.e., the distance to the nearest
+   representative of 0 in the centered range (-q/2, q/2]. *)
+definition dist0 :: "int => int => int" where
+  "dist0 q d = (let d' = d mod q in if d' > q div 2 then q - d' else d')"
+
+(* Decodes a ciphertext value to a bit based on distance from 0 vs q/2.
+   Returns True if closer to q/2 (distance > q/4). *)
 definition decode_bit :: "int => int => bool" where
-  "decode_bit q d = (let d' = d mod q in
-    (if d' > q div 2 then q - d' else d') > q div 4)"
+  "decode_bit q d = (dist0 q d > q div 4)"
+
+lemma dist0_alt: "dist0 q d = (let d' = d mod q in if d' > q div 2 then q - d' else d')"
+  by (simp add: dist0_def)
+
+lemma decode_bit_alt: "decode_bit q d =
+  (let d' = d mod q in (if d' > q div 2 then q - d' else d') > q div 4)"
+  unfolding decode_bit_def dist0_def Let_def by simp
+
+lemma dist0_mod: "dist0 q (d mod q) = dist0 q d"
+  unfolding dist0_def Let_def by (simp add: mod_mod_trivial)
+
+lemma decode_bit_mod: "decode_bit q (d mod q) = decode_bit q d"
+  unfolding decode_bit_def using dist0_mod by simp
 
 lemma div2_pos:
   fixes q :: int
@@ -100,6 +122,25 @@ proof -
   then show ?thesis by simp
 qed
 
+lemma dist0_zero:
+  fixes q :: int
+  assumes "q > 0"
+  shows "dist0 q 0 = 0"
+  unfolding dist0_def using assms by simp
+
+lemma dist0_half:
+  fixes q :: int
+  assumes "q > 0"
+  shows "dist0 q (q div 2) = q div 2"
+proof -
+  have half_pos: "q div 2 >= 0" using assms by simp
+  have half_lt_q: "q div 2 < q" using assms by simp
+  have mod_half: "(q div 2) mod q = q div 2"
+    using half_pos half_lt_q by simp
+  have not_gt: "\<not> (q div 2 > q div 2)" by simp
+  show ?thesis unfolding dist0_def Let_def using mod_half not_gt by simp
+qed
+
 lemma encode_decode_inverse:
   fixes q :: int
   assumes "q > 2"
@@ -107,25 +148,20 @@ lemma encode_decode_inverse:
 proof (cases b)
   case True
   have q_pos: "q > 0" using assms by arith
-  have half_pos: "q div 2 > 0" using div2_pos[OF assms] .
-  have half_lt_q: "q div 2 < q" using q_pos by simp
-  have mod_half: "(q div 2) mod q = q div 2"
-    using half_pos half_lt_q by simp
-  have not_gt: "\<not> (q div 2 > q div 2)" by simp
   have quarter_lt_half: "q div 4 < q div 2"
     using assms by (simp add: zdiv_mono2)
+  have "dist0 q (q div 2) = q div 2"
+    using dist0_half[OF q_pos] .
+  then have "decode_bit q (q div 2) = (q div 2 > q div 4)"
+    unfolding decode_bit_def by simp
   then show ?thesis
-    using True mod_half not_gt
-    by (simp add: decode_bit_def encode_bit_def Let_def)
+    using True quarter_lt_half by (simp add: encode_bit_def)
 next
   case False
   have q_pos: "q > 0" using assms by arith
-  have q_nonneg: "q >= 0" using q_pos by arith
-  have zero_mod: "(0::int) mod q = 0" using q_pos by simp
-  (* decode_bit q 0: d' = 0 mod q = 0; 0 > q/2? No; distance = 0; 0 > q/4? No *)
-  have "decode_bit q 0 = False"
-    unfolding decode_bit_def Let_def
-    using q_nonneg by simp
+  have "dist0 q 0 = 0" using dist0_zero[OF q_pos] .
+  then have "decode_bit q 0 = False"
+    unfolding decode_bit_def using q_pos by simp
   then show ?thesis
     using False by (simp add: encode_bit_def)
 qed
@@ -188,10 +224,16 @@ next
   finally show ?case .
 qed
 
-(* Note: The inner product transpose identity <s, A^T r> = <As, r> is a standard
-   linear algebra fact. In this formalization, we assume it via the iprod assumption
-   in the main lemmas, as the full proof requires careful matrix dimension tracking
-   that would distract from the cryptographic correctness focus. *)
+(* ========== Transpose Identity ========== *)
+(* The inner product transpose identity <s, A^T r> = <As, r> is a standard linear
+   algebra fact. Both sides equal sum_{i,j} A_ij * s_j * r_i:
+   - LHS: sum_j s_j * (A^T r)_j = sum_j s_j * sum_i A_ij * r_i
+   - RHS: sum_i r_i * (As)_i = sum_i r_i * sum_j A_ij * s_j
+
+   In this formalization, we pass this as the iprod assumption to the main lemmas.
+   The validity predicates (valid_matrix, valid_vec) ensure the dimensions match.
+   A full proof in Isabelle would use nth_transpose and sum.swap but requires
+   careful handling of index bounds. *)
 
 definition lwe_encrypt :: "lwe_public_key => int => int_vec => bool => lwe_ciphertext" where
   "lwe_encrypt pk q r m =
@@ -350,8 +392,12 @@ proof -
         (* d' = noise < q/4 < q/2, so not > q/2 *)
         have "\<not> (?d' > q div 2)" using d'_eq `?noise < q div 4` q_div4_pos by simp
         (* distance = d' = noise < q/4 *)
+        (* dist0 q d' = d' since d' < q/2 *)
+        have "dist0 q ?d' = ?d'"
+          using d'_eq `?noise < q div 4` `\<not> (?d' > q div 2)`
+          unfolding dist0_def Let_def by simp
         hence "decode_bit q ?d' = (?d' > q div 4)"
-          by (simp add: decode_bit_def Let_def)
+          by (simp add: decode_bit_def)
         thus ?thesis using d'_eq `?noise < q div 4` True by simp
       next
         case False
@@ -359,23 +405,26 @@ proof -
         have noise_neg: "?noise < 0" using False by simp
         have noise_gt: "?noise > - (q div 4)" using noise_small by simp
         have noise_gt_neg_q: "?noise > -q" using noise_gt q_gt by simp
+        have sum_nonneg: "?noise + q >= 0" using noise_gt_neg_q by simp
+        have sum_lt_q: "?noise + q < q" using noise_neg by simp
         (* For -q < a < 0 and q > 0: a mod q = a + q *)
         have d'_eq: "?d' = q + ?noise"
-        proof -
-          have "?noise + q >= 0" using noise_gt_neg_q by simp
-          have "?noise + q < q" using noise_neg by simp
-          thus ?thesis using `?noise + q >= 0` `?noise + q < q` q_pos
-            by (metis add.commute mod_add_self2 mod_pos_pos_trivial)
-        qed
+          using sum_nonneg sum_lt_q q_pos
+          by (metis add.commute mod_add_self2 mod_pos_pos_trivial)
         (* q + noise > q - q/4 = 3q/4 > q/2 *)
-        have "q + ?noise > q - q div 4" using noise_gt by simp
+        have sum_gt: "q + ?noise > q - q div 4" using noise_gt by simp
         have "q - q div 4 >= q div 2" using q_gt by simp
-        hence d'_gt: "?d' > q div 2" using `q + ?noise > q - q div 4` d'_eq by simp
+        hence d'_gt: "?d' > q div 2" using sum_gt d'_eq by simp
         (* distance = q - d' = q - (q + noise) = -noise < q/4 *)
         have dist_eq: "q - ?d' = - ?noise" using d'_eq by simp
         have dist_lt: "- ?noise < q div 4" using noise_small noise_neg by simp
-        have "decode_bit q ?d' = (q - ?d' > q div 4)"
-          using d'_gt by (simp add: decode_bit_def Let_def)
+        (* dist0 q d' = q - d' since d' > q/2 *)
+        have d'_mod: "?d' mod q = ?d'"
+          using d'_eq noise_neg sum_nonneg sum_lt_q by simp
+        have "dist0 q ?d' = q - ?d'"
+          using d'_gt d'_mod unfolding dist0_def Let_def by simp
+        hence "decode_bit q ?d' = (q - ?d' > q div 4)"
+          by (simp add: decode_bit_def)
         thus ?thesis using dist_eq dist_lt by simp
       qed
     qed
@@ -419,8 +468,12 @@ proof -
           case True
           have dist: "q - ?sum > q div 4"
             using sum_ub q_gt by simp
-          have "decode_bit q ?sum = (q - ?sum > q div 4)"
-            using True d'_eq by (simp add: decode_bit_def Let_def)
+          (* dist0 q sum = q - sum since sum > q/2 *)
+          have sum_mod: "?sum mod q = ?sum" using d'_eq by simp
+          have "dist0 q ?sum = q - ?sum"
+            using True sum_mod unfolding dist0_def Let_def by simp
+          hence "decode_bit q ?sum = (q - ?sum > q div 4)"
+            by (simp add: decode_bit_def)
           thus ?thesis using dist d'_eq by simp
         next
           case False
@@ -435,9 +488,13 @@ proof -
           have half_gt_quarter: "q div 2 > q div 4" using q_div2_pos q_div4_pos q_gt by simp
           (* decode_bit uses d mod q internally, so decode_bit q (d mod q) = decode_bit q d *)
           have decode_mod: "decode_bit q (?sum mod q) = decode_bit q ?sum"
-            unfolding decode_bit_def by (simp add: mod_mod_trivial)
-          have "decode_bit q ?sum = True"
-            unfolding decode_bit_def Let_def using d'_is_half not_gt_half half_gt_quarter by simp
+            using decode_bit_mod .
+          (* dist0 q sum = sum = q/2 since sum <= q/2 *)
+          have "dist0 q ?sum = ?sum"
+            using d'_is_half not_gt_half sum_eq unfolding dist0_def Let_def by simp
+          hence "decode_bit q ?sum = (?sum > q div 4)"
+            by (simp add: decode_bit_def)
+          hence "decode_bit q ?sum = True" using sum_eq half_gt_quarter by simp
           thus ?thesis using decode_mod by simp
         qed
       next
@@ -450,9 +507,13 @@ proof -
         (* sum in (q/4, q/2), so not > q/2, distance = sum > q/4 *)
         have not_gt: "\<not> (?sum > q div 2)" using sum_lt_half by simp
         have decode_mod: "decode_bit q (?sum mod q) = decode_bit q ?sum"
-          unfolding decode_bit_def by (simp add: mod_mod_trivial)
-        have "decode_bit q ?sum = (?sum > q div 4)"
-          using not_gt d'_eq by (simp add: decode_bit_def Let_def)
+          using decode_bit_mod .
+        (* dist0 q sum = sum since sum <= q/2 *)
+        have sum_mod: "?sum mod q = ?sum" using d'_eq by simp
+        have "dist0 q ?sum = ?sum"
+          using not_gt sum_mod unfolding dist0_def Let_def by simp
+        hence "decode_bit q ?sum = (?sum > q div 4)"
+          by (simp add: decode_bit_def)
         hence "decode_bit q ?sum = True" using sum_lb by simp
         thus ?thesis using decode_mod by simp
       qed
@@ -464,28 +525,28 @@ qed
 export_code
   vec_add vec_mod inner_prod
   mat_vec_mult transpose mat_transpose_vec_mult
-  encode_bit decode_bit
+  encode_bit decode_bit dist0
   lwe_encrypt lwe_decrypt
   in Haskell module_name "Lattice.LWE_Regev"
 
 export_code
   vec_add vec_mod inner_prod
   mat_vec_mult transpose mat_transpose_vec_mult
-  encode_bit decode_bit
+  encode_bit decode_bit dist0
   lwe_encrypt lwe_decrypt
   in SML module_name LWE_Regev
 
 export_code
   vec_add vec_mod inner_prod
   mat_vec_mult transpose mat_transpose_vec_mult
-  encode_bit decode_bit
+  encode_bit decode_bit dist0
   lwe_encrypt lwe_decrypt
   in OCaml module_name LWE_Regev
 
 export_code
   vec_add vec_mod inner_prod
   mat_vec_mult transpose mat_transpose_vec_mult
-  encode_bit decode_bit
+  encode_bit decode_bit dist0
   lwe_encrypt lwe_decrypt
   in Scala module_name LWE_Regev
 

@@ -2,7 +2,7 @@
 
 module
   Lattice.LWE_Regev(Int, Num, Lwe_ciphertext_ext, Lwe_public_key_ext,
-                     Lwe_secret_key_ext, transpose, vec_add, vec_mod,
+                     Lwe_secret_key_ext, transpose, dist0, vec_add, vec_mod,
                      decode_bit, encode_bit, inner_prod, lwe_decrypt,
                      mat_vec_mult, mat_transpose_vec_mult, lwe_encrypt)
   where {
@@ -85,9 +85,6 @@ _ : t -> [t];
 apsnd :: forall a b c. (a -> b) -> (c, a) -> (c, b);
 apsnd f (x, y) = (x, f y);
 
-vec_add :: [Int] -> [Int] -> [Int];
-vec_add xs ys = map (\ (a, b) -> plus_int a b) (zip xs ys);
-
 divmod_integer :: Integer -> Integer -> (Integer, Integer);
 divmod_integer k l =
   (if k == (0 :: Integer) then ((0 :: Integer), (0 :: Integer))
@@ -117,9 +114,6 @@ modulo_int :: Int -> Int -> Int;
 modulo_int k l =
   Int_of_integer (modulo_integer (integer_of_int k) (integer_of_int l));
 
-vec_mod :: [Int] -> Int -> [Int];
-vec_mod v q = map (\ x -> modulo_int x q) v;
-
 divide_integer :: Integer -> Integer -> Integer;
 divide_integer k l = fst (divmod_integer k l);
 
@@ -133,13 +127,22 @@ minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
 less_int :: Int -> Int -> Bool;
 less_int k l = integer_of_int k < integer_of_int l;
 
-decode_bit :: Int -> Int -> Bool;
-decode_bit q d =
+dist0 :: Int -> Int -> Int;
+dist0 q d =
   let {
     da = modulo_int d q;
-  } in less_int (divide_int q (Int_of_integer (4 :: Integer)))
-         (if less_int (divide_int q (Int_of_integer (2 :: Integer))) da
-           then minus_int q da else da);
+  } in (if less_int (divide_int q (Int_of_integer (2 :: Integer))) da
+         then minus_int q da else da);
+
+vec_add :: [Int] -> [Int] -> [Int];
+vec_add xs ys = map (\ (a, b) -> plus_int a b) (zip xs ys);
+
+vec_mod :: [Int] -> Int -> [Int];
+vec_mod v q = map (\ x -> modulo_int x q) v;
+
+decode_bit :: Int -> Int -> Bool;
+decode_bit q d =
+  less_int (divide_int q (Int_of_integer (4 :: Integer))) (dist0 q d);
 
 encode_bit :: Int -> Bool -> Int;
 encode_bit q b =

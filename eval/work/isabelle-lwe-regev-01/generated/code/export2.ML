@@ -5,6 +5,7 @@ structure LWE_Regev : sig
   type 'a lwe_public_key_ext
   type 'a lwe_secret_key_ext
   val transpose : ('a list) list -> ('a list) list
+  val dist0 : int -> int -> int
   val vec_add : int list -> int list -> int list
   val vec_mod : int list -> int -> int list
   val decode_bit : int -> int -> bool
@@ -85,8 +86,6 @@ fun transpose [] = []
 
 fun apsnd f (x, y) = (x, f y);
 
-fun vec_add xs ys = map (fn (a, b) => plus_inta a b) (zip xs ys);
-
 fun divmod_integer k l =
   (if ((k : IntInf.int) = (0 : IntInf.int))
     then ((0 : IntInf.int), (0 : IntInf.int))
@@ -125,8 +124,6 @@ fun modulo_integer k l = snd (divmod_integer k l);
 fun modulo_int k l =
   Int_of_integer (modulo_integer (integer_of_int k) (integer_of_int l));
 
-fun vec_mod v q = map (fn x => modulo_int x q) v;
-
 fun fst (x1, x2) = x1;
 
 fun divide_integer k l = fst (divmod_integer k l);
@@ -139,14 +136,20 @@ fun minus_int k l =
 
 fun less_int k l = IntInf.< (integer_of_int k, integer_of_int l);
 
-fun decode_bit q d =
+fun dist0 q d =
   let
     val da = modulo_int d q;
   in
-    less_int (divide_int q (Int_of_integer (4 : IntInf.int)))
-      (if less_int (divide_int q (Int_of_integer (2 : IntInf.int))) da
-        then minus_int q da else da)
+    (if less_int (divide_int q (Int_of_integer (2 : IntInf.int))) da
+      then minus_int q da else da)
   end;
+
+fun vec_add xs ys = map (fn (a, b) => plus_inta a b) (zip xs ys);
+
+fun vec_mod v q = map (fn x => modulo_int x q) v;
+
+fun decode_bit q d =
+  less_int (divide_int q (Int_of_integer (4 : IntInf.int))) (dist0 q d);
 
 fun encode_bit q b =
   (if b then divide_int q (Int_of_integer (2 : IntInf.int)) else zero_inta);

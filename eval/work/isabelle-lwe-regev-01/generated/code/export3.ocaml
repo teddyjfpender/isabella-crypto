@@ -5,6 +5,7 @@ module LWE_Regev : sig
   type 'a lwe_public_key_ext
   type 'a lwe_secret_key_ext
   val transpose : ('a list) list -> ('a list) list
+  val dist0 : int -> int -> int
   val vec_add : int list -> int list -> int list
   val vec_mod : int list -> int -> int list
   val decode_bit : int -> int -> bool
@@ -86,8 +87,6 @@ let rec transpose
 
 let rec apsnd f (x, y) = (x, f y);;
 
-let rec vec_add xs ys = map (fun (a, b) -> plus_inta a b) (zip xs ys);;
-
 let rec divmod_integer
   k l = (if Z.equal k Z.zero then (Z.zero, Z.zero)
           else (if Z.lt Z.zero l
@@ -125,8 +124,6 @@ let rec modulo_integer k l = snd (divmod_integer k l);;
 let rec modulo_int
   k l = Int_of_integer (modulo_integer (integer_of_int k) (integer_of_int l));;
 
-let rec vec_mod v q = map (fun x -> modulo_int x q) v;;
-
 let rec fst (x1, x2) = x1;;
 
 let rec divide_integer k l = fst (divmod_integer k l);;
@@ -139,11 +136,17 @@ let rec minus_int
 
 let rec less_int k l = Z.lt (integer_of_int k) (integer_of_int l);;
 
-let rec decode_bit
+let rec dist0
   q d = (let da = modulo_int d q in
-          less_int (divide_int q (Int_of_integer (Z.of_int 4)))
-            (if less_int (divide_int q (Int_of_integer (Z.of_int 2))) da
-              then minus_int q da else da));;
+          (if less_int (divide_int q (Int_of_integer (Z.of_int 2))) da
+            then minus_int q da else da));;
+
+let rec vec_add xs ys = map (fun (a, b) -> plus_inta a b) (zip xs ys);;
+
+let rec vec_mod v q = map (fun x -> modulo_int x q) v;;
+
+let rec decode_bit
+  q d = less_int (divide_int q (Int_of_integer (Z.of_int 4))) (dist0 q d);;
 
 let rec encode_bit
   q b = (if b then divide_int q (Int_of_integer (Z.of_int 2)) else zero_inta);;

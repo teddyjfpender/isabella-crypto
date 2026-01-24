@@ -117,14 +117,6 @@ def apsnd[A, B, C](f : A => B, x1 : (C, A)) : (C, B) = (f, x1) match {
   case (f, (x, y)) => (x, f(y))
 }
 
-def vec_add(xs : List[int], ys : List[int]) : List[int] =
-  map[(int, int),
-       int](((a : (int, int)) => {
-                                   val (aa, b) = a : ((int, int));
-                                   plus_inta(aa, b)
-                                 }),
-             zip[int, int](xs, ys))
-
 def divmod_integer(k : BigInt, l : BigInt) : (BigInt, BigInt) =
   (k == BigInt(0) match { case true => (BigInt(0), BigInt(0))
     case false => (BigInt(0) < l match {
@@ -170,9 +162,6 @@ def modulo_integer(k : BigInt, l : BigInt) : BigInt =
 def modulo_int(k : int, l : int) : int =
   int_of_integer(modulo_integer(integer_of_int(k), integer_of_int(l)))
 
-def vec_mod(v : List[int], q : int) : List[int] =
-  map[int, int](((x : int) => modulo_int(x, q)), v)
-
 def fst[A, B](x0 : (A, B)) : A = x0 match {
   case (x1, x2) => x1
 }
@@ -188,13 +177,26 @@ def minus_int(k : int, l : int) : int =
 
 def less_int(k : int, l : int) : Boolean = integer_of_int(k) < integer_of_int(l)
 
-def decode_bit(q : int, d : int) : Boolean =
+def dist0(q : int, d : int) : int =
   {
     val da = modulo_int(d, q) : int;
-    less_int(divide_int(q, int_of_integer(BigInt(4))),
-              (less_int(divide_int(q, int_of_integer(BigInt(2))), da) match {
-                case true => minus_int(q, da) case false => da }))
+    (less_int(divide_int(q, int_of_integer(BigInt(2))), da) match {
+      case true => minus_int(q, da) case false => da })
   }
+
+def vec_add(xs : List[int], ys : List[int]) : List[int] =
+  map[(int, int),
+       int](((a : (int, int)) => {
+                                   val (aa, b) = a : ((int, int));
+                                   plus_inta(aa, b)
+                                 }),
+             zip[int, int](xs, ys))
+
+def vec_mod(v : List[int], q : int) : List[int] =
+  map[int, int](((x : int) => modulo_int(x, q)), v)
+
+def decode_bit(q : int, d : int) : Boolean =
+  less_int(divide_int(q, int_of_integer(BigInt(4))), dist0(q, d))
 
 def encode_bit(q : int, b : Boolean) : int =
   (b match { case true => divide_int(q, int_of_integer(BigInt(2)))
