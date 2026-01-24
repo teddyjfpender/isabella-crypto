@@ -1,24 +1,23 @@
-# Set repository language to Isabelle
-*.thy linguist-detectable=true
+# Isabelle is the primary language
 *.thy linguist-language=Isabelle
 
-# Mark shell scripts as vendored (not primary language)
-*.sh linguist-vendored=true
-collect.sh linguist-vendored=true
-build-js.sh linguist-vendored=true
+# Vendored scripts (exclude from language stats)
+*.sh linguist-vendored
+*.py linguist-vendored
 
-# Mark generated/vendored code
-haskell/isabella/src/*.hs linguist-generated=true
-ocaml/isabella/src/*.ml linguist-generated=true
-scala/isabella/src/**/*.scala linguist-generated=true
-sml/isabella/src/*.sml linguist-generated=true
-javascript/isabella/dist/*.js linguist-generated=true
-typescript/isabella/dist/*.js linguist-generated=true
+# Generated code from Isabelle export
+haskell/** linguist-generated
+ocaml/** linguist-generated
+scala/** linguist-generated
+sml/** linguist-generated
+javascript/** linguist-generated
+typescript/** linguist-generated
 
-# Mark website as documentation
-website/*.html linguist-documentation=true
-website/*.css linguist-documentation=true
-website/*.js linguist-documentation=true
+# Documentation
+website/** linguist-documentation
 
-# Mark CI/config files as vendored
-.github/** linguist-vendored=true
+# Vendored/tooling directories
+.github/** linguist-vendored
+bench/** linguist-vendored
+ralph/** linguist-vendored
+eval/** linguist-vendored
