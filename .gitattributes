@@ -1,0 +1,15 @@
+# Set repository language to Isabelle
+*.thy linguist-detectable=true
+
+# Mark generated/vendored code
+haskell/isabella/src/*.hs linguist-generated=true
+ocaml/isabella/src/*.ml linguist-generated=true
+scala/isabella/src/**/*.scala linguist-generated=true
+sml/isabella/src/*.sml linguist-generated=true
+javascript/isabella/dist/*.js linguist-generated=true
+typescript/isabella/dist/*.js linguist-generated=true
+
+# Mark website as not primary
+website/*.html linguist-documentation=true
+website/*.css linguist-documentation=true
+website/*.js linguist-documentation=true
