@@ -26,18 +26,18 @@ jobs:
           path: |
             ~/.isabelle
             ~/Isabelle*
-          key: isabelle-2024-${{ runner.os }}-${{ hashFiles('eval/work/**/ROOT', 'eval/work/**/*.thy') }}
+          key: isabelle-2025-${{ runner.os }}-${{ hashFiles('eval/work/**/ROOT', 'eval/work/**/*.thy') }}
           restore-keys: |
-            isabelle-2024-${{ runner.os }}-
+            isabelle-2025-${{ runner.os }}-
 
       - name: Install Isabelle
         run: |
-          if [[ ! -d ~/Isabelle2024 ]]; then
-            curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/dist/Isabelle2024_linux.tar.gz
+          if [[ ! -d ~/Isabelle2025 ]]; then
+            curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/website-Isabelle2025/dist/Isabelle2025_linux.tar.gz
             tar -xzf isabelle.tar.gz -C ~
             rm isabelle.tar.gz
           fi
-          echo "$HOME/Isabelle2024/bin" >> $GITHUB_PATH
+          echo "$HOME/Isabelle2025/bin" >> $GITHUB_PATH
 
       - name: Build Isabelle theories
         run: |

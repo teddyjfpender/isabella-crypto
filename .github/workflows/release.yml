@@ -36,10 +36,10 @@ jobs:
 
       - name: Install Isabelle
         run: |
-          curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/dist/Isabelle2024_linux.tar.gz
+          curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/website-Isabelle2025/dist/Isabelle2025_linux.tar.gz
           tar -xzf isabelle.tar.gz -C ~
           rm isabelle.tar.gz
-          echo "$HOME/Isabelle2024/bin" >> $GITHUB_PATH
+          echo "$HOME/Isabelle2025/bin" >> $GITHUB_PATH
 
       - name: Build and export Isabelle
         run: |
