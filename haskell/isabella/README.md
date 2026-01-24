@@ -82,7 +82,8 @@ To regenerate the Haskell code from Isabelle proofs:
 ralph/isabella-loop.sh --prompt isabelle-lwe-regev-01 ...
 
 # Collect generated code into this library
-haskell/collect.sh
+./collect.sh                # Haskell only (default)
+./collect.sh --lang all     # All languages (Haskell, SML, OCaml, Scala)
 ```
 
 ## License

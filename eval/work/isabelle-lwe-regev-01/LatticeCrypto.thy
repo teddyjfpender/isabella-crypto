@@ -197,4 +197,25 @@ export_code
   lwe_encrypt lwe_decrypt
   in Haskell module_name "Lattice.LWE_Regev"
 
+export_code
+  vec_add vec_mod inner_prod
+  mat_vec_mult transpose mat_transpose_vec_mult
+  encode_bit decode_bit
+  lwe_encrypt lwe_decrypt
+  in SML module_name LWE_Regev
+
+export_code
+  vec_add vec_mod inner_prod
+  mat_vec_mult transpose mat_transpose_vec_mult
+  encode_bit decode_bit
+  lwe_encrypt lwe_decrypt
+  in OCaml module_name LWE_Regev
+
+export_code
+  vec_add vec_mod inner_prod
+  mat_vec_mult transpose mat_transpose_vec_mult
+  encode_bit decode_bit
+  lwe_encrypt lwe_decrypt
+  in Scala module_name LWE_Regev
+
 end

@@ -6,3 +6,7 @@ session "LatticeCrypto" = "HOL" +
     LatticeCrypto
   export_files (in "generated") [1]
     "*:**.hs"
+    "*:**.ML"
+    "*:**.ml"
+    "*:**.ocaml"
+    "*:**.scala"

@@ -158,4 +158,20 @@ The default schema (`schema/code-output.schema.json`) expects:
 | `record_step.py` | Record verification step |
 | `steps_to_verify.py` | Generate verify.json |
 | `write_run_metadata.py` | Write run.json |
-| `collect_haskell.py` | Collect generated Haskell |
+
+## Collecting Generated Code
+
+After verification succeeds, use the project-root `collect.sh` script to gather generated code:
+
+```bash
+# From project root
+./collect.sh              # Haskell only (default)
+./collect.sh --lang all   # All languages (Haskell, SML, OCaml, Scala)
+./collect.sh --verbose    # Show which files are collected
+```
+
+This collects code from `eval/work/*/generated/` into the language-specific libraries:
+- `haskell/isabella/src/Lattice/`
+- `sml/isabella/src/Lattice/`
+- `ocaml/isabella/src/Lattice/`
+- `scala/isabella/src/Lattice/`

@@ -31,12 +31,18 @@ end
 
 ### Target Languages
 
+Isabelle supports four built-in target languages:
+
 ```isabelle
-export_code f in Haskell   (* Haskell *)
-export_code f in Scala     (* Scala *)
-export_code f in SML       (* Standard ML *)
-export_code f in OCaml     (* OCaml *)
+export_code f in Haskell   (* Haskell - .hs files *)
+export_code f in SML       (* Standard ML - .ML files *)
+export_code f in OCaml     (* OCaml - .ocaml files, rename to .ml *)
+export_code f in Scala     (* Scala - .scala files *)
 ```
+
+**Note:** OCaml files are exported with `.ocaml` extension internally; the collect script renames them to `.ml`.
+
+For C/C++/Rust, see Isabelle-LLVM framework (requires different approach with separation logic).
 
 ## Module Organization
 
@@ -499,3 +505,68 @@ vec_dot (Vec xs) (Vec ys) =
 vec_scale :: Integer -> Vec Integer -> Vec Integer
 vec_scale c (Vec xs) = Vec (map (* c) xs)
 ```
+
+## Multi-Language Export
+
+### Exporting to All Languages
+
+To export code to all supported languages in a single theory:
+
+```isabelle
+theory MultiLang
+  imports Main "HOL-Library.Code_Target_Numeral"
+begin
+
+fun my_func :: "int \<Rightarrow> int" where
+  "my_func n = n * 2"
+
+(* Export to all four languages *)
+export_code my_func
+  in Haskell module_name "MyLib.Func"
+
+export_code my_func
+  in SML module_name MyFunc
+
+export_code my_func
+  in OCaml module_name MyFunc
+
+export_code my_func
+  in Scala module_name MyFunc
+
+end
+```
+
+### ROOT File Configuration
+
+To extract generated code during `isabelle build -e`, configure `export_files` in ROOT:
+
+```
+session "MySession" = "HOL" +
+  options [document = false]
+  sessions
+    "HOL-Library"
+  theories
+    MyTheory
+  export_files (in "generated") [1]
+    "*:**.hs"      (* Haskell *)
+    "*:**.ML"      (* SML - uppercase extension *)
+    "*:**.ocaml"   (* OCaml - Isabelle uses .ocaml *)
+    "*:**.scala"   (* Scala *)
+```
+
+### Collecting Generated Code
+
+After `isabelle build -e` succeeds, use the collect script:
+
+```bash
+./collect.sh              # Haskell only (default)
+./collect.sh --lang sml   # SML only
+./collect.sh --lang all   # All languages
+./collect.sh --verbose    # Show collected files
+```
+
+Files are collected into:
+- `haskell/isabella/src/Lattice/` - `.hs` files
+- `sml/isabella/src/Lattice/` - `.ML` files
+- `ocaml/isabella/src/Lattice/` - `.ml` files (renamed from `.ocaml`)
+- `scala/isabella/src/Lattice/` - `.scala` files

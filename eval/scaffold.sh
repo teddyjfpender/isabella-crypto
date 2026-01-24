@@ -166,6 +166,9 @@ session "${SESSION_NAME}" = "${PARENT_SESSION}" +
     ${THEORY_NAME}
   export_files (in "generated") [1]
     "*:**.hs"
+    "*:**.ML"
+    "*:**.ocaml"
+    "*:**.scala"
 EOF
     log_success "Created ROOT file: ${ROOT_FILE}"
 fi

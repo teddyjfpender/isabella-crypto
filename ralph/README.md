@@ -85,8 +85,13 @@ The Ralph Loop implements Geoffrey Huntley's technique of iterative work-review 
    - No `sorry` or `oops` allowed
 
 3. **Decision**:
-   - **Success** (exit 0): Export Haskell code, exit
+   - **Success** (exit 0): Export code to all target languages, exit
    - **Failure**: Extract errors, save as feedback, continue to next iteration
+
+4. **Collection** (after success):
+   ```bash
+   ./collect.sh --lang all   # Gather Haskell, SML, OCaml, Scala
+   ```
 
 ## State Directory
 

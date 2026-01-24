@@ -41,15 +41,17 @@ npm install -g @openai/codex
 
 ```
 isabella-crypto/
+├── collect.sh             # Collect generated code (all languages)
 ├── haskell/               # Verified Haskell library
-│   ├── collect.sh         # Collect generated code
-│   └── isabella/          # The library
-│       ├── isabella.cabal
-│       └── src/
-│           ├── Lattice.hs
-│           └── Lattice/
-│               ├── LWE.hs
-│               └── LWE_Regev.hs
+│   └── isabella/          # Haskell library
+├── sml/                   # Verified SML library
+│   └── isabella/
+├── ocaml/                 # Verified OCaml library
+│   └── isabella/
+├── scala/                 # Verified Scala library
+│   └── isabella/
+├── docs/                  # Documentation
+│   └── LLVM-CODEGEN.md    # C/C++/Rust via Isabelle-LLVM
 ├── eval/                  # Evaluation harness
 │   ├── run-prompt.sh      # Single-shot runner
 │   ├── verify.sh          # Isabelle verification
@@ -67,6 +69,17 @@ isabella-crypto/
 └── dist/                  # Packaged skills
 ```
 
+## Supported Target Languages
+
+| Language | Status | Method |
+|----------|--------|--------|
+| Haskell | ✓ Built-in | `export_code ... in Haskell` |
+| SML | ✓ Built-in | `export_code ... in SML` |
+| OCaml | ✓ Built-in | `export_code ... in OCaml` |
+| Scala | ✓ Built-in | `export_code ... in Scala` |
+| C/C++ | Planned | Via [Isabelle-LLVM](docs/LLVM-CODEGEN.md) |
+| Rust | Planned | Via Isabelle-LLVM + FFI |
+
 ## Quick Start
 
 ### Building Isabelle Theories
@@ -76,32 +89,45 @@ cd isabelle
 isabelle build -d . -v LatticeCrypto
 ```
 
-### Exporting Haskell Code
+### Collecting Generated Code
 
 ```bash
 # After ralph loop completes successfully, collect the generated code:
-haskell/collect.sh
+./collect.sh              # Haskell only (default)
+./collect.sh --lang all   # All languages
+./collect.sh --lang sml   # Specific language
+./collect.sh --verbose    # Show collected files
 ```
 
-Generated Haskell modules will be collected into `haskell/isabella/src/Lattice/`.
+Generated modules will be collected into:
+- `haskell/isabella/src/Lattice/*.hs`
+- `sml/isabella/src/Lattice/*.ML`
+- `ocaml/isabella/src/Lattice/*.ml`
+- `scala/isabella/src/Lattice/*.scala`
 
-### Building Haskell Library
+### Building Libraries
 
 ```bash
-cd haskell/isabella
-cabal build
+# Haskell
+cd haskell/isabella && cabal build
+
+# OCaml
+cd ocaml/isabella && dune build
+
+# Scala
+cd scala/isabella && sbt compile
 ```
 
-### Using the Library
+### Using the Haskell Library
 
 ```haskell
-import Lattice.LWE_Regev
+import qualified Lattice.LWE_Regev as Regev
 
 -- Encrypt a bit with LWE
-let ciphertext = lwe_encrypt publicKey q randomVector True
+let ciphertext = Regev.lwe_encrypt publicKey q randomVector True
 
 -- Decrypt
-let plaintext = lwe_decrypt secretKey q ciphertext
+let plaintext = Regev.lwe_decrypt secretKey q ciphertext
 ```
 
 ## Ralph Loop (Recommended)
