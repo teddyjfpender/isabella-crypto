@@ -137,6 +137,14 @@ ehthumbs.db
 Desktop.ini
 
 # --------------------------------------------
+# Benchmark Artifacts
+# --------------------------------------------
+# Keep benchmark results (valuable data)
+# bench/data/**/*.json  # DO NOT IGNORE
+# Ignore generated summary (can be regenerated)
+bench/data/summary.json
+
+# --------------------------------------------
 # Logs & Temp Files
 # --------------------------------------------
 *.log

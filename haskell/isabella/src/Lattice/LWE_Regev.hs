@@ -1,8 +1,8 @@
 {-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
 
 module
-  Lattice.LWE_Regev(Int, Num, Lwe_ciphertext_ext, Lwe_public_key_ext,
-                     Lwe_secret_key_ext, transpose, vec_add, vec_mod,
+  Lattice.LWE_Regev(Int(..), Num(..), Lwe_ciphertext_ext(..), Lwe_public_key_ext(..),
+                     Lwe_secret_key_ext(..), transpose, vec_add, vec_mod,
                      decode_bit, encode_bit, inner_prod, lwe_decrypt,
                      mat_vec_mult, mat_transpose_vec_mult, lwe_encrypt)
   where {

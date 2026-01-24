@@ -47,12 +47,50 @@ collect_haskell() {
     local count=0
     for src_file in $(find "$WORK_DIR" -path "$PATTERN" -type f 2>/dev/null); do
         filename=$(basename "$src_file")
-        cp "$src_file" "${LIB_DIR}/Lattice/${filename}"
+        local dest_file="${LIB_DIR}/Lattice/${filename}"
+        cp "$src_file" "$dest_file"
+
+        # Patch for benchmarks/usability: export type constructors
+        # Isabelle generates modules that hide constructors, making types opaque
+        patch_haskell_exports "$dest_file"
+
         [[ "$VERBOSE" == "true" ]] && log_info "  Haskell: ${filename}"
         ((count++))
     done
 
     echo "$count"
+}
+
+# Patch Haskell module exports to include type constructors
+# Isabelle generates abstract types (exports type but not constructor)
+patch_haskell_exports() {
+    local file="$1"
+    [[ ! -f "$file" ]] && return
+
+    # Use Python for reliable multi-line replacement
+    python3 << PYTHON
+import re
+
+with open('$file', 'r') as f:
+    content = f.read()
+
+# Match module export list: module\n  Name(exports...\n  )\n  where
+def add_constructors(match):
+    exports = match.group(0)
+    # Add (..) to type names to export constructors
+    exports = re.sub(r'\bInt\b(?!_)', 'Int(..)', exports)
+    exports = re.sub(r'\bNum\b', 'Num(..)', exports)
+    exports = re.sub(r'\bLwe_ciphertext_ext\b', 'Lwe_ciphertext_ext(..)', exports)
+    exports = re.sub(r'\bLwe_public_key_ext\b', 'Lwe_public_key_ext(..)', exports)
+    exports = re.sub(r'\bLwe_secret_key_ext\b', 'Lwe_secret_key_ext(..)', exports)
+    return exports
+
+# Match from "module" to "where {"
+content = re.sub(r'module\s+[\w.]+\([^)]+\)\s+where', add_constructors, content, flags=re.DOTALL)
+
+with open('$file', 'w') as f:
+    f.write(content)
+PYTHON
 }
 
 collect_sml() {

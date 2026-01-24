@@ -1,8 +1,8 @@
 {-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
 
 module
-  Lattice.LWE(Int, Nat, Num, Lwe_params_ext, Lwe_public_key_ext,
-               Lwe_secret_key_ext, dot, transpose, lwe_q, decode_bit,
+  Lattice.LWE(Int(..), Nat, Num(..), Lwe_params_ext, Lwe_public_key_ext(..),
+               Lwe_secret_key_ext(..), dot, transpose, lwe_q, decode_bit,
                encode_bit, lwe_s, lwe_decrypt, lwe_b, lwe_A, mat_vec_mult,
                lwe_encrypt, make, lwe_n, makea, makeb,
                lwe_correctness_condition)

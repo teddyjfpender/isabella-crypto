@@ -58,6 +58,11 @@ isabella-crypto/
 │   └── isabella/
 ├── typescript/            # TypeScript package with type definitions
 │   └── isabella/
+├── bench/                 # Cross-language benchmarks
+│   ├── run-benchmarks.sh  # Main benchmark runner
+│   ├── summarize.sh       # Generate comparison report
+│   ├── runners/           # Language-specific runners
+│   └── data/              # Benchmark results (JSON)
 ├── eval/                  # Evaluation harness
 │   ├── run-prompt.sh      # Single-shot runner
 │   ├── verify.sh          # Isabelle verification
@@ -139,6 +144,23 @@ The JavaScript/TypeScript build uses js_of_ocaml to compile OCaml to JS:
 Output:
 - `javascript/isabella/dist/isabella.js` - Compiled runtime
 - `typescript/isabella/` - TypeScript package with type definitions
+
+### Running Benchmarks
+
+Compare performance across all language targets:
+
+```bash
+# Run all benchmarks
+./bench/run-benchmarks.sh
+
+# Specific function with custom sizes
+./bench/run-benchmarks.sh --function inner_prod --sizes "100,1000,5000"
+
+# View summary report
+./bench/summarize.sh
+```
+
+Results are stored as JSON in `bench/data/<function>/<language>_<size>.json`.
 
 ### Using the Haskell Library
 
@@ -299,6 +321,7 @@ GitHub Actions workflows automate building and testing:
 | `ci.yml` | Push to main, PRs | Full build: Isabelle → all languages |
 | `pr-check.yml` | PRs | Fast syntax checks for Isabelle, TypeScript, OCaml, Haskell |
 | `release.yml` | Tags `v*` | Build and publish releases to GitHub, npm |
+| `benchmark.yml` | Tags `v*`, manual | Cross-language performance benchmarks |
 
 ### CI Pipeline
 

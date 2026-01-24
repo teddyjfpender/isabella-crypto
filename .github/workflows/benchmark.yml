@@ -1,0 +1,88 @@
+name: Benchmarks
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: 'Input sizes (comma-separated)'
+        required: false
+        default: '10,100,1000'
+      iterations:
+        description: 'Number of iterations'
+        required: false
+        default: '10'
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.8'
+          cabal-version: '3.10'
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.2'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Scala
+        uses: coursier/setup-action@v1
+        with:
+          apps: scala-cli
+
+      - name: Install OCaml dependencies
+        run: |
+          opam install -y zarith ocamlfind
+
+      - name: Build JavaScript (if not exists)
+        run: |
+          if [[ ! -f "javascript/isabella/dist/isabella.js" ]]; then
+            opam install -y dune zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
+            eval $(opam env)
+            cd ocaml/isabella && dune build src/js/isabella_js.bc.js
+            mkdir -p ../../javascript/isabella/dist
+            cp _build/default/src/js/isabella_js.bc.js ../../javascript/isabella/dist/isabella.js
+          fi
+
+      - name: Run benchmarks
+        run: |
+          SIZES="${{ github.event.inputs.sizes || '10,100,1000' }}"
+          ITERATIONS="${{ github.event.inputs.iterations || '10' }}"
+
+          eval $(opam env)
+          ./bench/run-benchmarks.sh \
+            --sizes "$SIZES" \
+            --iterations "$ITERATIONS" \
+            --languages "haskell,ocaml,javascript,scala"
+
+      - name: Generate summary
+        run: ./bench/summarize.sh
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench/data/
+          retention-days: 90
+
+      - name: Post summary to job
+        run: |
+          echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ./bench/summarize.sh >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
