@@ -1,0 +1,29 @@
+{
+  "prompt_id": "isabelle-sis-normal-form-01",
+  "generated_at": "2026-01-24T17:35:45.868294+00:00",
+  "prompt_path": "/Users/theodorepender/Coding/isabella-crypto/.ralph/isabelle-sis-normal-form-01/augmented/isabelle-sis-normal-form-01.md",
+  "skill": "isabelle-basics isabelle-proofs isabelle-datatypes isabelle-code-generation isabelle-lattice-crypto ",
+  "work_dir": "/Users/theodorepender/Coding/isabella-crypto/eval/work/isabelle-sis-normal-form-01",
+  "git": {
+    "commit": "41e808fa31bb8b24ddc45e1eed398be7588bdf0a",
+    "branch": "main",
+    "dirty": true
+  },
+  "model": "gpt-5.2-codex",
+  "exit_code": 0,
+  "success": true,
+  "timing": {
+    "started_at": "2026-01-24T17:18:30Z",
+    "completed_at": "2026-01-24T17:35:45Z",
+    "duration_ms": 1034000
+  },
+  "environment": {
+    "python_version": "3.9.6",
+    "platform": "Darwin",
+    "platform_version": "Darwin Kernel Version 24.3.0: Thu Jan  2 20:24:22 PST 2025; root:xnu-11215.81.4~3/RELEASE_ARM64_T6041"
+  },
+  "extra": {
+    "provider": "openai",
+    "session_name": "LatticeCrypto"
+  }
+}

@@ -592,3 +592,126 @@ lemma lwe_correctness:
 
 end
 ```
+
+## Problem Reductions and Equivalences
+
+### Normal-Form SIS Equivalence
+
+Normal-form (systematic) SIS uses matrices of the form A_nf = [A₀|I_n]. This is equivalent to general SIS:
+
+```isabelle
+(* SIS instance types *)
+record sis_instance =
+  sis_A :: int_matrix
+  sis_b :: int_vec
+
+record nf_sis_instance =
+  nfsis_A0 :: int_matrix  (* The non-identity part *)
+  nfsis_b0 :: int_vec
+
+(* Direction A: nfSIS → SIS *)
+(* Given nfSIS instance (A₀, b₀), create SIS instance by randomizing with B ∈ GL_n *)
+definition nfsis_to_sis :: "nf_sis_instance \<Rightarrow> int \<Rightarrow> int_matrix \<Rightarrow> sis_instance" where
+  "nfsis_to_sis nf_inst q B =
+     (let A_nf = concat_cols (nfsis_A0 nf_inst) (identity_matrix (length (nfsis_b0 nf_inst)))
+      in \<lparr> sis_A = mat_mat_mult_mod B A_nf q,
+           sis_b = mat_vec_mult_mod B (nfsis_b0 nf_inst) q \<rparr>)"
+
+(* Direction B: SIS → nfSIS *)
+(* Given SIS instance (A, b) with A = [A₀|B] where B is invertible *)
+definition sis_to_nfsis :: "sis_instance \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> nf_sis_instance" where
+  "sis_to_nfsis inst q n =
+     (let (A0, B) = split_cols (sis_A inst) (length (sis_A inst ! 0) - n);
+          B_inv = mat_inverse_mod B q
+      in \<lparr> nfsis_A0 = mat_mat_mult_mod B_inv A0 q,
+           nfsis_b0 = mat_vec_mult_mod B_inv (sis_b inst) q \<rparr>)"
+
+(* Key insight: the solution vector e is UNCHANGED by both reductions *)
+(* This is why shortness is automatically preserved *)
+lemma nfsis_sis_solution_preserved:
+  assumes "is_invertible_mod B q"
+    and "[A₀|I]·e ≡ b₀ (mod q)"
+  shows "B·[A₀|I]·e ≡ B·b₀ (mod q)"
+  (* Proof: direct matrix multiplication *)
+  sorry
+```
+
+### Short-Secret LWE Reductions
+
+Short-secret LWE (ssLWE) has s ← χ^n instead of s ← ℤ_q^n.
+
+```isabelle
+(* Reduction 1: ssLWE → LWE (same parameters) *)
+(* Mask the short secret with uniform randomness *)
+definition sslwe_to_lwe :: "int_matrix \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> int_matrix \<times> int_vec" where
+  "sslwe_to_lwe A y q r =
+     (A, vec_mod (vec_add y (vec_mat_mult r A)) q)"
+  (* y' = y + r^T·A = (s+r)^T·A + e where s' = s+r is now uniform *)
+
+(* Recovery: given s' = s + r, compute s = s' - r *)
+definition recover_short_secret :: "int_vec \<Rightarrow> int_vec \<Rightarrow> int_vec" where
+  "recover_short_secret s' r = vec_sub s' r"
+
+(* Reduction 2: LWE → ssLWE (needs m+n samples) *)
+(* Use the normal-form trick to eliminate uniform secret *)
+definition lwe_to_sslwe :: "int_matrix \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> int_matrix \<times> int_vec" where
+  "lwe_to_sslwe A y q n =
+     (let m_total = length (A ! 0);
+          (A0, B) = split_cols A (m_total - n);
+          (y0, y1) = split_vec y (length y - n);
+          B_inv = mat_inverse_mod B q;
+          s_tilde = vec_mat_mult y1 B_inv;  (* noisy secret estimate *)
+          A_ss = mat_mat_mult_mod B_inv A0 q;
+          z0 = vec_mod (vec_sub y0 (vec_mat_mult s_tilde A0)) q
+      in (A_ss, z0))"
+  (* Result: z₀ = (-e₁)^T · A_ss + e₀ where new secret is -e₁ (short!) *)
+
+(* The key algebraic identity for Reduction 2 *)
+lemma lwe_to_sslwe_correctness:
+  assumes "y = vec_mod (vec_add (vec_mat_mult s A) e) q"
+    and "A = concat_cols A0 B"
+    and "is_invertible_mod B q"
+  shows "(* z₀ = (-e₁)^T · (B⁻¹·A₀) + e₀ *)"
+  (* Proof sketch:
+     y₁ = s^T·B + e₁, so y₁·B⁻¹ = s + e₁·B⁻¹
+     z₀ = y₀ - (s + e₁·B⁻¹)·A₀
+        = s·A₀ + e₀ - s·A₀ - e₁·B⁻¹·A₀
+        = e₀ - e₁·(B⁻¹·A₀)
+        = (-e₁)·A_ss + e₀
+  *)
+  sorry
+
+(* Parameter relationship *)
+lemma sslwe_sample_requirement:
+  "LWE with m samples reduces to ssLWE requiring m+n samples"
+  (* The extra n samples are used to eliminate the uniform secret *)
+  sorry
+```
+
+### Utility Functions for Reductions
+
+```isabelle
+(* Matrix column operations *)
+definition concat_cols :: "int_matrix \<Rightarrow> int_matrix \<Rightarrow> int_matrix" where
+  "concat_cols A B = map2 (@) A B"
+
+definition split_cols :: "int_matrix \<Rightarrow> nat \<Rightarrow> int_matrix \<times> int_matrix" where
+  "split_cols A k = (map (take k) A, map (drop k) A)"
+
+definition identity_matrix :: "nat \<Rightarrow> int_matrix" where
+  "identity_matrix n = map (\<lambda>i. replicate i 0 @ [1] @ replicate (n - i - 1) 0) [0..<n]"
+
+(* Vector operations *)
+definition vec_sub :: "int_vec \<Rightarrow> int_vec \<Rightarrow> int_vec" where
+  "vec_sub = map2 (-)"
+
+definition vec_negate :: "int_vec \<Rightarrow> int_vec" where
+  "vec_negate v = map uminus v"
+
+definition split_vec :: "int_vec \<Rightarrow> nat \<Rightarrow> int_vec \<times> int_vec" where
+  "split_vec v k = (take k v, drop k v)"
+
+(* Vector-matrix multiplication (s^T · A) *)
+definition vec_mat_mult :: "int_vec \<Rightarrow> int_matrix \<Rightarrow> int_vec" where
+  "vec_mat_mult v A = map (\<lambda>j. sum_list (map2 (*) v (map (\<lambda>row. row ! j) A))) [0..<length (hd A)]"
+```
