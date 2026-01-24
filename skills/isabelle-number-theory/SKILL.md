@@ -9,9 +9,18 @@ description: Number theory for cryptography in Isabelle/HOL including modular ar
 
 This skill covers computational number theory in Isabelle/HOL, focusing on concepts essential for cryptography: modular arithmetic, primality, greatest common divisors, extended Euclidean algorithm, and the Chinese remainder theorem. These form the foundation for both classical RSA-style cryptography and modern lattice-based schemes.
 
+## Web References
+
+| Topic | URL | Description |
+|-------|-----|-------------|
+| HOL-Number_Theory | https://isabelle.in.tum.de/library/HOL/HOL-Number_Theory/index.html | Number theory library |
+| Primes Theory | https://isabelle.in.tum.de/library/HOL/HOL-Number_Theory/Primes.html | Primality definitions |
+| CRT Theory | https://isabelle.in.tum.de/library/HOL/HOL-Number_Theory/Residues.html | Chinese remainder theorem |
+
 ## Quick Use
 
 - Read `references/number-theory.md` before answering number theory questions
+- Use web search to fetch URLs above for number theory constructs
 - Use HOL-Number_Theory for advanced results
 - Leverage Code_Target_Numeral for efficient computation
 

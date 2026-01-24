@@ -9,9 +9,18 @@ description: Algebraic structures in Isabelle/HOL including groups, rings, field
 
 This skill covers abstract algebra in Isabelle/HOL, focusing on algebraic structures essential for cryptography: groups, rings, fields, polynomial rings, and quotient constructions. These structures underpin both classical and lattice-based cryptography.
 
+## Web References
+
+| Topic | URL | Description |
+|-------|-----|-------------|
+| HOL-Algebra | https://isabelle.in.tum.de/library/HOL/HOL-Algebra/index.html | Abstract algebra library |
+| Polynomials | https://isabelle.in.tum.de/library/HOL/HOL-Computational_Algebra/index.html | Polynomial rings |
+| Number Theory | https://isabelle.in.tum.de/library/HOL/HOL-Number_Theory/index.html | Modular arithmetic |
+
 ## Quick Use
 
 - Read `references/algebra.md` before answering algebraic structure questions
+- Use web search to fetch the URLs above for specific algebra constructs
 - Use HOL-Algebra for abstract structures with carriers
 - Use type classes for concrete instantiations
 

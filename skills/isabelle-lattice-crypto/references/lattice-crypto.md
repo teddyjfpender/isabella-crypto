@@ -171,34 +171,124 @@ definition lwe_secure :: "nat \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> 
 
 ### LWE-Based Encryption (Regev's Scheme)
 
-```isabelle
-(* Key generation *)
-definition regev_keygen :: "nat \<Rightarrow> int \<Rightarrow> real \<Rightarrow>
-                           int_matrix \<times> int_vec \<times> int_vec" where
-  "regev_keygen n q sigma =
-     (let A = random_matrix n n q;
-          s = random_vec n q;
-          e = gaussian_vec n sigma;
-          b = (A *\<^sub>v s +\<^sub>v e) mod\<^sub>v q
-      in (A, b, s))"  (* pk = (A,b), sk = s *)
+Regev's scheme is a foundational lattice-based PKE, secure under the LWE assumption.
 
-(* Encryption of bit mu *)
-definition regev_encrypt :: "int_matrix \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> bool \<Rightarrow> real \<Rightarrow>
-                            int_vec \<times> int" where
-  "regev_encrypt A b q mu sigma =
-     (let r = binary_vec (dim_row A);
-          e1 = gaussian_vec (dim_col A) sigma;
-          e2 = gaussian_sample sigma;
-          u = (transpose A *\<^sub>v r +\<^sub>v e1) mod\<^sub>v q;
-          v = (inner_prod b r + e2 + (if mu then q div 2 else 0)) mod q
-      in (u, v))"
+#### Parameters
+- **n**: Security parameter (dimension of secret vector)
+- **q**: Prime modulus (polynomial in n, typically q = poly(n))
+- **N**: Number of LWE samples (rows of A, typically N ≥ (n+1) log q)
+- **χ**: Error distribution (discrete Gaussian with small σ)
 
-(* Decryption *)
-definition regev_decrypt :: "int_vec \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> int \<Rightarrow> bool" where
-  "regev_decrypt s u v q =
-     (let d = (v - inner_prod s u) mod q in
-      \<bar>d\<bar> > q div 4)"
+#### Algorithms
+
+**KeyGen**:
+1. s ← ℤ_q^n (uniform random secret)
+2. A ← ℤ_q^(N×n) (uniform random matrix)
+3. e ← χ^N (error vector)
+4. b = A·s + e (mod q)
+5. pk = (A, b), sk = s
+
+**Encrypt(pk, m ∈ {0,1})**:
+1. r ← {0,1}^N (random binary vector)
+2. u = A^T · r (mod q) ∈ ℤ_q^n
+3. v = b^T · r + ⌊q/2⌋ · m (mod q) ∈ ℤ_q
+4. ct = (u, v)
+
+**Decrypt(sk, ct)**:
+1. d = v - s^T · u (mod q)
+2. m = 1 if |d - q/2| < |d|, else m = 0
+
+#### Correctness Analysis
+
+Decryption computes:
 ```
+d = v - s^T · u
+  = (b^T · r + ⌊q/2⌋ · m) - s^T · (A^T · r)
+  = ((As + e)^T · r + ⌊q/2⌋ · m) - s^T · A^T · r
+  = e^T · r + ⌊q/2⌋ · m
+```
+
+**Correctness condition**: |e^T · r| < ⌊q/4⌋
+
+Since r ∈ {0,1}^N (at most N ones) and e has small entries bounded by B:
+- |e^T · r| ≤ N · B
+- Correctness requires: N · B < q/4
+
+#### Isabelle Formalization Pattern
+
+```isabelle
+theory LWE_Encryption
+  imports Main "HOL-Library.Code_Target_Numeral"
+begin
+
+type_synonym int_vec = "int list"
+type_synonym int_matrix = "int list list"
+
+(* Vector operations *)
+definition inner_prod :: "int_vec \<Rightarrow> int_vec \<Rightarrow> int" where
+  "inner_prod u v = sum_list (map2 (*) u v)"
+
+definition mat_transpose_vec_mult :: "int_matrix \<Rightarrow> int_vec \<Rightarrow> int_vec" where
+  "mat_transpose_vec_mult A r = map (\<lambda>col. inner_prod col r) (transpose A)"
+
+(* Encoding: 0 ↦ 0, 1 ↦ ⌊q/2⌋ *)
+definition encode_bit :: "int \<Rightarrow> bool \<Rightarrow> int" where
+  "encode_bit q b = (if b then q div 2 else 0)"
+
+(* Decoding: closer to 0 → False, closer to q/2 → True *)
+definition decode_bit :: "int \<Rightarrow> int \<Rightarrow> bool" where
+  "decode_bit q d = (let d' = d mod q in
+                     \<bar>d' - q div 2\<bar> < \<bar>d'\<bar>)"
+
+(* Key and ciphertext records *)
+record lwe_public_key =
+  pk_A :: int_matrix
+  pk_b :: int_vec
+
+record lwe_secret_key =
+  sk_s :: int_vec
+
+record lwe_ciphertext =
+  ct_u :: int_vec
+  ct_v :: int
+
+(* Encryption: pk, modulus q, random r, bit m → ciphertext *)
+definition lwe_encrypt :: "lwe_public_key \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> bool \<Rightarrow> lwe_ciphertext" where
+  "lwe_encrypt pk q r m =
+     (let u = map (\<lambda>x. x mod q) (mat_transpose_vec_mult (pk_A pk) r);
+          v = (inner_prod (pk_b pk) r + encode_bit q m) mod q
+      in \<lparr> ct_u = u, ct_v = v \<rparr>)"
+
+(* Decryption: sk, modulus q, ciphertext → bit *)
+definition lwe_decrypt :: "lwe_secret_key \<Rightarrow> int \<Rightarrow> lwe_ciphertext \<Rightarrow> bool" where
+  "lwe_decrypt sk q ct =
+     (let d = (ct_v ct - inner_prod (sk_s sk) (ct_u ct)) mod q
+      in decode_bit q d)"
+
+(* Correctness theorem (requires error bound assumption) *)
+theorem lwe_correctness:
+  assumes pk_valid: "pk_b pk = map (\<lambda>x. x mod q) (vec_add (mat_vec_mult (pk_A pk) (sk_s sk)) e)"
+    and error_bound: "\<bar>inner_prod e r\<bar> < q div 4"
+    and q_positive: "q > 2"
+  shows "lwe_decrypt sk q (lwe_encrypt pk q r m) = m"
+  (* Proof expands definitions and uses error_bound *)
+  sorry
+
+end
+```
+
+#### Parameter Selection for Correctness
+
+For correctness with probability 1 - δ:
+- With N samples, r has at most N ones
+- If e_i bounded by B (e.g., B = 6σ with discrete Gaussian)
+- Need: N · B < q/4
+- Example: n=512, N=1024, B=10 → need q > 4·1024·10 = 40960
+
+Typical parameters (Regev original):
+- q = Õ(n²) for security
+- σ = 1/√(2π) · √n
+- N = (n + 1)⌈log q⌉
 
 ## Ring-LWE (RLWE)
 

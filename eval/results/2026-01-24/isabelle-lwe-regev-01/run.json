@@ -1,0 +1,29 @@
+{
+  "prompt_id": "isabelle-lwe-regev-01",
+  "generated_at": "2026-01-24T01:56:06.302901+00:00",
+  "prompt_path": "/Users/theodorepender/Coding/isabella-crypto/.ralph/isabelle-lwe-regev-01/augmented/isabelle-lwe-regev-01.md",
+  "skill": "isabelle-basics isabelle-proofs isabelle-datatypes isabelle-code-generation isabelle-lattice-crypto ",
+  "work_dir": "/Users/theodorepender/Coding/isabella-crypto/eval/work/isabelle-lwe-regev-01",
+  "git": {
+    "commit": "1e74391bc6e88f59281ad066f90a84621c52776f",
+    "branch": "main",
+    "dirty": true
+  },
+  "model": "gpt-5.2-codex",
+  "exit_code": 0,
+  "success": true,
+  "timing": {
+    "started_at": "2026-01-24T01:14:12Z",
+    "completed_at": "2026-01-24T01:56:06Z",
+    "duration_ms": 2514000
+  },
+  "environment": {
+    "python_version": "3.9.6",
+    "platform": "Darwin",
+    "platform_version": "Darwin Kernel Version 24.3.0: Thu Jan  2 20:24:22 PST 2025; root:xnu-11215.81.4~3/RELEASE_ARM64_T6041"
+  },
+  "extra": {
+    "provider": "openai",
+    "session_name": "LatticeCrypto"
+  }
+}

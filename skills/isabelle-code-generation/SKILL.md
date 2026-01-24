@@ -9,9 +9,21 @@ description: Generating executable Haskell code from Isabelle/HOL specifications
 
 This skill covers Isabelle's code generation facility, which allows extracting executable code in Haskell, Scala, SML, and OCaml from verified Isabelle specifications. The focus is on Haskell code generation, including module naming, code equations, numeric types, and handling abstract types.
 
+## Web References
+
+When you need more information about code generation, fetch these sources:
+
+| Topic | URL | Description |
+|-------|-----|-------------|
+| Code Generation | https://isabelle.in.tum.de/doc/codegen.pdf | Official code generation manual |
+| Code Target Numeral | https://isabelle.in.tum.de/library/HOL/HOL-Library/Code_Target_Numeral.html | Efficient numerics theory |
+| Code Library | https://isabelle.in.tum.de/library/HOL/HOL-Library/index.html | HOL-Library with code support |
+| Haskell Platform | https://www.haskell.org/platform/ | Haskell installation for testing |
+
 ## Quick Use
 
 - Read `references/codegen.md` before answering code generation questions
+- Use web search to fetch the URLs above when you need export_code details
 - Ensure all functions are defined with executable equations
 - Use Code_Target_Numeral for efficient integer operations
 

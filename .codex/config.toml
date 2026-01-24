@@ -1,0 +1,5 @@
+# Codex configuration for Isabella project
+
+[features]
+# Enable web search so the model can fetch documentation URLs
+web_search_request = true

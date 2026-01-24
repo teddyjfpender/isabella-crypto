@@ -9,9 +9,22 @@ description: Basic Isabelle/HOL theory writing including theory files, imports, 
 
 This skill covers the fundamentals of writing Isabelle/HOL theories. Isabelle/HOL is an interactive theorem prover based on Higher-Order Logic, widely used for formal verification of mathematical proofs and software systems. Understanding the basics of theory files, imports, definitions, and lemmas is essential for any Isabelle development.
 
+## Web References
+
+When you need more information, you can fetch these authoritative sources:
+
+| Topic | URL | Description |
+|-------|-----|-------------|
+| Isabelle Documentation | https://isabelle.in.tum.de/documentation.html | Main documentation hub |
+| Prog & Prove Tutorial | https://isabelle.in.tum.de/doc/prog-prove.pdf | Programming and Proving in Isabelle/HOL |
+| Isar Reference | https://isabelle.in.tum.de/doc/isar-ref.pdf | Complete Isar language reference |
+| Main Tutorial | https://isabelle.in.tum.de/doc/tutorial.pdf | Comprehensive Isabelle tutorial |
+| HOL Library | https://isabelle.in.tum.de/library/HOL/index.html | HOL theory library browser |
+
 ## Quick Use
 
 - Read `references/basics.md` before answering questions about Isabelle theory structure
+- Use web search to fetch the URLs above when you need syntax details
 - Focus on correct syntax for theory headers, imports, and basic constructs
 - Ensure proper indentation and formatting conventions
 

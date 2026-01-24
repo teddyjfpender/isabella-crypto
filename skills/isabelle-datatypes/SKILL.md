@@ -9,9 +9,18 @@ description: Defining datatypes, recursive functions, and records in Isabelle/HO
 
 This skill covers the definition of algebraic datatypes, recursive and non-recursive functions, and record types in Isabelle/HOL. Datatypes are fundamental for modeling structured data, while `primrec` and `fun` provide different mechanisms for defining functions over these types.
 
+## Web References
+
+| Topic | URL | Description |
+|-------|-----|-------------|
+| Prog & Prove | https://isabelle.in.tum.de/doc/prog-prove.pdf | Datatypes and recursion chapters |
+| Datatype Docs | https://isabelle.in.tum.de/doc/datatypes.pdf | BNF datatype package manual |
+| Functions | https://isabelle.in.tum.de/doc/functions.pdf | Function definition package |
+
 ## Quick Use
 
 - Read `references/datatypes.md` before answering questions about datatype definitions
+- Use web search to fetch URLs above when defining complex datatypes
 - Choose between `primrec`, `fun`, and `function` based on recursion complexity
 - Use records for structured data with named fields
 

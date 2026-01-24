@@ -597,3 +597,131 @@ qed
 
 end
 ```
+
+## Modular Arithmetic Proofs
+
+Lattice cryptography heavily relies on modular arithmetic. Here are key patterns:
+
+### Basic Modular Properties
+
+```isabelle
+(* Modular reduction preserves under operations *)
+lemma mod_add: "((a mod m) + (b mod m)) mod m = (a + b) mod m"
+  by (simp add: mod_add_eq)
+
+lemma mod_mult: "((a mod m) * (b mod m)) mod m = (a * b) mod m"
+  by (simp add: mod_mult_eq)
+
+(* Useful when m > 0 *)
+lemma mod_pos_bound: "m > 0 \<Longrightarrow> 0 \<le> a mod m \<and> a mod m < m"
+  by simp
+```
+
+### Proving Modular Equality
+
+```isabelle
+(* Pattern: Show two expressions are equal mod m *)
+lemma mod_equality_example:
+  assumes "m > 0"
+  shows "(a + b) mod m = (b + a) mod m"
+  by (simp add: add.commute)
+
+(* Using mod_simps *)
+lemma mod_chain:
+  "((x mod m) + y) mod m = (x + y) mod m"
+  by (simp add: mod_add_left_eq)
+```
+
+### Centered vs Non-centered Modulo
+
+For cryptography, we often need centered representatives:
+
+```isabelle
+(* Centered mod: result in [−m/2, m/2) instead of [0, m) *)
+definition centered_mod :: "int \<Rightarrow> int \<Rightarrow> int" where
+  "centered_mod x m = (let r = x mod m in
+                        if r > m div 2 then r - m else r)"
+
+lemma centered_mod_bound:
+  assumes "m > 0"
+  shows "\<bar>centered_mod x m\<bar> \<le> m div 2"
+  unfolding centered_mod_def Let_def
+  using assms by auto
+```
+
+### Division and Rounding
+
+```isabelle
+(* Floor division *)
+lemma div_floor: "(a::int) div b * b \<le> a"
+  by (simp add: div_mult_le)
+
+(* Useful for encoding: ⌊q/2⌋ *)
+lemma encode_bound:
+  assumes "q > 2"
+  shows "q div 2 > 0 \<and> q div 2 < q"
+  using assms by auto
+```
+
+### Proving Correctness Conditions
+
+For LWE correctness, we often need to show error bounds:
+
+```isabelle
+(* Inner product bound *)
+lemma inner_prod_bound:
+  assumes "\<forall>i < length xs. \<bar>xs ! i\<bar> \<le> B"
+    and "\<forall>i < length ys. ys ! i \<in> {0, 1}"
+    and "length xs = length ys"
+  shows "\<bar>sum_list (map2 (*) xs ys)\<bar> \<le> int (length xs) * B"
+proof -
+  (* Each term is either 0 or bounded by B *)
+  have "\<forall>i < length xs. \<bar>xs ! i * ys ! i\<bar> \<le> B"
+    using assms by (auto simp: abs_mult)
+  then show ?thesis
+    by (induction xs ys rule: list_induct2) auto
+qed
+```
+
+### Threshold Decoding
+
+```isabelle
+(* Decode by threshold: closer to 0 → 0, closer to q/2 → 1 *)
+definition decode_threshold :: "int \<Rightarrow> int \<Rightarrow> bool" where
+  "decode_threshold q d = (\<bar>d - q div 2\<bar> < \<bar>d\<bar>)"
+
+(* Key lemma: small noise preserves message *)
+lemma decode_correctness:
+  assumes "q > 4" "\<bar>noise\<bar> < q div 4"
+  shows "decode_threshold q noise = False"
+    and "decode_threshold q (q div 2 + noise) = True"
+  using assms unfolding decode_threshold_def by auto
+```
+
+### Useful Lemmas for Crypto Proofs
+
+```isabelle
+(* Triangle inequality for absolute value *)
+lemma abs_triangle: "\<bar>a + b\<bar> \<le> \<bar>a\<bar> + \<bar>b\<bar>"
+  by simp
+
+(* Sum of bounded terms *)
+lemma sum_bounded:
+  assumes "\<forall>x \<in> set xs. \<bar>x\<bar> \<le> B"
+  shows "\<bar>sum_list xs\<bar> \<le> int (length xs) * B"
+  using assms by (induction xs) (auto simp: abs_triangle)
+
+(* Mod doesn't increase absolute value (for positive mod) *)
+lemma mod_abs_le:
+  assumes "m > 0"
+  shows "\<bar>x mod m\<bar> \<le> m - 1"
+  using assms by auto
+```
+
+### Tips for Modular Arithmetic Proofs
+
+1. **Use arithmetic solvers**: `by arith`, `by linarith` for linear inequalities
+2. **Unfold definitions carefully**: `unfolding foo_def` before `by auto`
+3. **Case split on signs**: `by (cases "x \<ge> 0") auto` when absolute values involved
+4. **Use SMT for complex arithmetic**: `by smt` (requires SMT solver)
+5. **Break into lemmas**: Prove bounds separately, then combine

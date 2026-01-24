@@ -533,6 +533,9 @@ run_ai_command() {
                 local skills_dir="${PROJECT_ROOT}/.codex/skills"
                 local codex_opts=(-m "$MODEL")
 
+                # Enable web search feature
+                codex_opts+=(-c "features.web_search_request=true")
+
                 # Add skills directory config if it exists
                 if [[ -d "$skills_dir" ]]; then
                     codex_opts+=(-c "skills.additional_paths=[\"${skills_dir}\"]")

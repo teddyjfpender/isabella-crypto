@@ -14,8 +14,8 @@
 #   --iterations <n>      Max iterations (default: 5)
 #   --provider <name>     AI provider: openai, anthropic (default: openai)
 #   --model <model>       Model for work phase (default: gpt-5.2-codex)
-#   --review-provider     Provider for review/fix phase (default: anthropic)
-#   --review-model        Model for review/fix phase (default: claude-sonnet-4-20250514)
+#   --review-provider     Provider for review/fix phase (default: openai)
+#   --review-model        Model for review/fix phase (default: gpt-5.2-codex)
 #   --session <name>      Isabelle session name (default: LatticeCrypto)
 #   --verbose             Verbose output
 #
@@ -48,8 +48,8 @@ SKILLS=()
 MAX_ITERATIONS=5
 PROVIDER="openai"
 MODEL="gpt-5.2-codex"
-REVIEW_PROVIDER="anthropic"
-REVIEW_MODEL="claude-sonnet-4-20250514"
+REVIEW_PROVIDER="openai"
+REVIEW_MODEL="gpt-5.2-codex"
 SESSION_NAME="LatticeCrypto"
 VERBOSE=false
 
@@ -94,8 +94,8 @@ Options:
   --iterations <n>        Max iterations (default: 5)
   --provider <name>       Work phase provider: openai, anthropic (default: openai)
   --model <model>         Work phase model (default: gpt-5.2-codex)
-  --review-provider <p>   Review phase provider (default: anthropic)
-  --review-model <m>      Review phase model (default: claude-sonnet-4-20250514)
+  --review-provider <p>   Review phase provider (default: openai)
+  --review-model <m>      Review phase model (default: gpt-5.2-codex)
   --session <name>        Isabelle session name (default: LatticeCrypto)
   --verbose               Enable verbose output
   -h, --help              Show this help
