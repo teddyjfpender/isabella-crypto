@@ -7,10 +7,12 @@ session Canon_Base = HOL +
   sessions
     "HOL-Library"
     "HOL-Number_Theory"
+  directories
+    "Linear"
   theories
     Prelude
-    (* Add as created:
     "Linear/ListVec"
+    (* Add as created:
     "Algebra/Zq"
     "Analysis/Norms"
     "Prob/DiscreteBasics"

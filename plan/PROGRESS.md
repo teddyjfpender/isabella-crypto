@@ -33,7 +33,7 @@
 | Theory | Status | Notes |
 |--------|--------|-------|
 | `Prelude.thy` | ✅ | Complete with hardened proofs |
-| `Linear/ListVec.thy` | ⬜ | Prompt ready: canon-linear-listvec |
+| `Linear/ListVec.thy` | ✅ | Complete with iprod_transpose |
 | `Algebra/Zq.thy` | ⬜ | Prompt ready: canon-algebra-zq |
 | `Analysis/Norms.thy` | ⬜ | Prompt needed |
 | `Prob/DiscreteBasics.thy` | ⬜ | Prompt needed |
@@ -90,16 +90,16 @@
 ## Key Lemmas Checklist
 
 ### ListVec.thy
-- [ ] `vec_add_length`
-- [ ] `inner_product_comm`
-- [ ] `inner_prod_vec_add` (bilinearity)
-- [ ] `inner_prod_scalar` (bilinearity)
-- [ ] `mat_vec_mult_length`
-- [ ] `iprod_transpose`
-- [ ] `dot_append`
-- [ ] `mat_vec_mult_concat_cols`
-- [ ] `vec_space` locale
-- [ ] `mat_space` locale
+- [x] `vec_add_length`
+- [x] `inner_prod_comm`
+- [ ] `inner_prod_vec_add` (bilinearity) - not included
+- [ ] `inner_prod_scalar` (bilinearity) - not included
+- [x] `mat_vec_mult_length`
+- [x] `iprod_transpose`
+- [ ] `dot_append` - not included
+- [ ] `mat_vec_mult_concat_cols` - not included
+- [ ] `vec_space` locale - not included
+- [ ] `mat_space` locale - not included
 
 ### Zq.thy
 - [ ] `mod_add_cong`
@@ -187,7 +187,7 @@
 
 | Session | Compiles | Tests | Notes |
 |---------|----------|-------|-------|
-| Canon_Base | ✅ | N/A | Prelude only (partial session) |
+| Canon_Base | ✅ | N/A | Prelude + ListVec |
 | Canon_Hardness | ⬜ | ⬜ | Waiting for Canon_Base completion |
 | Canon_Crypto | ⬜ | ⬜ | |
 | Canon_Rings | ⬜ | ⬜ | |
@@ -207,3 +207,5 @@
 | 2026-01-24 | Completed Prelude.thy with hardened proofs (explicit case splits, type annotations) |
 | 2026-01-24 | Added session-based verification to step-loop for dependent theories |
 | 2026-01-24 | Key insight: `(n::int)` type annotation required for mod/div simplification |
+| 2026-01-24 | Completed ListVec.thy with iprod_transpose (key LWE correctness lemma) |
+| 2026-01-24 | Key insight: avoid `...` chaining with `simp add: algebra_simps` on nested sums - causes infinite loops |
