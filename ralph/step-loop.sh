@@ -40,6 +40,8 @@ THEORY_NAME=""
 THEORY_PATH=""
 SESSION_NAME=""
 THEORY_IMPORTS='Main "HOL-Library.Code_Target_Numeral" "HOL-Number_Theory.Number_Theory"'
+PARENT_SESSION=""
+SESSION_DIR=""
 VERBOSE=false
 RESET=false
 
@@ -68,17 +70,27 @@ Options:
   --theory-path <path>    Subdirectory (e.g., Linear)
   --session <name>        Isabelle session name
   --imports <string>      Theory imports (default: Main + HOL-Library + HOL-Number_Theory)
+  --parent-session <name> Parent session for verification (e.g., Canon_Base)
+  --session-dir <path>    Directory containing parent session ROOT file
   --reset                 Clear previous progress and start fresh
   --verbose               Verbose output
   -h, --help              Show this help
 
-Example:
+Example (standalone theory):
+  $(basename "$0") --prompt canon-prelude \\
+      --output-dir Canon \\
+      --theory-name Prelude \\
+      --session Canon_Base
+
+Example (theory with dependencies):
   $(basename "$0") --prompt canon-linear-listvec \\
       --output-dir Canon \\
       --theory-name ListVec \\
       --theory-path Linear \\
       --session Canon_Base \\
-      --imports 'Canon_Base.Prelude'
+      --imports 'Canon_Base.Prelude' \\
+      --parent-session Canon_Base \\
+      --session-dir Canon
 EOF
     exit 0
 }
@@ -96,6 +108,8 @@ while [[ $# -gt 0 ]]; do
         --theory-path) THEORY_PATH="$2"; shift 2 ;;
         --session) SESSION_NAME="$2"; shift 2 ;;
         --imports) THEORY_IMPORTS="$2"; shift 2 ;;
+        --parent-session) PARENT_SESSION="$2"; shift 2 ;;
+        --session-dir) SESSION_DIR="$2"; shift 2 ;;
         --reset) RESET=true; shift ;;
         --verbose) VERBOSE=true; shift ;;
         -h|--help) usage ;;
@@ -194,6 +208,11 @@ echo ""
 log_info "Prompt: ${BOLD}${PROMPT_ID}${NC}"
 log_info "Output: ${THEORY_FILE}"
 log_info "Session: ${SESSION_NAME}"
+if [[ -n "$PARENT_SESSION" ]]; then
+    log_info "Verification: builds on ${BOLD}${PARENT_SESSION}${NC} (from ${SESSION_DIR})"
+else
+    log_info "Verification: standalone (HOL + HOL-Library + HOL-Number_Theory)"
+fi
 
 TOTAL_STEPS=$(count_steps "$PROMPT_FILE")
 log_info "Total steps: ${TOTAL_STEPS}"
@@ -348,9 +367,10 @@ EOF
         log_info "Attempt written to ${CURRENT_ATTEMPT_FILE}"
 
         # Build test theory using current_attempt.thy
+        # Use THEORY_IMPORTS for the test theory (same as final output)
         cat > "${TEMP_DIR}/test.thy" <<EOF
 theory ${THEORY_NAME}
-  imports Main "HOL-Library.Code_Target_Numeral" "HOL-Number_Theory.Number_Theory"
+  imports ${THEORY_IMPORTS}
 begin
 
 $(cat "$ACCUMULATED_FILE")
@@ -364,16 +384,36 @@ EOF
         # Create test session
         mkdir -p "${TEMP_DIR}/test"
         cp "${TEMP_DIR}/test.thy" "${TEMP_DIR}/test/${THEORY_NAME}.thy"
-        cat > "${TEMP_DIR}/test/ROOT" <<EOF
+
+        # Generate ROOT file based on whether we have a parent session
+        if [[ -n "$PARENT_SESSION" ]]; then
+            # Build on top of parent session (for theories with dependencies)
+            cat > "${TEMP_DIR}/test/ROOT" <<EOF
+session Test = ${PARENT_SESSION} +
+  options [document = false]
+  theories "${THEORY_NAME}"
+EOF
+        else
+            # Standalone session (for base theories like Prelude)
+            cat > "${TEMP_DIR}/test/ROOT" <<EOF
 session Test = HOL +
   options [document = false]
   sessions "HOL-Library" "HOL-Number_Theory"
   theories "${THEORY_NAME}"
 EOF
+        fi
 
-        # Verify
+        # Verify - include session dir if provided
         set +e
-        isabelle build -d "${TEMP_DIR}/test" Test > "${TEMP_DIR}/build.log" 2>&1
+        if [[ -n "$SESSION_DIR" ]]; then
+            # Resolve session dir to absolute path
+            if [[ "$SESSION_DIR" != /* ]]; then
+                SESSION_DIR="${PROJECT_ROOT}/${SESSION_DIR}"
+            fi
+            isabelle build -d "${SESSION_DIR}" -d "${TEMP_DIR}/test" Test > "${TEMP_DIR}/build.log" 2>&1
+        else
+            isabelle build -d "${TEMP_DIR}/test" Test > "${TEMP_DIR}/build.log" 2>&1
+        fi
         BUILD_EXIT=$?
         set -e
 

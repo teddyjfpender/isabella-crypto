@@ -10,7 +10,18 @@ This is the core linear algebra layer that all cryptographic constructions depen
 
 The step-loop provides the theory header automatically. Your steps output content for inside `begin...end`.
 
-Note: For the final theory, imports will be adjusted to `"../Prelude"` manually.
+## Step-Loop Invocation
+
+```bash
+./ralph/step-loop.sh --prompt canon-linear-listvec \
+    --output-dir Canon \
+    --theory-name ListVec \
+    --theory-path Linear \
+    --session Canon_Base \
+    --imports 'Canon_Base.Prelude' \
+    --parent-session Canon_Base \
+    --session-dir Canon
+```
 
 ## Steps
 

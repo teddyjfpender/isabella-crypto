@@ -15,6 +15,17 @@ This theory provides:
 
 The step-loop provides the theory header automatically. Your steps output content for inside `begin...end`.
 
+## Step-Loop Invocation
+
+```bash
+./ralph/step-loop.sh --prompt canon-prelude \
+    --output-dir Canon \
+    --theory-name Prelude \
+    --session Canon_Base
+```
+
+This is a base theory with no dependencies, so no `--parent-session` is needed.
+
 ## Proof Robustness Guidelines
 
 **CRITICAL**: Do not rely on `auto` or `simp` to magically solve complex goals. These tactics are non-deterministic and may fail across Isabelle versions.

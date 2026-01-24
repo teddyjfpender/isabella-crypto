@@ -10,7 +10,20 @@ This theory provides the Z_q abstraction and the critical `dist0`/`decode_bit` m
 
 The step-loop provides the theory header automatically. Your steps output content for inside `begin...end`.
 
-Note: For the final theory, imports will need adjustment to `"../Prelude" "../Linear/ListVec"`.
+## Step-Loop Invocation
+
+```bash
+./ralph/step-loop.sh --prompt canon-algebra-zq \
+    --output-dir Canon \
+    --theory-name Zq \
+    --theory-path Algebra \
+    --session Canon_Base \
+    --imports 'Canon_Base.Prelude Canon_Base.ListVec' \
+    --parent-session Canon_Base \
+    --session-dir Canon
+```
+
+**Note**: ListVec must be completed first since Zq depends on it for vector operations.
 
 ## Steps
 
