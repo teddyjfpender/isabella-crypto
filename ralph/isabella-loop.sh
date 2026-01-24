@@ -17,6 +17,10 @@
 #   --review-provider     Provider for review/fix phase (default: openai)
 #   --review-model        Model for review/fix phase (default: gpt-5.2-codex)
 #   --session <name>      Isabelle session name (default: LatticeCrypto)
+#   --output-dir <path>   Output directory (default: eval/work/<prompt-id>)
+#   --theory-name <name>  Theory name (default: same as session)
+#   --theory-path <path>  Subdirectory for theory (e.g., Linear for Canon/Linear/)
+#   --root-dir <path>     Directory containing ROOT file (default: same as output-dir)
 #   --verbose             Verbose output
 #
 # Example:
@@ -51,6 +55,10 @@ MODEL="gpt-5.2-codex"
 REVIEW_PROVIDER="openai"
 REVIEW_MODEL="gpt-5.2-codex"
 SESSION_NAME="LatticeCrypto"
+OUTPUT_DIR=""
+THEORY_NAME=""
+THEORY_PATH=""
+ROOT_DIR=""
 VERBOSE=false
 
 # Logging
@@ -97,14 +105,26 @@ Options:
   --review-provider <p>   Review phase provider (default: openai)
   --review-model <m>      Review phase model (default: gpt-5.2-codex)
   --session <name>        Isabelle session name (default: LatticeCrypto)
+  --output-dir <path>     Output directory (default: eval/work/<prompt-id>)
+  --theory-name <name>    Theory name (default: same as session)
+  --theory-path <path>    Subdirectory for theory (e.g., Linear)
+  --root-dir <path>       Directory containing ROOT file
   --verbose               Enable verbose output
   -h, --help              Show this help
 
-Example:
+Examples:
+  # Standard usage
   $(basename "$0") --prompt isabelle-lwe-encryption-01 \\
       --skill isabelle-basics \\
       --skill isabelle-code-generation \\
-      --skill isabelle-lattice-crypto \\
+      --iterations 5
+
+  # Canon usage with custom output
+  $(basename "$0") --prompt canon-linear-listvec \\
+      --output-dir Canon \\
+      --theory-name ListVec \\
+      --theory-path Linear \\
+      --session Canon_Base \\
       --iterations 5
 EOF
     exit 0
@@ -145,6 +165,22 @@ while [[ $# -gt 0 ]]; do
             SESSION_NAME="$2"
             shift 2
             ;;
+        --output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --theory-name)
+            THEORY_NAME="$2"
+            shift 2
+            ;;
+        --theory-path)
+            THEORY_PATH="$2"
+            shift 2
+            ;;
+        --root-dir)
+            ROOT_DIR="$2"
+            shift 2
+            ;;
         --verbose)
             VERBOSE=true
             shift
@@ -175,8 +211,40 @@ done
 STATE_DIR="${PROJECT_ROOT}/.ralph/${PROMPT_ID}"
 mkdir -p "$STATE_DIR"
 
+# Derive theory name from session if not specified
+if [[ -z "$THEORY_NAME" ]]; then
+    THEORY_NAME="$SESSION_NAME"
+fi
+
 # Work and results directories
-WORK_DIR="${EVAL_DIR}/work/${PROMPT_ID}"
+if [[ -n "$OUTPUT_DIR" ]]; then
+    # Custom output directory (e.g., Canon)
+    if [[ "$OUTPUT_DIR" != /* ]]; then
+        OUTPUT_DIR="${PROJECT_ROOT}/${OUTPUT_DIR}"
+    fi
+    if [[ -n "$THEORY_PATH" ]]; then
+        WORK_DIR="${OUTPUT_DIR}/${THEORY_PATH}"
+        mkdir -p "$WORK_DIR"
+        THEORY_FILE="${WORK_DIR}/${THEORY_NAME}.thy"
+    else
+        WORK_DIR="$OUTPUT_DIR"
+        mkdir -p "$WORK_DIR"
+        THEORY_FILE="${WORK_DIR}/${THEORY_NAME}.thy"
+    fi
+    # ROOT directory - where the ROOT file is
+    if [[ -n "$ROOT_DIR" ]]; then
+        if [[ "$ROOT_DIR" != /* ]]; then
+            ROOT_DIR="${PROJECT_ROOT}/${ROOT_DIR}"
+        fi
+    else
+        ROOT_DIR="$OUTPUT_DIR"
+    fi
+else
+    # Default: eval/work/<prompt-id>
+    WORK_DIR="${EVAL_DIR}/work/${PROMPT_ID}"
+    THEORY_FILE="${WORK_DIR}/${THEORY_NAME}.thy"
+    ROOT_DIR="$WORK_DIR"
+fi
 RESULTS_DIR="${EVAL_DIR}/results/$(date +%Y-%m-%d)/${PROMPT_ID}"
 
 # Banner
@@ -191,6 +259,8 @@ log_info "Skills: ${CYAN}${SKILLS[*]:-none}${NC}"
 log_info "Max iterations: ${MAX_ITERATIONS}"
 log_info "Work: ${PROVIDER}/${MODEL}"
 log_info "Review: ${REVIEW_PROVIDER}/${REVIEW_MODEL}"
+log_info "Output: ${THEORY_FILE}"
+log_info "Session: ${SESSION_NAME}"
 echo ""
 
 # Initialize state
@@ -282,8 +352,9 @@ EOF
     REVIEW_START=$(date +%s)
 
     # Run Isabelle build (strict mode - no quick_and_dirty)
+    # Use ROOT_DIR for session root (where ROOT file lives)
     set +e
-    isabelle build -v -d "$WORK_DIR" "$SESSION_NAME" > "${STATE_DIR}/isabelle-${i}.log" 2>&1
+    isabelle build -v -d "$ROOT_DIR" "$SESSION_NAME" > "${STATE_DIR}/isabelle-${i}.log" 2>&1
     ISABELLE_EXIT=$?
     set -e
 
@@ -298,11 +369,11 @@ EOF
         echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
         log_success "Isabelle verification passed in ${REVIEW_DURATION}s"
-        log_success "Theory file: ${WORK_DIR}/${SESSION_NAME}.thy"
+        log_success "Theory file: ${THEORY_FILE}"
 
         # Export Haskell code
         log_phase "EXPORT" "Generating Haskell code..."
-        isabelle build -e -d "$WORK_DIR" "$SESSION_NAME" 2>&1 || true
+        isabelle build -e -d "$ROOT_DIR" "$SESSION_NAME" 2>&1 || true
 
         # Mark complete
         echo "COMPLETE: $(date)" > "${STATE_DIR}/.ralph-complete"
@@ -321,8 +392,8 @@ EOF
 
         # Also get the theory file for context
         THEORY_CONTENT=""
-        if [[ -f "${WORK_DIR}/${SESSION_NAME}.thy" ]]; then
-            THEORY_CONTENT=$(cat "${WORK_DIR}/${SESSION_NAME}.thy")
+        if [[ -f "${THEORY_FILE}" ]]; then
+            THEORY_CONTENT=$(cat "${THEORY_FILE}")
         fi
 
         # Prepare feedback for next iteration

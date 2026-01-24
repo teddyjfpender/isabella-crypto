@@ -100,6 +100,13 @@ eval/results/**/steps.jsonl
 .ralph/**/*.log
 .ralph/**/augmented/
 
+# Step-loop state (runtime, not source)
+.ralph/**/accumulated.thy
+.ralph/**/current_step.txt
+.ralph/**/current_attempt.thy
+.ralph/**/last_feedback.txt
+.ralph/**/.complete
+
 # Keep these ralph files:
 # - .ralph/**/.ralph-complete
 # - .ralph/**/iteration.txt

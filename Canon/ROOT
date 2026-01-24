@@ -1,0 +1,41 @@
+(* Canon ROOT - Lattice Cryptography Canon Sessions *)
+(* Add theories to sessions as they are created *)
+
+(* Session 1: Base mathematical infrastructure *)
+session Canon_Base = HOL +
+  options [document = false]
+  sessions
+    "HOL-Library"
+    "HOL-Number_Theory"
+  theories
+    Prelude
+    (* Add as created:
+    "Linear/ListVec"
+    "Algebra/Zq"
+    "Analysis/Norms"
+    "Prob/DiscreteBasics"
+    *)
+
+(* Future sessions - uncomment as theories are added:
+
+session Canon_Hardness = Canon_Base +
+  theories
+    "Hardness/LWE_Def"
+    "Hardness/SIS_Def"
+    "Hardness/NormalForms"
+
+session Canon_Crypto = Canon_Hardness +
+  theories
+    "Gadgets/Decomp"
+    "Crypto/Regev_PKE"
+    "Crypto/Commit_SIS"
+
+session Canon_Rings = Canon_Crypto +
+  theories
+    "Rings/PolyMod"
+    "Rings/ModuleLWE"
+
+session Canon_ZK = Canon_Rings +
+  theories
+    "ZK/Sigma_Base"
+*)
