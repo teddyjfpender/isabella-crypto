@@ -171,22 +171,34 @@ qed
 
 ### Step 4: Key Distance Lemma - Small Values
 
-This lemma says: small values stay small after mod_centered.
+This lemma says: small values stay small after mod_centered. Requires a helper lemma for negative modulo.
 
 **USE THIS EXACT CODE**:
 ```isabelle
+(* Helper lemma for negative modulo - uses explicit OF application *)
+lemma neg_mod_eq:
+  assumes "(q::int) > 0" "x < 0" "x > -q"
+  shows "x mod q = x + q"
+proof -
+  have h1: "(0::int) <= x + q" using assms by arith
+  have h2: "x + q < q" using assms by arith
+  have xpq: "(x + q) mod q = x + q"
+    using mod_pos_pos_trivial[OF h1 h2] by simp
+  have "(x + q) mod q = x mod q" by simp
+  thus ?thesis using xpq by simp
+qed
+
 lemma dist0_small:
   assumes q_pos: "(q::int) > 0"
   assumes x_small: "abs x < q div 2"
-  assumes x_nonneg_or_neg: "x >= 0 \<or> x < 0"
   shows "dist0 q x = abs x"
 proof (cases "x >= 0")
   case True
   hence x_eq: "x mod q = x"
     using x_small q_pos by simp
-  have "x <= q div 2" using x_small True by arith
+  have x_le: "x <= q div 2" using x_small True by arith
   hence not_gt: "\<not> (x mod q > q div 2)"
-    using x_eq x_small True by arith
+    using x_eq by arith
   have "mod_centered x q = x mod q"
     unfolding mod_centered_def Let_def using not_gt by simp
   hence "mod_centered x q = x" using x_eq by simp
@@ -194,28 +206,21 @@ proof (cases "x >= 0")
 next
   case False
   hence x_neg: "x < 0" by simp
-  have x_gt: "x > -q div 2 - 1" using x_small by arith
-  have "x mod q = x + q"
-  proof -
-    have "x + q >= 0" using x_gt q_pos by arith
-    moreover have "x + q < q" using x_neg by arith
-    ultimately show ?thesis
-      using q_pos by (simp add: mod_pos_pos_trivial)
-  qed
-  hence xmod_eq: "x mod q = x + q" .
+  have x_bound: "x > -q div 2" using x_small by arith
+  hence x_gt_negq: "x > -q" using q_pos by arith
+  have xmod_eq: "x mod q = x + q"
+    by (rule neg_mod_eq[OF q_pos x_neg x_gt_negq])
   have "x + q > q div 2"
   proof -
-    have "x > -(q div 2) - 1" using x_small by arith
-    hence "x + q > q - q div 2 - 1" by arith
-    have "q - q div 2 - 1 >= q div 2 - 1"
-      using q_pos by arith
-    thus ?thesis using x_small q_pos by arith
+    have "x > -q div 2" using x_small by arith
+    thus ?thesis by arith
   qed
   hence gt_half: "x mod q > q div 2" using xmod_eq by simp
   have "mod_centered x q = x mod q - q"
     unfolding mod_centered_def Let_def using gt_half by simp
-  hence "mod_centered x q = x" using xmod_eq by simp
-  thus ?thesis unfolding dist0_def using x_neg by simp
+  hence mc_eq: "mod_centered x q = x" using xmod_eq by simp
+  have "abs x = -x" using x_neg by simp
+  thus ?thesis unfolding dist0_def mc_eq using x_neg by simp
 qed
 ```
 
@@ -290,7 +295,7 @@ proof -
   have q4_le_q2: "q div 4 <= q div 2" using q_pos by arith
   have x_lt_half: "abs x < q div 2" using x_small q4_le_q2 by arith
   have "dist0 q x = abs x"
-    by (rule dist0_small[OF q_pos x_lt_half]) simp
+    by (rule dist0_small[OF q_pos x_lt_half])
   hence "dist0 q x < q div 4" using x_small by simp
   thus ?thesis unfolding decode_bit_def by arith
 qed
