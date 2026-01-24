@@ -58,36 +58,11 @@
     </div>
   </section>
 
-  <!-- Benchmark Controls -->
-  <section class="benchmark-controls">
+  <!-- Stats Section -->
+  <section class="stats-section">
     <div class="container">
-      <div class="controls-row">
-        <div class="control-group">
-          <label class="control-label">Function</label>
-          <select id="function-select" class="control-select">
-            <option value="inner_prod">inner_prod</option>
-            <option value="vec_add">vec_add</option>
-            <option value="mat_vec_mult">mat_vec_mult</option>
-            <option value="lwe_encrypt">lwe_encrypt</option>
-            <option value="lwe_decrypt">lwe_decrypt</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label class="control-label">Metric</label>
-          <select id="metric-select" class="control-select">
-            <option value="mean">Mean</option>
-            <option value="median">Median</option>
-            <option value="min">Min</option>
-            <option value="max">Max</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label class="control-label">Scale</label>
-          <select id="scale-select" class="control-select">
-            <option value="linear">Linear</option>
-            <option value="log">Logarithmic</option>
-          </select>
-        </div>
+      <div class="stats-grid" id="stats-grid">
+        <!-- Stats cards will be populated by JavaScript -->
       </div>
     </div>
   </section>
@@ -97,22 +72,43 @@
     <div class="container">
       <div class="chart-container">
         <div class="chart-header">
-          <h2 class="chart-title" id="chart-title">inner_prod Performance</h2>
-          <div class="chart-legend" id="chart-legend"></div>
+          <div class="chart-title-row">
+            <h2 class="chart-title" id="chart-title">inner_prod</h2>
+            <div class="chart-legend" id="chart-legend"></div>
+          </div>
+          <div class="chart-controls">
+            <div class="control-group">
+              <label class="control-label">Function</label>
+              <select id="function-select" class="control-select">
+                <option value="inner_prod">inner_prod</option>
+                <option value="vec_add">vec_add</option>
+                <option value="mat_vec_mult">mat_vec_mult</option>
+                <option value="lwe_encrypt">lwe_encrypt</option>
+                <option value="lwe_decrypt">lwe_decrypt</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label class="control-label">Metric</label>
+              <select id="metric-select" class="control-select">
+                <option value="mean">Mean</option>
+                <option value="median">Median</option>
+                <option value="min">Min</option>
+                <option value="max">Max</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label class="control-label">Scale</label>
+              <select id="scale-select" class="control-select">
+                <option value="linear">Linear</option>
+                <option value="log">Log</option>
+              </select>
+            </div>
+          </div>
         </div>
         <div class="chart-wrapper">
           <canvas id="benchmark-chart"></canvas>
+          <div class="chart-tooltip" id="chart-tooltip"></div>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Stats Section -->
-  <section class="stats-section">
-    <div class="container">
-      <h2 class="section-title">Summary Statistics</h2>
-      <div class="stats-grid" id="stats-grid">
-        <!-- Stats cards will be populated by JavaScript -->
       </div>
     </div>
   </section>
@@ -120,7 +116,7 @@
   <!-- Data Table -->
   <section class="table-section">
     <div class="container">
-      <h2 class="section-title">Raw Data</h2>
+      <h2 class="section-title" id="table-title">Raw Data - inner_prod</h2>
       <div class="table-wrapper">
         <table class="data-table" id="data-table">
           <thead>
