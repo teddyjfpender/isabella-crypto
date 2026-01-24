@@ -54,6 +54,69 @@ lemma vec_mod_length: "length (vec_mod v q) = length v"
 lemma mat_vec_mult_length: "length (mat_vec_mult A x) = length A"
   unfolding mat_vec_mult_def by simp
 
+lemma inner_prod_nth_min:
+  "inner_prod u v = (\<Sum>i = 0 ..< min (length u) (length v). u ! i * v ! i)"
+proof -
+  have "inner_prod u v = sum_list (map2 (*) u v)"
+    by (simp add: inner_prod_def)
+  also have "... = (\<Sum>i = 0 ..< length (map2 (*) u v). (map2 (*) u v) ! i)"
+    by (simp add: sum_list_sum_nth)
+  also have "... = (\<Sum>i = 0 ..< min (length u) (length v). u ! i * v ! i)"
+  proof (intro sum.cong refl)
+    fix i assume i_lt: "i < min (length u) (length v)"
+    then have iu: "i < length u" and iv: "i < length v"
+      by simp_all
+    show "(map2 (*) u v) ! i = u ! i * v ! i"
+      using iu iv by (simp add: nth_zip)
+  qed
+  finally show ?thesis .
+qed
+
+lemma foldr_max_const:
+  assumes "xs \<noteq> []" "\<forall>x \<in> set xs. length x = n"
+  shows "foldr (\<lambda>x. max (length x)) xs 0 = n"
+using assms
+proof (induct xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  have len_x: "length x = n" using Cons.prems by simp
+  have rows_xs: "\<forall>x \<in> set xs. length x = n" using Cons.prems by simp
+  have ih: "xs \<noteq> [] \<Longrightarrow> foldr (\<lambda>x. max (length x)) xs 0 = n"
+    using Cons.hyps rows_xs by simp
+  show ?case
+  proof (cases xs)
+    case Nil
+    then show ?thesis using len_x by simp
+  next
+    case Cons_xs: (Cons y ys)
+    have ih': "foldr (\<lambda>x. max (length x)) xs 0 = n"
+      using ih Cons_xs by simp
+    show ?thesis using len_x ih' by simp
+  qed
+qed
+
+lemma length_transpose_valid_matrix:
+  fixes A :: "int_matrix"
+  assumes A_ok: "valid_matrix A m n" and m_pos: "m > 0"
+  shows "length (transpose A) = n"
+proof -
+  have len_A: "length A = m" and rows: "\<forall>row \<in> set A. length row = n"
+    using A_ok by (simp_all add: valid_matrix_def)
+  have A_ne: "A \<noteq> []"
+  proof
+    assume "A = []"
+    hence "length A = 0" by simp
+    with len_A have "m = 0" by simp
+    with m_pos show False by simp
+  qed
+  have "length (transpose A) = foldr (\<lambda>xs. max (length xs)) A 0"
+    by (simp add: length_transpose)
+  also have "... = n" using foldr_max_const[OF A_ne rows] .
+  finally show ?thesis .
+qed
+
 lemma inner_prod_vec_add:
   assumes len_xy: "length x = length y"
     and len_xr: "length x = length r"
@@ -70,6 +133,151 @@ next
   with Cons show ?case
     by (simp add: vec_add_def inner_prod_def algebra_simps)
 qed
+
+locale lwe_dims =
+  fixes A :: int_matrix and s r e :: int_vec and m n :: nat
+  assumes A_ok: "valid_matrix A m n"
+    and s_ok: "valid_vec s n"
+    and r_ok: "valid_vec r m"
+    and e_ok: "valid_vec e m"
+    and m_pos: "m > 0"
+begin
+
+lemma len_A: "length A = m"
+  using A_ok by (simp add: valid_matrix_def)
+
+lemma len_s: "length s = n"
+  using s_ok by (simp add: valid_vec_def)
+
+lemma len_r: "length r = m"
+  using r_ok by (simp add: valid_vec_def)
+
+lemma len_e: "length e = m"
+  using e_ok by (simp add: valid_vec_def)
+
+lemma len_rows: "row \<in> set A \<Longrightarrow> length row = n"
+  using A_ok by (simp add: valid_matrix_def)
+
+lemma len_As: "length (mat_vec_mult A s) = m"
+  using len_A by (simp add: mat_vec_mult_length)
+
+lemma len_At: "length (mat_transpose_vec_mult A r) = n"
+  using length_transpose_valid_matrix[OF A_ok m_pos]
+  by (simp add: mat_transpose_vec_mult_def mat_vec_mult_length)
+
+lemma transpose_nth:
+  assumes j_lt: "j < n"
+  shows "transpose A ! j = map (\<lambda>row. row ! j) A"
+proof -
+  have len_T: "length (transpose A) = n"
+    using length_transpose_valid_matrix[OF A_ok m_pos] .
+  have j_T: "j < length (transpose A)" using j_lt len_T by simp
+  have all_rows: "\<forall>row \<in> set A. j < length row"
+    using len_rows j_lt by auto
+  have filt: "filter (\<lambda>ys. j < length ys) A = A"
+    using all_rows by (simp add: filter_True)
+  show ?thesis using nth_transpose[OF j_T]
+    by (simp add: filt)
+qed
+
+lemma inner_prod_col:
+  assumes j_lt: "j < n"
+  shows "inner_prod (map (\<lambda>row. row ! j) A) r =
+         (\<Sum>i = 0 ..< m. (A ! i) ! j * r ! i)"
+proof -
+  have len_map: "length (map (\<lambda>row. row ! j) A) = m"
+    using len_A by simp
+  have "inner_prod (map (\<lambda>row. row ! j) A) r =
+        (\<Sum>i = 0 ..< min (length (map (\<lambda>row. row ! j) A)) (length r).
+           (map (\<lambda>row. row ! j) A) ! i * r ! i)"
+    by (simp add: inner_prod_nth_min)
+  also have "... = (\<Sum>i = 0 ..< m. (map (\<lambda>row. row ! j) A) ! i * r ! i)"
+    using len_map len_r by (intro sum.cong refl) simp
+  also have "... = (\<Sum>i = 0 ..< m. (A ! i) ! j * r ! i)"
+    using len_A by (intro sum.cong refl) simp
+  finally show ?thesis .
+qed
+
+lemma inner_prod_row:
+  assumes i_lt: "i < m"
+  shows "inner_prod (A ! i) s =
+         (\<Sum>j = 0 ..< n. (A ! i) ! j * s ! j)"
+proof -
+  have i_ltA: "i < length A" using i_lt len_A by simp
+  have row_mem: "A ! i \<in> set A" using i_ltA by (simp add: nth_mem)
+  have row_len: "length (A ! i) = n"
+    using len_rows row_mem by simp
+  have "inner_prod (A ! i) s =
+        (\<Sum>j = 0 ..< min (length (A ! i)) (length s). (A ! i) ! j * s ! j)"
+    by (simp add: inner_prod_nth_min)
+  also have "... = (\<Sum>j = 0 ..< n. (A ! i) ! j * s ! j)"
+    using row_len len_s by (simp add: min_def)
+  finally show ?thesis .
+qed
+
+lemma iprod_transpose:
+  "inner_prod s (mat_transpose_vec_mult A r) =
+   inner_prod (mat_vec_mult A s) r"
+proof -
+  have lhs:
+    "inner_prod s (mat_transpose_vec_mult A r) =
+     (\<Sum>j = 0 ..< n. s ! j * (\<Sum>i = 0 ..< m. (A ! i) ! j * r ! i))"
+  proof -
+    have "inner_prod s (mat_transpose_vec_mult A r) =
+          (\<Sum>j = 0 ..< min (length s) (length (mat_transpose_vec_mult A r)).
+             s ! j * (mat_transpose_vec_mult A r) ! j)"
+      by (simp add: inner_prod_nth_min)
+    also have "... = (\<Sum>j = 0 ..< n. s ! j * (mat_transpose_vec_mult A r) ! j)"
+      using len_s len_At by simp
+    also have "... = (\<Sum>j = 0 ..< n. s ! j * inner_prod (transpose A ! j) r)"
+      using len_At by (intro sum.cong refl) (simp add: mat_transpose_vec_mult_def mat_vec_mult_def)
+    also have "... = (\<Sum>j = 0 ..< n. s ! j * inner_prod (map (\<lambda>row. row ! j) A) r)"
+      using transpose_nth by (intro sum.cong refl) simp
+    also have "... = (\<Sum>j = 0 ..< n. s ! j * (\<Sum>i = 0 ..< m. (A ! i) ! j * r ! i))"
+      using inner_prod_col by (intro sum.cong refl) simp
+    finally show ?thesis .
+  qed
+  have rhs:
+    "inner_prod (mat_vec_mult A s) r =
+     (\<Sum>i = 0 ..< m. r ! i * (\<Sum>j = 0 ..< n. (A ! i) ! j * s ! j))"
+  proof -
+    have "inner_prod (mat_vec_mult A s) r =
+          (\<Sum>i = 0 ..< min (length (mat_vec_mult A s)) (length r).
+             (mat_vec_mult A s) ! i * r ! i)"
+      by (simp add: inner_prod_nth_min)
+    also have "... = (\<Sum>i = 0 ..< m. (mat_vec_mult A s) ! i * r ! i)"
+      using len_As len_r by simp
+    also have "... = (\<Sum>i = 0 ..< m. inner_prod (A ! i) s * r ! i)"
+      using len_As by (intro sum.cong refl) (simp add: mat_vec_mult_def)
+    also have "... = (\<Sum>i = 0 ..< m. r ! i * inner_prod (A ! i) s)"
+      by (intro sum.cong refl) (simp add: algebra_simps)
+    also have "... = (\<Sum>i = 0 ..< m. r ! i * (\<Sum>j = 0 ..< n. (A ! i) ! j * s ! j))"
+      using inner_prod_row by (intro sum.cong refl) simp
+    finally show ?thesis .
+  qed
+  have swap:
+    "(\<Sum>j = 0 ..< n. s ! j * (\<Sum>i = 0 ..< m. (A ! i) ! j * r ! i)) =
+     (\<Sum>i = 0 ..< m. r ! i * (\<Sum>j = 0 ..< n. (A ! i) ! j * s ! j))"
+  proof -
+    have step1:
+      "(\<Sum>j = 0 ..< n. s ! j * (\<Sum>i = 0 ..< m. (A ! i) ! j * r ! i)) =
+       (\<Sum>j = 0 ..< n. \<Sum>i = 0 ..< m. s ! j * ((A ! i) ! j * r ! i))"
+      by (simp add: sum_distrib_left[symmetric])
+    have step2:
+      "... = (\<Sum>i = 0 ..< m. \<Sum>j = 0 ..< n. s ! j * ((A ! i) ! j * r ! i))"
+      by (simp add: sum.swap)
+    have step3:
+      "... = (\<Sum>i = 0 ..< m. \<Sum>j = 0 ..< n. r ! i * ((A ! i) ! j * s ! j))"
+      by (simp add: algebra_simps)
+    have step4:
+      "... = (\<Sum>i = 0 ..< m. r ! i * (\<Sum>j = 0 ..< n. (A ! i) ! j * s ! j))"
+      by (simp add: sum_distrib_left)
+    show ?thesis using step1 step2 step3 step4 by simp
+  qed
+  show ?thesis using lhs rhs swap by simp
+qed
+
+end
 
 (* ========== Encoding/Decoding ========== *)
 
@@ -100,26 +308,186 @@ lemma dist0_mod: "dist0 q (d mod q) = dist0 q d"
 lemma decode_bit_mod: "decode_bit q (d mod q) = decode_bit q d"
   unfolding decode_bit_def using dist0_mod by simp
 
-lemma div2_pos:
+lemma div4_le_div2:
   fixes q :: int
-  assumes "q > 2"
-  shows "q div 2 > 0"
+  assumes "q >= 0"
+  shows "q div 4 <= q div 2"
+  using zdiv_mono2[of q 4 2] assms by simp
+
+lemma even_div2_add:
+  fixes q :: int
+  assumes "q mod 2 = 0"
+  shows "q div 2 + q div 2 = q"
 proof -
-  have "2 <= q" using assms by arith
-  have "0 < q div 2"
-    using pos_imp_zdiv_pos_iff[of 2 q] `2 <= q` by simp
-  then show ?thesis by simp
+  have "q div 2 * 2 + q mod 2 = q"
+    by (simp add: div_mult_mod_eq)
+  hence "q div 2 * 2 = q" using assms by simp
+  thus ?thesis by (simp add: algebra_simps)
 qed
 
-lemma div4_pos:
+lemma even_div2_sub:
   fixes q :: int
-  assumes "q > 4"
-  shows "q div 4 > 0"
+  assumes "q mod 2 = 0"
+  shows "q - q div 2 = q div 2"
+  using even_div2_add[OF assms] by simp
+
+lemma mod2_from_mod4:
+  fixes q :: int
+  assumes "q mod 4 = 0"
+  shows "q mod 2 = 0"
 proof -
-  have "4 <= q" using assms by arith
-  have "0 < q div 4"
-    using pos_imp_zdiv_pos_iff[of 4 q] `4 <= q` by simp
-  then show ?thesis by simp
+  have "4 dvd q" using assms by (simp add: mod_eq_0_iff_dvd)
+  hence "2 dvd q" using dvd_trans[of 2 4 q] by simp
+  thus ?thesis by (simp add: mod_eq_0_iff_dvd)
+qed
+
+lemma div2_eq_double_div4:
+  fixes q :: int
+  assumes "q mod 4 = 0"
+  shows "q div 2 = 2 * (q div 4)"
+proof -
+  obtain k where k_def: "q = 4 * k"
+    using assms by (auto simp: mod_eq_0_iff_dvd dvd_def)
+  have "q div 2 = (4 * k) div 2" using k_def by simp
+  also have "... = 2 * k" by simp
+  also have "... = 2 * (q div 4)" using k_def by simp
+  finally show ?thesis .
+qed
+
+lemma dist0_small:
+  fixes q x :: int
+  assumes q_pos: "q > 0"
+    and bound: "\<bar>x\<bar> < q div 4"
+  shows "dist0 q x = \<bar>x\<bar>"
+proof (cases "x >= 0")
+  case True
+  have x_lt: "x < q div 4" using bound True by simp
+  have x_lt_q: "x < q"
+    using x_lt q_pos by simp
+  have mod_x: "x mod q = x"
+    using True x_lt_q by simp
+  have x_lt_half: "x < q div 2"
+  proof -
+    have "q div 4 <= q div 2" using div4_le_div2[of q] q_pos by simp
+    with x_lt show ?thesis by linarith
+  qed
+  have not_gt: "\<not> (x mod q > q div 2)"
+    using mod_x x_lt_half by simp
+  show ?thesis
+    unfolding dist0_def Let_def using mod_x not_gt True by simp
+next
+  case False
+  have x_neg: "x < 0" using False by simp
+  have x_gt: "x > - (q div 4)" using bound by simp
+  have x_gt_neg_q: "x > - q" using x_gt q_pos by simp
+  have sum_nonneg: "x + q >= 0" using x_gt_neg_q by simp
+  have sum_lt_q: "x + q < q" using x_neg by simp
+  have mod_x: "x mod q = x + q"
+    using sum_nonneg sum_lt_q q_pos
+    by (metis add.commute mod_add_self2 mod_pos_pos_trivial)
+  have d'_gt: "x + q > q div 2"
+  proof -
+    have "q - q div 4 >= q div 2" using q_pos by simp
+    moreover have "x + q > q - q div 4" using x_gt by simp
+    ultimately show ?thesis by simp
+  qed
+  have "dist0 q x = q - (x + q)"
+    unfolding dist0_def Let_def using mod_x d'_gt by simp
+  also have "... = -x" by simp
+  finally show ?thesis using x_neg by simp
+qed
+
+lemma dist0_small_lt:
+  fixes q x :: int
+  assumes q_pos: "q > 0"
+    and bound: "\<bar>x\<bar> < q div 4"
+  shows "dist0 q x < q div 4"
+  using dist0_small[OF q_pos bound] bound by simp
+
+lemma dist0_half_shift:
+  fixes q x :: int
+  assumes q_pos: "q > 0"
+    and q_even: "q mod 2 = 0"
+    and bound: "\<bar>x\<bar> < q div 4"
+  shows "dist0 q (x + q div 2) = q div 2 - \<bar>x\<bar>"
+proof (cases "x >= 0")
+  case True
+  have x_lt: "x < q div 4" using bound True by simp
+  have div4_le_half: "q div 4 <= q div 2"
+    using div4_le_div2[of q] q_pos by simp
+  have sum_pos: "0 <= x + q div 2"
+    using True by simp
+  have sum_lt_q: "x + q div 2 < q"
+  proof -
+    have "x + q div 2 < q div 2 + q div 2"
+      using x_lt div4_le_half by linarith
+    also have "... = q" using even_div2_add[OF q_even] by simp
+    finally show ?thesis .
+  qed
+  have mod_sum: "(x + q div 2) mod q = x + q div 2"
+    using sum_pos sum_lt_q by simp
+  have "dist0 q (x + q div 2) =
+        (if x > 0 then q - (x + q div 2) else x + q div 2)"
+    unfolding dist0_def Let_def using mod_sum by simp
+  then show ?thesis
+  proof (cases "x > 0")
+    case True
+    have "dist0 q (x + q div 2) = q - (x + q div 2)"
+      using True by simp
+    also have "... = q div 2 - x"
+      using even_div2_sub[OF q_even] by (simp add: algebra_simps)
+    finally show ?thesis using True by simp
+  next
+    case False
+    have x_eq: "x = 0" using True False by simp
+    have "dist0 q (x + q div 2) = x + q div 2"
+      using False by simp
+    also have "... = q div 2 - \<bar>x\<bar>" using x_eq by simp
+    finally show ?thesis .
+  qed
+next
+  case False
+  have x_neg: "x < 0" using False by simp
+  have x_gt: "x > - (q div 4)" using bound by simp
+  have div4_le_half: "q div 4 <= q div 2"
+    using div4_le_div2[of q] q_pos by simp
+  have sum_pos: "0 <= x + q div 2"
+  proof -
+    have "x + q div 2 > - (q div 4) + q div 2" using x_gt by simp
+    also have "... >= 0" using div4_le_half by simp
+    finally show ?thesis by simp
+  qed
+  have sum_lt_half: "x + q div 2 < q div 2" using x_neg by simp
+  have sum_lt_q: "x + q div 2 < q" using sum_lt_half q_pos by simp
+  have mod_sum: "(x + q div 2) mod q = x + q div 2"
+    using sum_pos sum_lt_q by simp
+  have "dist0 q (x + q div 2) = x + q div 2"
+    unfolding dist0_def Let_def using mod_sum sum_lt_half by simp
+  also have "... = q div 2 - \<bar>x\<bar>"
+    using x_neg by simp
+  finally show ?thesis .
+qed
+
+lemma decode_bit_small:
+  fixes q x :: int
+  assumes q_pos: "q > 0"
+    and bound: "\<bar>x\<bar> < q div 4"
+  shows "decode_bit q x = False"
+  using dist0_small_lt[OF q_pos bound] by (simp add: decode_bit_def)
+
+lemma decode_bit_half_shift:
+  fixes q x :: int
+  assumes q_pos: "q > 0"
+    and q_mod4: "q mod 4 = 0"
+    and bound: "\<bar>x\<bar> < q div 4"
+  shows "decode_bit q (x + q div 2) = True"
+proof -
+  have q_even: "q mod 2 = 0" using mod2_from_mod4[OF q_mod4] .
+  have dist_eq: "dist0 q (x + q div 2) = q div 2 - \<bar>x\<bar>"
+    using dist0_half_shift[OF q_pos q_even bound] .
+  have "dist0 q (x + q div 2) > q div 4"
+    using dist_eq div2_eq_double_div4[OF q_mod4] bound by linarith
+  thus ?thesis by (simp add: decode_bit_def)
 qed
 
 lemma dist0_zero:
@@ -167,11 +535,6 @@ next
 qed
 
 (* Modular arithmetic helpers *)
-lemma mod_add_cong:
-  fixes q :: int assumes "q > 0"
-  shows "(a mod q + b mod q) mod q = (a + b) mod q"
-  using assms by (simp add: mod_add_eq)
-
 lemma inner_prod_mod_cong:
   fixes q :: int
   assumes "q > 0" "length v = length w"
@@ -225,15 +588,9 @@ next
 qed
 
 (* ========== Transpose Identity ========== *)
-(* The inner product transpose identity <s, A^T r> = <As, r> is a standard linear
-   algebra fact. Both sides equal sum_{i,j} A_ij * s_j * r_i:
-   - LHS: sum_j s_j * (A^T r)_j = sum_j s_j * sum_i A_ij * r_i
-   - RHS: sum_i r_i * (As)_i = sum_i r_i * sum_j A_ij * s_j
-
-   In this formalization, we pass this as the iprod assumption to the main lemmas.
-   The validity predicates (valid_matrix, valid_vec) ensure the dimensions match.
-   A full proof in Isabelle would use nth_transpose and sum.swap but requires
-   careful handling of index bounds. *)
+(* The inner product transpose identity <s, A^T r> = <As, r> is proved in locale
+   lwe_dims using nth_transpose and sum.swap, with explicit dimension constraints
+   coming from valid_matrix / valid_vec. *)
 
 definition lwe_encrypt :: "lwe_public_key => int => int_vec => bool => lwe_ciphertext" where
   "lwe_encrypt pk q r m =
@@ -249,18 +606,31 @@ definition lwe_decrypt :: "lwe_secret_key => int => lwe_ciphertext => bool" wher
 lemma decryption_error_term:
   fixes q :: int
   assumes q_pos: "q > 0"
+    and A_ok: "valid_matrix (pk_A pk) m_dim n"
+    and s_ok: "valid_vec (sk_s sk) n"
+    and r_ok: "valid_vec r m_dim"
+    and e_ok: "valid_vec e m_dim"
+    and m_pos: "m_dim > 0"
     and b_def: "pk_b pk = vec_mod (vec_add (mat_vec_mult (pk_A pk) (sk_s sk)) e) q"
-    and len_e: "length (mat_vec_mult (pk_A pk) (sk_s sk)) = length e"
-    and len_r: "length r = length (mat_vec_mult (pk_A pk) (sk_s sk))"
-    and len_b: "length (pk_b pk) = length r"
-    and len_sk: "length (mat_transpose_vec_mult (pk_A pk) r) = length (sk_s sk)"
-    and iprod: "inner_prod (sk_s sk) (mat_transpose_vec_mult (pk_A pk) r) =
-                inner_prod (mat_vec_mult (pk_A pk) (sk_s sk)) r"
   shows "(ct_v (lwe_encrypt pk q r m) -
           inner_prod (sk_s sk) (ct_u (lwe_encrypt pk q r m))) mod q =
          (inner_prod e r + encode_bit q m) mod q"
 proof -
+  interpret dims: lwe_dims "pk_A pk" "sk_s sk" r e m_dim n
+    by (unfold_locales) (simp add: A_ok s_ok r_ok e_ok m_pos)
   let ?As = "mat_vec_mult (pk_A pk) (sk_s sk)"
+  have len_e: "length ?As = length e"
+    using dims.len_As dims.len_e by simp
+  have len_r: "length r = length ?As"
+    using dims.len_r dims.len_As by simp
+  have len_b: "length (pk_b pk) = length r"
+    using b_def dims.len_As dims.len_e dims.len_r
+    by (simp add: vec_add_length vec_mod_length)
+  have len_sk: "length (mat_transpose_vec_mult (pk_A pk) r) = length (sk_s sk)"
+    using dims.len_At dims.len_s by simp
+  have iprod: "inner_prod (sk_s sk) (mat_transpose_vec_mult (pk_A pk) r) =
+               inner_prod (mat_vec_mult (pk_A pk) (sk_s sk)) r"
+    using dims.iprod_transpose by simp
   have len_add: "length (vec_add ?As e) = length ?As"
     using len_e by (simp add: vec_add_length)
   have b_iprod_mod:
@@ -342,24 +712,23 @@ qed
 
 lemma correctness_condition:
   fixes q :: int
-  assumes q_gt: "q > 4"
+  assumes q_pos: "q > 0"
+    and q_mod4: "q mod 4 = 0"
+    and A_ok: "valid_matrix (pk_A pk) m_dim n"
+    and s_ok: "valid_vec (sk_s sk) n"
+    and r_ok: "valid_vec r m_dim"
+    and e_ok: "valid_vec e m_dim"
+    and m_pos: "m_dim > 0"
     and b_def: "pk_b pk = vec_mod (vec_add (mat_vec_mult (pk_A pk) (sk_s sk)) e) q"
-    and len_e: "length (mat_vec_mult (pk_A pk) (sk_s sk)) = length e"
-    and len_r: "length r = length (mat_vec_mult (pk_A pk) (sk_s sk))"
-    and len_b: "length (pk_b pk) = length r"
-    and len_sk: "length (mat_transpose_vec_mult (pk_A pk) r) = length (sk_s sk)"
-    and iprod: "inner_prod (sk_s sk) (mat_transpose_vec_mult (pk_A pk) r) =
-                inner_prod (mat_vec_mult (pk_A pk) (sk_s sk)) r"
     and error_bound: "\<bar>inner_prod e r\<bar> < q div 4"
   shows "lwe_decrypt sk q (lwe_encrypt pk q r m) = m"
 proof -
-  have q_pos: "q > 0" using q_gt by arith
   let ?noise = "inner_prod e r"
   have d_eq:
     "(ct_v (lwe_encrypt pk q r m) -
       inner_prod (sk_s sk) (ct_u (lwe_encrypt pk q r m))) mod q =
      (?noise + encode_bit q m) mod q"
-    using decryption_error_term[OF q_pos b_def len_e len_r len_b len_sk iprod] .
+    using decryption_error_term[OF q_pos A_ok s_ok r_ok e_ok m_pos b_def] .
   have decrypt_eq:
     "lwe_decrypt sk q (lwe_encrypt pk q r m) =
      decode_bit q ((?noise + encode_bit q m) mod q)"
@@ -367,158 +736,21 @@ proof -
   show ?thesis
   proof (cases m)
     case False
-    (* m = False, so encode_bit q m = 0 *)
     have enc_false: "encode_bit q False = 0" by (simp add: encode_bit_def)
-    have noise_val: "(?noise + encode_bit q m) mod q = ?noise mod q"
-      using False enc_false by simp
-    (* With |noise| < q/4, the distance from 0 is |noise|, which is < q/4 *)
-    (* So decode_bit returns False (distance <= q/4) *)
-    have noise_small: "\<bar>?noise\<bar> < q div 4" using error_bound .
-    (* noise mod q: if noise in [0, q/4), stays as is; if noise in (-q/4, 0), becomes q+noise *)
-    have "decode_bit q (?noise mod q) = False"
-    proof -
-      let ?d' = "?noise mod q"
-      have q_gt2: "q > 2" using q_gt by arith
-      have q_div4_pos: "q div 4 > 0" using div4_pos[OF q_gt] .
-      have q_div2_pos: "q div 2 > 0" using div2_pos[OF q_gt2] .
-      (* Case analysis on sign of noise *)
-      show ?thesis
-      proof (cases "?noise >= 0")
-        case True
-        (* noise in [0, q/4), so noise mod q = noise *)
-        have "?noise < q div 4" using noise_small True by simp
-        hence "?noise < q" using q_gt by simp
-        hence d'_eq: "?d' = ?noise" using True by simp
-        (* d' = noise < q/4 < q/2, so not > q/2 *)
-        have "\<not> (?d' > q div 2)" using d'_eq `?noise < q div 4` q_div4_pos by simp
-        (* distance = d' = noise < q/4 *)
-        (* dist0 q d' = d' since d' < q/2 *)
-        have "dist0 q ?d' = ?d'"
-          using d'_eq `?noise < q div 4` `\<not> (?d' > q div 2)`
-          unfolding dist0_def Let_def by simp
-        hence "decode_bit q ?d' = (?d' > q div 4)"
-          by (simp add: decode_bit_def)
-        thus ?thesis using d'_eq `?noise < q div 4` True by simp
-      next
-        case False
-        (* noise in (-q/4, 0), so noise mod q = q + noise *)
-        have noise_neg: "?noise < 0" using False by simp
-        have noise_gt: "?noise > - (q div 4)" using noise_small by simp
-        have noise_gt_neg_q: "?noise > -q" using noise_gt q_gt by simp
-        have sum_nonneg: "?noise + q >= 0" using noise_gt_neg_q by simp
-        have sum_lt_q: "?noise + q < q" using noise_neg by simp
-        (* For -q < a < 0 and q > 0: a mod q = a + q *)
-        have d'_eq: "?d' = q + ?noise"
-          using sum_nonneg sum_lt_q q_pos
-          by (metis add.commute mod_add_self2 mod_pos_pos_trivial)
-        (* q + noise > q - q/4 = 3q/4 > q/2 *)
-        have sum_gt: "q + ?noise > q - q div 4" using noise_gt by simp
-        have "q - q div 4 >= q div 2" using q_gt by simp
-        hence d'_gt: "?d' > q div 2" using sum_gt d'_eq by simp
-        (* distance = q - d' = q - (q + noise) = -noise < q/4 *)
-        have dist_eq: "q - ?d' = - ?noise" using d'_eq by simp
-        have dist_lt: "- ?noise < q div 4" using noise_small noise_neg by simp
-        (* dist0 q d' = q - d' since d' > q/2 *)
-        have d'_mod: "?d' mod q = ?d'"
-          using d'_eq noise_neg sum_nonneg sum_lt_q by simp
-        have "dist0 q ?d' = q - ?d'"
-          using d'_gt d'_mod unfolding dist0_def Let_def by simp
-        hence "decode_bit q ?d' = (q - ?d' > q div 4)"
-          by (simp add: decode_bit_def)
-        thus ?thesis using dist_eq dist_lt by simp
-      qed
-    qed
-    thus ?thesis using decrypt_eq noise_val False by simp
+    have "decode_bit q ((?noise + encode_bit q m) mod q) = decode_bit q ?noise"
+      using False enc_false by (simp add: decode_bit_mod)
+    also have "... = False"
+      using decode_bit_small[OF q_pos error_bound] by simp
+    finally show ?thesis using decrypt_eq False by simp
   next
     case True
-    (* m = True, so encode_bit q m = q div 2 *)
     have enc_true: "encode_bit q True = q div 2" by (simp add: encode_bit_def)
-    have val: "(?noise + encode_bit q m) mod q = (?noise + q div 2) mod q"
-      using True enc_true by simp
-    have noise_small: "\<bar>?noise\<bar> < q div 4" using error_bound .
-    (* noise + q/2 should decode to True (distance from q/2 is |noise| < q/4) *)
-    have "decode_bit q ((?noise + q div 2) mod q) = True"
-    proof -
-      let ?sum = "?noise + q div 2"
-      have q_gt2: "q > 2" using q_gt by arith
-      have q_div4_pos: "q div 4 > 0" using div4_pos[OF q_gt] .
-      have q_div2_pos: "q div 2 > 0" using div2_pos[OF q_gt2] .
-      (* sum is in (q/2 - q/4, q/2 + q/4) = (q/4, 3q/4) *)
-      have sum_lb: "?sum > q div 4"
-        using noise_small q_div2_pos by simp
-      have sum_ub: "?sum < q div 2 + q div 4"
-        using noise_small by simp
-      have sum_lt_q: "?sum < q"
-        using sum_ub q_gt by simp
-      show ?thesis
-      proof (cases "?noise >= 0")
-        case True
-        (* sum in [q/2, 3q/4), stays as is mod q *)
-        have sum_nonneg: "?sum >= 0" using True q_div2_pos by simp
-        have d'_eq: "?sum mod q = ?sum" using sum_nonneg sum_lt_q by simp
-        (* sum <= q/2 + noise < q/2 + q/4 *)
-        have not_gt: "\<not> (?sum > q div 2)" if "?noise = 0"
-          using that by simp
-        (* For noise in [0, q/4): sum in [q/2, 3q/4)
-           If sum <= q/2: distance = sum, need sum > q/4 (yes, since sum >= q/2 > q/4)
-           If sum > q/2: distance = q - sum, need q - sum > q/4
-             q - sum > q - (q/2 + q/4) = q/4 - only if sum < 3q/4 *)
-        show ?thesis
-        proof (cases "?sum > q div 2")
-          case True
-          have dist: "q - ?sum > q div 4"
-            using sum_ub q_gt by simp
-          (* dist0 q sum = q - sum since sum > q/2 *)
-          have sum_mod: "?sum mod q = ?sum" using d'_eq by simp
-          have "dist0 q ?sum = q - ?sum"
-            using True sum_mod unfolding dist0_def Let_def by simp
-          hence "decode_bit q ?sum = (q - ?sum > q div 4)"
-            by (simp add: decode_bit_def)
-          thus ?thesis using dist d'_eq by simp
-        next
-          case False
-          (* sum <= q/2 and noise >= 0, so noise + q/2 <= q/2, hence noise <= 0 *)
-          (* Combined with noise >= 0, we get noise = 0, hence sum = q/2 *)
-          have noise_le: "?noise <= 0" using False by simp
-          have noise_eq: "?noise = 0" using True noise_le by simp
-          have sum_eq: "?sum = q div 2" using noise_eq by simp
-          (* decode_bit q (q/2): d' = (q/2) mod q = q/2, not > q/2, so distance = q/2 > q/4 *)
-          have d'_is_half: "?sum mod q = q div 2" using d'_eq sum_eq by simp
-          have not_gt_half: "\<not> (q div 2 > q div 2)" by simp
-          have half_gt_quarter: "q div 2 > q div 4" using q_div2_pos q_div4_pos q_gt by simp
-          (* decode_bit uses d mod q internally, so decode_bit q (d mod q) = decode_bit q d *)
-          have decode_mod: "decode_bit q (?sum mod q) = decode_bit q ?sum"
-            using decode_bit_mod .
-          (* dist0 q sum = sum = q/2 since sum <= q/2 *)
-          have "dist0 q ?sum = ?sum"
-            using d'_is_half not_gt_half sum_eq unfolding dist0_def Let_def by simp
-          hence "decode_bit q ?sum = (?sum > q div 4)"
-            by (simp add: decode_bit_def)
-          hence "decode_bit q ?sum = True" using sum_eq half_gt_quarter by simp
-          thus ?thesis using decode_mod by simp
-        qed
-      next
-        case False
-        (* noise < 0, so sum in (q/4, q/2) *)
-        have noise_neg: "?noise < 0" using False by simp
-        have sum_lt_half: "?sum < q div 2" using noise_neg by simp
-        have sum_pos: "?sum > 0" using sum_lb q_div4_pos by simp
-        have d'_eq: "?sum mod q = ?sum" using sum_pos sum_lt_q by simp
-        (* sum in (q/4, q/2), so not > q/2, distance = sum > q/4 *)
-        have not_gt: "\<not> (?sum > q div 2)" using sum_lt_half by simp
-        have decode_mod: "decode_bit q (?sum mod q) = decode_bit q ?sum"
-          using decode_bit_mod .
-        (* dist0 q sum = sum since sum <= q/2 *)
-        have sum_mod: "?sum mod q = ?sum" using d'_eq by simp
-        have "dist0 q ?sum = ?sum"
-          using not_gt sum_mod unfolding dist0_def Let_def by simp
-        hence "decode_bit q ?sum = (?sum > q div 4)"
-          by (simp add: decode_bit_def)
-        hence "decode_bit q ?sum = True" using sum_lb by simp
-        thus ?thesis using decode_mod by simp
-      qed
-    qed
-    thus ?thesis using decrypt_eq val True by simp
+    have "decode_bit q ((?noise + encode_bit q m) mod q) =
+          decode_bit q (?noise + q div 2)"
+      using True enc_true by (simp add: decode_bit_mod)
+    also have "... = True"
+      using decode_bit_half_shift[OF q_pos q_mod4 error_bound] by simp
+    finally show ?thesis using decrypt_eq True by simp
   qed
 qed
 
