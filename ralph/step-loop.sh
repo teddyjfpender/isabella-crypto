@@ -159,12 +159,14 @@ THEORY_NAME="${THEORY_NAME:-LatticeCrypto}"
 
 # Build skill content
 SKILL_CONTENT=""
-for skill in "${SKILLS[@]}"; do
-    skill_file="${PROJECT_ROOT}/skills/${skill}/SKILL.md"
-    if [[ -f "$skill_file" ]]; then
-        SKILL_CONTENT+="$(cat "$skill_file")"$'\n\n'
-    fi
-done
+if [[ ${#SKILLS[@]} -gt 0 ]]; then
+    for skill in "${SKILLS[@]}"; do
+        skill_file="${PROJECT_ROOT}/skills/${skill}/SKILL.md"
+        if [[ -f "$skill_file" ]]; then
+            SKILL_CONTENT+="$(cat "$skill_file")"$'\n\n'
+        fi
+    done
+fi
 
 # Extract steps from prompt
 count_steps() {
