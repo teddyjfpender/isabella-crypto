@@ -127,11 +127,19 @@ divide_int :: Int -> Int -> Int;
 divide_int k l =
   Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
 
-less_eq_int :: Int -> Int -> Bool;
-less_eq_int k l = integer_of_int k <= integer_of_int l;
+minus_int :: Int -> Int -> Int;
+minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
+
+less_int :: Int -> Int -> Bool;
+less_int k l = integer_of_int k < integer_of_int l;
 
 decode_bit :: Int -> Int -> Bool;
-decode_bit q d = less_eq_int (divide_int q (Int_of_integer (2 :: Integer))) d;
+decode_bit q d =
+  let {
+    da = modulo_int d q;
+  } in less_int (divide_int q (Int_of_integer (4 :: Integer)))
+         (if less_int (divide_int q (Int_of_integer (2 :: Integer))) da
+           then minus_int q da else da);
 
 encode_bit :: Int -> Bool -> Int;
 encode_bit q b =
@@ -154,9 +162,6 @@ ct_v (Lwe_ciphertext_ext ct_u ct_v more) = ct_v;
 
 ct_u :: forall a. Lwe_ciphertext_ext a -> [Int];
 ct_u (Lwe_ciphertext_ext ct_u ct_v more) = ct_u;
-
-minus_int :: Int -> Int -> Int;
-minus_int k l = Int_of_integer (integer_of_int k - integer_of_int l);
 
 lwe_decrypt :: Lwe_secret_key_ext () -> Int -> Lwe_ciphertext_ext () -> Bool;
 lwe_decrypt sk q ct =

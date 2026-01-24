@@ -183,11 +183,18 @@ def divide_integer(k : BigInt, l : BigInt) : BigInt =
 def divide_int(k : int, l : int) : int =
   int_of_integer(divide_integer(integer_of_int(k), integer_of_int(l)))
 
-def less_eq_int(k : int, l : int) : Boolean =
-  integer_of_int(k) <= integer_of_int(l)
+def minus_int(k : int, l : int) : int =
+  int_of_integer(integer_of_int(k) - integer_of_int(l))
+
+def less_int(k : int, l : int) : Boolean = integer_of_int(k) < integer_of_int(l)
 
 def decode_bit(q : int, d : int) : Boolean =
-  less_eq_int(divide_int(q, int_of_integer(BigInt(2))), d)
+  {
+    val da = modulo_int(d, q) : int;
+    less_int(divide_int(q, int_of_integer(BigInt(4))),
+              (less_int(divide_int(q, int_of_integer(BigInt(2))), da) match {
+                case true => minus_int(q, da) case false => da }))
+  }
 
 def encode_bit(q : int, b : Boolean) : int =
   (b match { case true => divide_int(q, int_of_integer(BigInt(2)))
@@ -219,9 +226,6 @@ def ct_v[A](x0 : lwe_ciphertext_ext[A]) : int = x0 match {
 def ct_u[A](x0 : lwe_ciphertext_ext[A]) : List[int] = x0 match {
   case lwe_ciphertext_exta(ct_u, ct_v, more) => ct_u
 }
-
-def minus_int(k : int, l : int) : int =
-  int_of_integer(integer_of_int(k) - integer_of_int(l))
 
 def lwe_decrypt(sk : lwe_secret_key_ext[Unit], q : int,
                  ct : lwe_ciphertext_ext[Unit]) : Boolean

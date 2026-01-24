@@ -134,10 +134,19 @@ fun divide_integer k l = fst (divmod_integer k l);
 fun divide_int k l =
   Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));
 
-fun less_eq_int k l = IntInf.<= (integer_of_int k, integer_of_int l);
+fun minus_int k l =
+  Int_of_integer (IntInf.- (integer_of_int k, integer_of_int l));
+
+fun less_int k l = IntInf.< (integer_of_int k, integer_of_int l);
 
 fun decode_bit q d =
-  less_eq_int (divide_int q (Int_of_integer (2 : IntInf.int))) d;
+  let
+    val da = modulo_int d q;
+  in
+    less_int (divide_int q (Int_of_integer (4 : IntInf.int)))
+      (if less_int (divide_int q (Int_of_integer (2 : IntInf.int))) da
+        then minus_int q da else da)
+  end;
 
 fun encode_bit q b =
   (if b then divide_int q (Int_of_integer (2 : IntInf.int)) else zero_inta);
@@ -157,9 +166,6 @@ fun sk_s (Lwe_secret_key_ext (sk_s, more)) = sk_s;
 fun ct_v (Lwe_ciphertext_ext (ct_u, ct_v, more)) = ct_v;
 
 fun ct_u (Lwe_ciphertext_ext (ct_u, ct_v, more)) = ct_u;
-
-fun minus_int k l =
-  Int_of_integer (IntInf.- (integer_of_int k, integer_of_int l));
 
 fun lwe_decrypt sk q ct =
   let

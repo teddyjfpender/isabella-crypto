@@ -134,10 +134,16 @@ let rec divide_integer k l = fst (divmod_integer k l);;
 let rec divide_int
   k l = Int_of_integer (divide_integer (integer_of_int k) (integer_of_int l));;
 
-let rec less_eq_int k l = Z.leq (integer_of_int k) (integer_of_int l);;
+let rec minus_int
+  k l = Int_of_integer (Z.sub (integer_of_int k) (integer_of_int l));;
+
+let rec less_int k l = Z.lt (integer_of_int k) (integer_of_int l);;
 
 let rec decode_bit
-  q d = less_eq_int (divide_int q (Int_of_integer (Z.of_int 2))) d;;
+  q d = (let da = modulo_int d q in
+          less_int (divide_int q (Int_of_integer (Z.of_int 4)))
+            (if less_int (divide_int q (Int_of_integer (Z.of_int 2))) da
+              then minus_int q da else da));;
 
 let rec encode_bit
   q b = (if b then divide_int q (Int_of_integer (Z.of_int 2)) else zero_inta);;
@@ -157,9 +163,6 @@ let rec sk_s (Lwe_secret_key_ext (sk_s, more)) = sk_s;;
 let rec ct_v (Lwe_ciphertext_ext (ct_u, ct_v, more)) = ct_v;;
 
 let rec ct_u (Lwe_ciphertext_ext (ct_u, ct_v, more)) = ct_u;;
-
-let rec minus_int
-  k l = Int_of_integer (Z.sub (integer_of_int k) (integer_of_int l));;
 
 let rec lwe_decrypt
   sk q ct =
