@@ -1,50 +1,25 @@
-# Isabelle build artifacts
+# ============================================
+# Isabella - Verified Lattice Cryptography
+# ============================================
+
+# --------------------------------------------
+# Isabelle Build Artifacts
+# --------------------------------------------
 .isabelle/
 **/.session/
 **/browser_info/
 **/*.thy~
 **/heap/
-
-# Isabelle document output
 **/document/output/
 **/*.aux
 **/*.toc
 
-# Eval working directories - keep important files
-eval/work/**/output/
-eval/work/**/.gitignore
-eval/results/**/*.out
-eval/results/**/*.err
-eval/results/**/*.stderr
-eval/results/**/ai.stderr
-eval/results/**/prompt.txt
-eval/results/**/steps.jsonl
+# Keep Isabelle generated code - this is the verified output
+# eval/work/**/generated/  # DO NOT IGNORE - needed for collect.sh
 
-# Keep these eval files (not ignored):
-# - eval/work/**/*.thy (generated theories)
-# - eval/work/**/ROOT (session config)
-# - eval/results/**/*.json (run metadata, verify results)
-# - eval/results/**/assistant_last.txt (AI response)
-
-# Export - keep generated Haskell code
-# Only ignore PIDE/theory metadata, keep code/**/*.hs
-export/**/PIDE/
-export/**/theory/
-
-# Keep these export files (not ignored):
-# - export/**/code/**/*.hs (generated Haskell)
-
-# Ralph state - ignore logs and temporary files
-.ralph/**/*.log
-.ralph/**/augmented/
-
-# Keep these ralph files (not ignored):
-# - .ralph/**/.ralph-complete (success marker)
-# - .ralph/**/successful-iteration.txt
-# - .ralph/**/iteration.txt
-# - .ralph/**/feedback.md (final feedback state)
-
-# Haskell build artifacts
+# --------------------------------------------
+# Haskell Build Artifacts
+# --------------------------------------------
 haskell/**/.stack-work/
 haskell/**/dist-newstyle/
 haskell/**/*.hi
@@ -53,27 +28,128 @@ haskell/**/*.dyn_hi
 haskell/**/*.dyn_o
 haskell/**/cabal.project.local
 haskell/**/cabal.project.local~
+*.hie
 
+# --------------------------------------------
+# OCaml/Dune Build Artifacts
+# --------------------------------------------
+ocaml/**/_build/
+ocaml/**/*.install
+ocaml/**/.merlin
+ocaml/**/_opam/
+**/.opam-switch/
+
+# --------------------------------------------
+# JavaScript Build Artifacts
+# --------------------------------------------
+javascript/**/dist/
+javascript/**/node_modules/
+javascript/**/*.js.map
+
+# --------------------------------------------
+# TypeScript Build Artifacts
+# --------------------------------------------
+typescript/**/dist/
+typescript/**/node_modules/
+typescript/**/src/*.js
+typescript/**/*.js.map
+typescript/**/*.tsbuildinfo
+
+# --------------------------------------------
+# Scala Build Artifacts
+# --------------------------------------------
+scala/**/target/
+scala/**/project/target/
+scala/**/project/project/
+scala/**/.bsp/
+scala/**/.scala-build/
+scala/**/*.class
+scala/**/*.tasty
+
+# --------------------------------------------
+# SML Build Artifacts
+# --------------------------------------------
+sml/**/*.ui
+sml/**/*.uo
+sml/**/.cm/
+
+# --------------------------------------------
+# Eval Harness Artifacts
+# --------------------------------------------
+eval/work/**/output/
+eval/results/**/*.out
+eval/results/**/*.err
+eval/results/**/*.stderr
+eval/results/**/ai.stderr
+eval/results/**/prompt.txt
+eval/results/**/steps.jsonl
+
+# Keep these eval files:
+# - eval/work/**/*.thy (generated theories)
+# - eval/work/**/ROOT (session config)
+# - eval/results/**/*.json
+
+# --------------------------------------------
+# Ralph Loop Artifacts
+# --------------------------------------------
+.ralph/**/*.log
+.ralph/**/augmented/
+
+# Keep these ralph files:
+# - .ralph/**/.ralph-complete
+# - .ralph/**/iteration.txt
+# - .ralph/**/feedback.md
+
+# --------------------------------------------
 # Python
+# --------------------------------------------
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
+venv/
+*.egg-info/
 
-# Editor artifacts
+# --------------------------------------------
+# Editor & IDE
+# --------------------------------------------
 *.swp
 *.swo
 *~
 .idea/
-.vscode/
 *.iml
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+*.sublime-*
 
-# OS artifacts
+# --------------------------------------------
+# OS Artifacts
+# --------------------------------------------
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Logs (but keep .json results)
+# --------------------------------------------
+# Logs & Temp Files
+# --------------------------------------------
 *.log
+*.tmp
+*.temp
+*.bak
 
-# Packaged skills (built artifacts)
-# dist/*.skill
+# --------------------------------------------
+# Secrets & Credentials (never commit!)
+# --------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+secrets.json

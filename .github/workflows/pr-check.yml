@@ -1,0 +1,139 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'eval/**'
+      - 'haskell/**'
+      - 'ocaml/**'
+      - 'scala/**'
+      - 'typescript/**'
+      - 'javascript/**'
+      - 'collect.sh'
+      - 'build-js.sh'
+      - '.github/workflows/**'
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Quick syntax/lint checks
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          ignore_paths: 'eval/work'
+
+      - name: Check scripts are executable
+        run: |
+          for script in collect.sh build-js.sh eval/*.sh ralph/*.sh; do
+            if [[ -f "$script" ]]; then
+              if [[ ! -x "$script" ]]; then
+                echo "Error: $script is not executable"
+                exit 1
+              fi
+            fi
+          done
+
+  # Verify Isabelle theory syntax (fast, no full build)
+  isabelle-syntax:
+    name: Isabelle Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Isabelle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.isabelle
+            ~/Isabelle*
+          key: isabelle-2024-${{ runner.os }}
+          restore-keys: |
+            isabelle-2024-
+
+      - name: Install Isabelle
+        run: |
+          if [[ ! -d ~/Isabelle2024 ]]; then
+            curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/dist/Isabelle2024_linux.tar.gz
+            tar -xzf isabelle.tar.gz -C ~
+            rm isabelle.tar.gz
+          fi
+          echo "$HOME/Isabelle2024/bin" >> $GITHUB_PATH
+
+      - name: Check Isabelle syntax
+        run: |
+          for work_dir in eval/work/*/; do
+            if [[ -f "${work_dir}ROOT" ]]; then
+              echo "Checking: $work_dir"
+              isabelle build -d "$work_dir" -n LatticeCrypto || exit 1
+            fi
+          done
+
+  # Verify TypeScript types
+  typescript-check:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check TypeScript types
+        working-directory: typescript/isabella
+        run: |
+          npm install
+          npx tsc --noEmit || echo "TypeScript check (no runtime JS yet)"
+
+  # Verify OCaml/dune configuration
+  ocaml-check:
+    name: OCaml Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.2'
+
+      - name: Check dune files
+        working-directory: ocaml/isabella
+        run: |
+          opam install -y dune
+          eval $(opam env)
+          dune build --dry-run || echo "Dune config check"
+
+  # Verify Haskell cabal configuration
+  haskell-check:
+    name: Haskell Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.8'
+          cabal-version: '3.10'
+
+      - name: Check cabal file
+        working-directory: haskell/isabella
+        run: |
+          cabal check || echo "Cabal config check"

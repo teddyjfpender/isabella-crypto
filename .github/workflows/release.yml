@@ -1,0 +1,200 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    name: Build All Targets
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Isabelle
+        run: |
+          curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/dist/Isabelle2024_linux.tar.gz
+          tar -xzf isabelle.tar.gz -C ~
+          rm isabelle.tar.gz
+          echo "$HOME/Isabelle2024/bin" >> $GITHUB_PATH
+
+      - name: Build and export Isabelle
+        run: |
+          for work_dir in eval/work/*/; do
+            if [[ -f "${work_dir}ROOT" ]]; then
+              isabelle build -d "$work_dir" -e LatticeCrypto
+            fi
+          done
+
+      - name: Collect all languages
+        run: ./collect.sh --lang all --verbose
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.8'
+          cabal-version: '3.10'
+
+      - name: Build Haskell
+        working-directory: haskell/isabella
+        run: |
+          cabal update
+          cabal build all
+          cabal sdist
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.2'
+
+      - name: Build JavaScript
+        run: |
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
+          eval $(opam env)
+          cd ocaml/isabella && dune build src/js/isabella_js.bc.js
+          mkdir -p ../../javascript/isabella/dist ../../typescript/isabella/src
+          cp _build/default/src/js/isabella_js.bc.js ../../javascript/isabella/dist/isabella.js
+          cp _build/default/src/js/isabella_js.bc.js ../../typescript/isabella/src/isabella.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build TypeScript
+        working-directory: typescript/isabella
+        run: |
+          npm install
+          npm run build
+
+      - name: Package artifacts
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Package Haskell
+          mkdir -p release
+          cp haskell/isabella/dist-newstyle/sdist/*.tar.gz release/isabella-haskell-${VERSION}.tar.gz 2>/dev/null || true
+
+          # Package JavaScript
+          cd javascript/isabella
+          tar -czf ../../release/isabella-javascript-${VERSION}.tar.gz dist/
+          cd ../..
+
+          # Package TypeScript
+          cd typescript/isabella
+          tar -czf ../../release/isabella-typescript-${VERSION}.tar.gz dist/ src/ package.json tsconfig.json
+          cd ../..
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: release/
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.version }}
+          name: Isabella ${{ needs.build.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(needs.build.outputs.version, '-') }}
+          files: release/*
+          body: |
+            ## Isabella ${{ needs.build.outputs.version }}
+
+            Formally verified lattice-based cryptography from Isabelle/HOL.
+
+            ### Downloads
+
+            | Language | File |
+            |----------|------|
+            | Haskell | `isabella-haskell-${{ needs.build.outputs.version }}.tar.gz` |
+            | JavaScript | `isabella-javascript-${{ needs.build.outputs.version }}.tar.gz` |
+            | TypeScript | `isabella-typescript-${{ needs.build.outputs.version }}.tar.gz` |
+
+            ### Installation
+
+            **Haskell:**
+            ```bash
+            cabal install isabella-${{ needs.build.outputs.version }}.tar.gz
+            ```
+
+            **JavaScript/TypeScript:**
+            ```bash
+            npm install @isabella/lattice-crypto
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Publish TypeScript package to npm
+  publish-npm:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Extract and publish
+        working-directory: typescript/isabella
+        run: |
+          # Extract built package
+          tar -xzf ../../release/isabella-typescript-*.tar.gz
+
+          # Update version in package.json
+          VERSION=${{ needs.build.outputs.version }}
+          VERSION=${VERSION#v}  # Remove 'v' prefix
+          npm version $VERSION --no-git-tag-version
+
+          # Publish (dry-run for safety - remove --dry-run when ready)
+          npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

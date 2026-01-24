@@ -1,0 +1,245 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Build and verify Isabelle theories
+  isabelle:
+    name: Isabelle Theories
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Isabelle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.isabelle
+            ~/Isabelle*
+          key: isabelle-2024-${{ runner.os }}-${{ hashFiles('eval/work/**/ROOT', 'eval/work/**/*.thy') }}
+          restore-keys: |
+            isabelle-2024-${{ runner.os }}-
+
+      - name: Install Isabelle
+        run: |
+          if [[ ! -d ~/Isabelle2024 ]]; then
+            curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/dist/Isabelle2024_linux.tar.gz
+            tar -xzf isabelle.tar.gz -C ~
+            rm isabelle.tar.gz
+          fi
+          echo "$HOME/Isabelle2024/bin" >> $GITHUB_PATH
+
+      - name: Build Isabelle theories
+        run: |
+          for work_dir in eval/work/*/; do
+            if [[ -f "${work_dir}ROOT" ]]; then
+              echo "Building: $work_dir"
+              isabelle build -d "$work_dir" -v LatticeCrypto
+            fi
+          done
+
+      - name: Export code
+        run: |
+          for work_dir in eval/work/*/; do
+            if [[ -f "${work_dir}ROOT" ]]; then
+              echo "Exporting: $work_dir"
+              isabelle build -d "$work_dir" -e LatticeCrypto
+            fi
+          done
+
+      - name: Upload generated code
+        uses: actions/upload-artifact@v4
+        with:
+          name: isabelle-generated
+          path: eval/work/*/generated/
+          retention-days: 7
+
+  # Collect generated code into language directories
+  collect:
+    name: Collect Code
+    needs: isabelle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download generated code
+        uses: actions/download-artifact@v4
+        with:
+          name: isabelle-generated
+          path: eval/work/
+
+      - name: Collect all languages
+        run: ./collect.sh --lang all --verbose
+
+      - name: Upload collected code
+        uses: actions/upload-artifact@v4
+        with:
+          name: collected-code
+          path: |
+            haskell/isabella/src/
+            sml/isabella/src/
+            ocaml/isabella/src/
+            scala/isabella/src/
+          retention-days: 7
+
+  # Build Haskell library
+  haskell:
+    name: Haskell Library
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download collected code
+        uses: actions/download-artifact@v4
+        with:
+          name: collected-code
+          path: .
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.8'
+          cabal-version: '3.10'
+
+      - name: Cache Cabal
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            haskell/isabella/dist-newstyle
+          key: cabal-${{ runner.os }}-ghc9.8-${{ hashFiles('haskell/isabella/isabella.cabal') }}
+          restore-keys: |
+            cabal-${{ runner.os }}-ghc9.8-
+
+      - name: Build Haskell
+        working-directory: haskell/isabella
+        run: |
+          cabal update
+          cabal build all
+
+  # Build JavaScript/TypeScript via js_of_ocaml
+  javascript:
+    name: JavaScript/TypeScript
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download collected code
+        uses: actions/download-artifact@v4
+        with:
+          name: collected-code
+          path: .
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.2'
+
+      - name: Cache opam
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.opam
+            ocaml/isabella/_build
+          key: opam-${{ runner.os }}-ocaml5.2-${{ hashFiles('ocaml/isabella/dune-project') }}
+          restore-keys: |
+            opam-${{ runner.os }}-ocaml5.2-
+
+      - name: Install OCaml dependencies
+        run: |
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
+
+      - name: Build JavaScript
+        working-directory: ocaml/isabella
+        run: |
+          eval $(opam env)
+          dune build src/js/isabella_js.bc.js
+
+      - name: Copy outputs
+        run: |
+          mkdir -p javascript/isabella/dist typescript/isabella/src
+          cp ocaml/isabella/_build/default/src/js/isabella_js.bc.js javascript/isabella/dist/isabella.js
+          cp ocaml/isabella/_build/default/src/js/isabella_js.bc.js typescript/isabella/src/isabella.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build TypeScript
+        working-directory: typescript/isabella
+        run: |
+          npm install
+          npm run build
+
+      - name: Upload JavaScript artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-build
+          path: |
+            javascript/isabella/dist/
+            typescript/isabella/dist/
+          retention-days: 7
+
+  # Build Scala library
+  scala:
+    name: Scala Library
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download collected code
+        uses: actions/download-artifact@v4
+        with:
+          name: collected-code
+          path: .
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Check Scala files exist
+        id: check-scala
+        run: |
+          if ls scala/isabella/src/Lattice/*.scala 1> /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Scala
+        if: steps.check-scala.outputs.exists == 'true'
+        working-directory: scala/isabella
+        run: |
+          # Create minimal build.sbt if not exists
+          if [[ ! -f build.sbt ]]; then
+            cat > build.sbt << 'EOF'
+          name := "isabella"
+          version := "0.1.0"
+          scalaVersion := "3.4.0"
+          EOF
+          fi
+          sbt compile

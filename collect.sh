@@ -79,7 +79,8 @@ collect_sml() {
 collect_ocaml() {
     local LIB_DIR="${PROJECT_ROOT}/ocaml/isabella/src"
 
-    mkdir -p "${LIB_DIR}/Lattice"
+    # Use lowercase 'lattice' for dune compatibility
+    mkdir -p "${LIB_DIR}/lattice"
 
     local count=0
     # Isabelle exports OCaml files with .ocaml extension, directly in code/ directory
@@ -91,12 +92,40 @@ collect_ocaml() {
         fi
         # OCaml module files should be lowercase
         ml_filename=$(echo "$module_name" | tr '[:upper:]' '[:lower:]').ml
-        cp "$src_file" "${LIB_DIR}/Lattice/${ml_filename}"
+        local dest_file="${LIB_DIR}/lattice/${ml_filename}"
+        cp "$src_file" "$dest_file"
+
+        # Patch for js_of_ocaml: expose type constructors in module signature
+        # Isabelle generates abstract types which prevents JS interop
+        patch_ocaml_for_jsoo "$dest_file"
+
         [[ "$VERBOSE" == "true" ]] && log_info "  OCaml: ${ml_filename}"
         ((count++))
     done
 
     echo "$count"
+}
+
+# Patch OCaml module signatures to expose type constructors for js_of_ocaml
+patch_ocaml_for_jsoo() {
+    local file="$1"
+    [[ ! -f "$file" ]] && return
+
+    # Replace abstract type declarations with concrete ones
+    # This is needed because js_of_ocaml bindings need to construct/deconstruct values
+    sed -i.bak '
+        # Expose int type constructor
+        s/^  type int$/  type int = Int_of_integer of Z.t/
+        # Expose num type constructors
+        s/^  type num$/  type num = One | Bit0 of num | Bit1 of num/
+        # Expose ciphertext type constructor
+        s/^  type '"'"'a lwe_ciphertext_ext$/  type '"'"'a lwe_ciphertext_ext = Lwe_ciphertext_ext of int list * int * '"'"'a/
+        # Expose public key type constructor
+        s/^  type '"'"'a lwe_public_key_ext$/  type '"'"'a lwe_public_key_ext = Lwe_public_key_ext of (int list) list * int list * '"'"'a/
+        # Expose secret key type constructor
+        s/^  type '"'"'a lwe_secret_key_ext$/  type '"'"'a lwe_secret_key_ext = Lwe_secret_key_ext of int list * '"'"'a/
+    ' "$file"
+    rm -f "${file}.bak"
 }
 
 collect_scala() {

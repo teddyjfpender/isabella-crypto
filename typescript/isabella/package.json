@@ -1,0 +1,27 @@
+{
+  "name": "@isabella/lattice-crypto",
+  "version": "0.1.0",
+  "description": "Verified lattice cryptography from Isabelle/HOL",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "cryptography",
+    "lattice",
+    "lwe",
+    "post-quantum",
+    "verified",
+    "isabelle"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

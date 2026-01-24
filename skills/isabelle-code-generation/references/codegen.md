@@ -42,7 +42,7 @@ export_code f in Scala     (* Scala - .scala files *)
 
 **Note:** OCaml files are exported with `.ocaml` extension internally; the collect script renames them to `.ml`.
 
-For C/C++/Rust, see Isabelle-LLVM framework (requires different approach with separation logic).
+For JavaScript/TypeScript, the OCaml output can be compiled via js_of_ocaml (see `./build-js.sh`).
 
 ## Module Organization
 

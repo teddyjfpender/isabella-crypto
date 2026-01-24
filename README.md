@@ -1,8 +1,11 @@
 # Isabella
 
+[![CI](https://github.com/anthropics/isabella-crypto/actions/workflows/ci.yml/badge.svg)](https://github.com/anthropics/isabella-crypto/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ***Isab***elle + ***Latt***ice Cryptography = ***Isabella***
 
-Formally verified lattice-based cryptography in Isabelle/HOL with executable Haskell code generation.
+Formally verified lattice-based cryptography in Isabelle/HOL with multi-language code generation.
 
 ## Overview
 
@@ -42,16 +45,19 @@ npm install -g @openai/codex
 ```
 isabella-crypto/
 ├── collect.sh             # Collect generated code (all languages)
+├── build-js.sh            # Build JavaScript/TypeScript from OCaml
 ├── haskell/               # Verified Haskell library
-│   └── isabella/          # Haskell library
+│   └── isabella/
 ├── sml/                   # Verified SML library
 │   └── isabella/
-├── ocaml/                 # Verified OCaml library
+├── ocaml/                 # Verified OCaml library (source for JS)
 │   └── isabella/
 ├── scala/                 # Verified Scala library
 │   └── isabella/
-├── docs/                  # Documentation
-│   └── LLVM-CODEGEN.md    # C/C++/Rust via Isabelle-LLVM
+├── javascript/            # Compiled JavaScript (via js_of_ocaml)
+│   └── isabella/
+├── typescript/            # TypeScript package with type definitions
+│   └── isabella/
 ├── eval/                  # Evaluation harness
 │   ├── run-prompt.sh      # Single-shot runner
 │   ├── verify.sh          # Isabelle verification
@@ -77,8 +83,8 @@ isabella-crypto/
 | SML | ✓ Built-in | `export_code ... in SML` |
 | OCaml | ✓ Built-in | `export_code ... in OCaml` |
 | Scala | ✓ Built-in | `export_code ... in Scala` |
-| C/C++ | Planned | Via [Isabelle-LLVM](docs/LLVM-CODEGEN.md) |
-| Rust | Planned | Via Isabelle-LLVM + FFI |
+| JavaScript | ✓ Via js_of_ocaml | OCaml → `./build-js.sh` |
+| TypeScript | ✓ Via js_of_ocaml | OCaml → `./build-js.sh` |
 
 ## Quick Start
 
@@ -102,7 +108,7 @@ isabelle build -d . -v LatticeCrypto
 Generated modules will be collected into:
 - `haskell/isabella/src/Lattice/*.hs`
 - `sml/isabella/src/Lattice/*.ML`
-- `ocaml/isabella/src/Lattice/*.ml`
+- `ocaml/isabella/src/lattice/*.ml`
 - `scala/isabella/src/Lattice/*.scala`
 
 ### Building Libraries
@@ -111,12 +117,28 @@ Generated modules will be collected into:
 # Haskell
 cd haskell/isabella && cabal build
 
-# OCaml
+# OCaml (native)
 cd ocaml/isabella && dune build
 
 # Scala
 cd scala/isabella && sbt compile
 ```
+
+### Building JavaScript/TypeScript
+
+The JavaScript/TypeScript build uses js_of_ocaml to compile OCaml to JS:
+
+```bash
+# First time setup (installs OCaml toolchain via opam)
+./build-js.sh --setup
+
+# Build JavaScript and TypeScript
+./build-js.sh
+```
+
+Output:
+- `javascript/isabella/dist/isabella.js` - Compiled runtime
+- `typescript/isabella/` - TypeScript package with type definitions
 
 ### Using the Haskell Library
 
@@ -268,11 +290,43 @@ The theories cover:
 
 The Haskell code in `haskell/isabella/` is extracted from Isabelle proofs, not hand-written. It produces GHC warnings (unused imports, incomplete patterns, etc.) but this is normal - the proofs guarantee correctness even where GHC's linter complains. See `haskell/isabella/README.md` for details.
 
+## CI/CD
+
+GitHub Actions workflows automate building and testing:
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | Push to main, PRs | Full build: Isabelle → all languages |
+| `pr-check.yml` | PRs | Fast syntax checks for Isabelle, TypeScript, OCaml, Haskell |
+| `release.yml` | Tags `v*` | Build and publish releases to GitHub, npm |
+
+### CI Pipeline
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
+│   Isabelle  │────>│   Collect   │────>│  Build Targets  │
+│   Build     │     │   Code      │     │                 │
+└─────────────┘     └─────────────┘     │  ├─ Haskell     │
+                                        │  ├─ JavaScript  │
+                                        │  ├─ TypeScript  │
+                                        │  └─ Scala       │
+                                        └─────────────────┘
+```
+
+### Running Locally
+
+```bash
+# Full build (requires Isabelle, opam, cabal)
+./collect.sh --lang all
+./build-js.sh
+cd haskell/isabella && cabal build
+```
+
 ## Contributing
 
-1. Add new theories in `isabelle/theories/`
-2. Update `isabelle/ROOT` to include new theories
-3. Add corresponding skills in `skills/`
+1. Add new theories in `eval/work/<prompt-name>/`
+2. Run Ralph loop to verify proofs: `ralph/isabella-loop.sh --prompt <name>`
+3. Collect generated code: `./collect.sh --lang all`
 4. Add evaluation prompts in `eval/prompts/`
 
 ## License

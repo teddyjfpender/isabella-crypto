@@ -1,0 +1,11 @@
+# Isabelle generated files
+output/
+.session/
+*.log
+*~
+
+# Heap images
+*.heap
+
+# Browser info
+browser_info/
