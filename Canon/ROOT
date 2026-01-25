@@ -20,18 +20,27 @@ session Canon_Base = HOL +
     "Prob/DiscreteBasics"
     *)
 
+(* Session 2: Hardness assumptions *)
+session Canon_Hardness in "Hardness" = Canon_Base +
+  options [document = false]
+  theories
+    LWE_Def
+    (* Add as created:
+    SIS_Def
+    NormalForms
+    *)
+
+(* Session 3: Cryptographic constructions *)
+session Canon_Crypto in "Crypto" = Canon_Hardness +
+  options [document = false]
+  theories
+    Regev_PKE
+
 (* Future sessions - uncomment as theories are added:
 
-session Canon_Hardness = Canon_Base +
-  theories
-    "Hardness/LWE_Def"
-    "Hardness/SIS_Def"
-    "Hardness/NormalForms"
-
-session Canon_Crypto = Canon_Hardness +
+session Canon_Gadgets = Canon_Hardness +
   theories
     "Gadgets/Decomp"
-    "Crypto/Regev_PKE"
     "Crypto/Commit_SIS"
 
 session Canon_Rings = Canon_Crypto +

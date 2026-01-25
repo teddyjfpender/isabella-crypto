@@ -36,7 +36,7 @@ SKILLS=()
 MAX_ATTEMPTS=7
 PROVIDER="anthropic"
 MODEL="claude-sonnet-4-20250514"
-REVIEW_MODEL="claude-haiku-4-20250514"  # Fast model for reviews
+REVIEW_MODEL="claude-sonnet-4-20250514"  # Reviewer model
 OUTPUT_DIR=""
 THEORY_NAME=""
 THEORY_PATH=""
@@ -173,8 +173,20 @@ fi
 # Check for balanced proof/qed pairs
 check_proof_balance() {
     local file="$1"
-    local proof_count=$(grep -cE '^\s*proof\b' "$file" 2>/dev/null || echo 0)
-    local qed_count=$(grep -cE '^\s*qed\b' "$file" 2>/dev/null || echo 0)
+    local proof_count
+    local qed_count
+
+    # Use grep -c with proper error handling
+    proof_count=$(grep -cE '^\s*proof\b' "$file" 2>/dev/null) || proof_count=0
+    qed_count=$(grep -cE '^\s*qed\b' "$file" 2>/dev/null) || qed_count=0
+
+    # Trim whitespace and ensure numeric
+    proof_count=$(echo "$proof_count" | tr -d '[:space:]')
+    qed_count=$(echo "$qed_count" | tr -d '[:space:]')
+
+    # Default to 0 if empty
+    proof_count=${proof_count:-0}
+    qed_count=${qed_count:-0}
 
     if [[ "$proof_count" -ne "$qed_count" ]]; then
         echo "UNBALANCED: $proof_count proof(s) vs $qed_count qed(s)"

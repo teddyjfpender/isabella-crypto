@@ -26,6 +26,8 @@
 | canon-linear-listvec | ✅ | Vectors, matrices, iprod_transpose |
 | canon-algebra-zq | ✅ | dist0, encode/decode_bit, mat_vec_mult_mod |
 | canon-analysis-norms | ✅ | linf_norm, all_bounded, inner_prod_bound |
+| canon-hardness-lwe-def | ✅ | LWE params, lwe_sample, Search/Decision LWE |
+| canon-crypto-regev-pke | ✅ | Regev PKE with correctness theorem |
 
 ---
 
@@ -36,7 +38,7 @@
 | `Prelude.thy` | ✅ | Complete with hardened proofs |
 | `Linear/ListVec.thy` | ✅ | Complete with iprod_transpose |
 | `Algebra/Zq.thy` | ✅ | Complete with dist0, encode/decode_bit, mat_vec_mult_mod |
-| `Analysis/Norms.thy` | ⬜ | Prompt ready: canon-analysis-norms |
+| `Analysis/Norms.thy` | ✅ | Complete with inner_prod_bound |
 | `Prob/DiscreteBasics.thy` | ⬜ | Prompt needed |
 
 **Blockers**: None
@@ -47,7 +49,7 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `Hardness/LWE_Def.thy` | ⬜ | clean from LWE.thy |
+| `Hardness/LWE_Def.thy` | ✅ | Complete with lwe_context locale |
 | `Hardness/SIS_Def.thy` | ⬜ | from SIS work |
 | `Hardness/NormalForms.thy` | ⬜ | migrate NFSIS |
 
@@ -59,7 +61,7 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `Crypto/Regev_PKE.thy` | ⬜ | refactor to use new imports |
+| `Crypto/Regev_PKE.thy` | ⬜ | Prompt ready: canon-crypto-regev-pke |
 | `Gadgets/Decomp.thy` | ⬜ | new: base-B decomposition |
 | `Crypto/Commit_SIS.thy` | ⬜ | new: SIS commitment |
 
@@ -122,10 +124,11 @@
 - [ ] `small_coeff_bound`
 
 ### LWE_Def.thy
-- [ ] `lwe_sample` definition
-- [ ] `lwe_params` record
-- [ ] Search-LWE definition
-- [ ] Decision-LWE definition
+- [x] `lwe_sample` definition
+- [x] `lwe_params` record
+- [x] Search-LWE definition
+- [x] Decision-LWE definition
+- [x] `lwe_context` locale
 
 ### SIS_Def.thy
 - [ ] `sis_instance` record
@@ -214,3 +217,6 @@
 | 2026-01-25 | Key insight: witness approach for division - from `q mod n = 0`, derive `n dvd q`, obtain `k` where `q = n*k`, eliminates division from goals |
 | 2026-01-25 | Added isabella.ts TypeScript library via js_of_ocaml (28 passing tests) |
 | 2026-01-25 | Created canon-analysis-norms prompt for Norms.thy (next theory) |
+| 2026-01-25 | Completed Norms.thy with inner_prod_bound lemma |
+| 2026-01-25 | Completed LWE_Def.thy (Phase 2 started) |
+| 2026-01-25 | Created canon-crypto-regev-pke prompt - the "crown jewel" correctness proof |
