@@ -87,7 +87,7 @@ definition is_sis_solution :: "sis_params ⇒ sis_instance ⇒ int_vec ⇒ bool"
   "is_sis_solution params inst e = (
      length e = m params ∧
      vec_mod (mat_vec_mult (A inst) e) (q params) = vec_mod (b inst) (q params) ∧
-     (∀i < length e. ¦e ! i¦ ≤ beta params))"
+     (∀i < length e. |e ! i| ≤ beta params))"
 
 (* Normal-form SIS solution *)
 definition is_nf_sis_solution :: "sis_params ⇒ nf_sis_instance ⇒ int_vec ⇒ bool" where
@@ -95,7 +95,7 @@ definition is_nf_sis_solution :: "sis_params ⇒ nf_sis_instance ⇒ int_vec ⇒
      length e = m params ∧
      let (x, y) = split_vec e (m params - n params) in
      vec_mod (vec_add (mat_vec_mult (A0 inst) x) y) (q params) = vec_mod (b0 inst) (q params) ∧
-     (∀i < length e. ¦e ! i¦ ≤ beta params))"
+     (∀i < length e. |e ! i| ≤ beta params))"
 ```
 
 ### 5. Reduction Functions
@@ -167,7 +167,7 @@ lemma reduction_B_correctness:
 #### Lemma 3: Shortness Preservation
 ```isabelle
 lemma shortness_preserved:
-  "∀i < length e. ¦e ! i¦ ≤ β ⟹ ∀i < length e. ¦e ! i¦ ≤ β"
+  "∀i < length e. |e ! i| ≤ β ⟹ ∀i < length e. |e ! i| ≤ β"
 ```
 
 This is trivial (the reductions don't modify the solution vector).
