@@ -24,7 +24,8 @@
 |--------|--------|-------|
 | canon-prelude | ✅ | Named theorems, mod lemmas |
 | canon-linear-listvec | ✅ | Vectors, matrices, iprod_transpose |
-| canon-algebra-zq | ✅ | dist0, decode_bit |
+| canon-algebra-zq | ✅ | dist0, encode/decode_bit, mat_vec_mult_mod |
+| canon-analysis-norms | ✅ | linf_norm, all_bounded, inner_prod_bound |
 
 ---
 
@@ -34,8 +35,8 @@
 |--------|--------|-------|
 | `Prelude.thy` | ✅ | Complete with hardened proofs |
 | `Linear/ListVec.thy` | ✅ | Complete with iprod_transpose |
-| `Algebra/Zq.thy` | ⬜ | Prompt ready: canon-algebra-zq |
-| `Analysis/Norms.thy` | ⬜ | Prompt needed |
+| `Algebra/Zq.thy` | ✅ | Complete with dist0, encode/decode_bit, mat_vec_mult_mod |
+| `Analysis/Norms.thy` | ⬜ | Prompt ready: canon-analysis-norms |
 | `Prob/DiscreteBasics.thy` | ⬜ | Prompt needed |
 
 **Blockers**: None
@@ -102,17 +103,17 @@
 - [ ] `mat_space` locale - not included
 
 ### Zq.thy
-- [ ] `mod_add_cong`
-- [ ] `mod_mult_cong`
-- [ ] `mod_sum`
-- [ ] `dist0` definition
-- [ ] `dist0_small`
-- [ ] `dist0_half_shift`
-- [ ] `decode_bit` definition
-- [ ] `decode_bit_small`
-- [ ] `decode_bit_half_shift`
-- [ ] `encode_decode_inverse`
-- [ ] `inner_prod_mod_cong`
+- [x] `mod_centered_cong`
+- [x] `mod_centered_abs_bound`
+- [x] `vec_mod`, `vec_mod_centered`
+- [x] `dist0` definition
+- [x] `dist0_small`
+- [x] `decode_bit` definition
+- [x] `encode_bit` definition
+- [x] `decode_bit_small`
+- [x] `decode_bit_half_shift`
+- [x] `encode_decode_inverse`
+- [x] `mat_vec_mult_mod`
 
 ### Norms.thy
 - [ ] `l2_norm` definition
@@ -170,8 +171,8 @@
 
 | Module | Haskell | OCaml | SML | Scala |
 |--------|---------|-------|-----|-------|
-| ListVec | ⬜ | ⬜ | ⬜ | ⬜ |
-| Zq | ⬜ | ⬜ | ⬜ | ⬜ |
+| ListVec | ✅ | ✅ | ⬜ | ⬜ |
+| Zq | ✅ | ✅ | ⬜ | ⬜ |
 | LWE_Def | ⬜ | ⬜ | ⬜ | ⬜ |
 | SIS_Def | ⬜ | ⬜ | ⬜ | ⬜ |
 | NormalForms | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -209,3 +210,7 @@
 | 2026-01-24 | Key insight: `(n::int)` type annotation required for mod/div simplification |
 | 2026-01-24 | Completed ListVec.thy with iprod_transpose (key LWE correctness lemma) |
 | 2026-01-24 | Key insight: avoid `...` chaining with `simp add: algebra_simps` on nested sums - causes infinite loops |
+| 2026-01-25 | Completed Zq.thy with full encode/decode machinery and mat_vec_mult_mod |
+| 2026-01-25 | Key insight: witness approach for division - from `q mod n = 0`, derive `n dvd q`, obtain `k` where `q = n*k`, eliminates division from goals |
+| 2026-01-25 | Added isabella.ts TypeScript library via js_of_ocaml (28 passing tests) |
+| 2026-01-25 | Created canon-analysis-norms prompt for Norms.thy (next theory) |
