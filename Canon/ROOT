@@ -44,10 +44,11 @@ session Canon_Gadgets in "Gadgets" = Canon_Base +
     Decomp
 
 (* Session 5: Polynomial ring arithmetic *)
-session Canon_Rings in "Rings" = Canon_Base +
+session Canon_Rings in "Rings" = Canon_Hardness +
   options [document = false]
   theories
     PolyMod
+    ModuleLWE
 
 (* Future sessions - uncomment as theories are added:
 

@@ -31,6 +31,9 @@
 | canon-hardness-sis-def | ✅ | SIS params, is_sis_solution, collision_to_sis |
 | canon-gadgets-decomp | ✅ | Base-B decomposition, gadget_vec, recompose |
 | canon-crypto-commit-sis | ✅ | SIS commitment with binding_implies_sis |
+| canon-rings-polymod | ✅ | Polynomial ring R_q = Z_q[X]/(X^n+1) |
+| canon-rings-modulelwe | ✅ | Module-LWE/SIS for Kyber/Dilithium |
+| canon-rings-ntt | ✅ | NTT for O(n log n) polynomial multiplication |
 
 ---
 
@@ -66,9 +69,9 @@
 |--------|--------|-------|
 | `Crypto/Regev_PKE.thy` | ✅ | Complete with correctness theorem |
 | `Gadgets/Decomp.thy` | ✅ | Complete with inner_prod_gadget_decomp |
-| `Crypto/Commit_SIS.thy` | ⬜ | Prompt ready: canon-crypto-commit-sis |
+| `Crypto/Commit_SIS.thy` | ✅ | binding_implies_sis theorem |
 
-**Blockers**: Phase 2 completion
+**Blockers**: None - Phase 3 complete
 
 ---
 
@@ -76,10 +79,10 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `Rings/PolyMod.thy` | ⬜ | refactor Polynomial_Ring |
-| `Rings/ModuleLWE.thy` | ⬜ | new: Module-LWE/SIS |
+| `Rings/PolyMod.thy` | ✅ | ring_mult, ring_add, ring_context locale |
+| `Rings/ModuleLWE.thy` | ✅ | mlwe_context, msis_params, mod_inner_prod |
 
-**Blockers**: Phase 3 completion
+**Blockers**: None - Phase 4 complete
 
 ---
 
@@ -165,12 +168,55 @@
 - [x] `decomp_signed` (centered digits)
 
 ### Commit_SIS.thy
-- [ ] `commit_params` record
-- [ ] `commit` function
-- [ ] `verify_opening` function
-- [ ] `is_binding_break` definition
-- [ ] `binding_implies_sis` theorem
-- [ ] `commit_context` locale
+- [x] `commit_params` record
+- [x] `commit` function
+- [x] `verify_opening` function
+- [x] `is_binding_break` definition
+- [x] `binding_implies_sis` theorem
+- [x] `commit_context` locale
+
+### PolyMod.thy
+- [x] `poly` type (coefficient list)
+- [x] `poly_add`, `poly_sub`, `poly_mult`
+- [x] `poly_mod` (coefficient reduction)
+- [x] `ring_mod` (X^n + 1 reduction)
+- [x] `ring_mult`, `ring_add`, `ring_sub`
+- [x] `ring_params` record
+- [x] `ring_context` locale
+
+### ModuleLWE.thy
+- [x] `mod_elem` type (poly list)
+- [x] `mod_inner_prod` (ring element dot product)
+- [x] `mod_mat_vec_mult`
+- [x] `mlwe_params` record
+- [x] `mlwe_sample` function
+- [x] `is_mlwe_solution`, `is_real_mlwe_instance`
+- [x] `msis_params` record
+- [x] `is_msis_solution`
+- [x] `mlwe_context` locale
+
+### NTT.thy (pending - Layer D)
+- [ ] `primitive_root` definition (2n-th root of unity)
+- [ ] `ntt_forward` transform
+- [ ] `ntt_inverse` transform
+- [ ] `ntt_mult` (pointwise multiplication)
+- [ ] `ntt_correct` theorem (NTT(a*b) = NTT(a) ⊙ NTT(b))
+- [ ] `ntt_inverse_correct` theorem
+- [ ] `ntt_params` record (n, q, omega)
+
+### Kyber.thy (pending - Layer D)
+- [ ] `kyber_params` record (n=256, k, q=3329, eta)
+- [ ] `kyber_keygen`
+- [ ] `kyber_encaps`
+- [ ] `kyber_decaps`
+- [ ] `kyber_correctness` theorem
+
+### Dilithium.thy (pending - Layer D)
+- [ ] `dilithium_params` record (n=256, k, l, q, eta, gamma)
+- [ ] `dilithium_keygen`
+- [ ] `dilithium_sign`
+- [ ] `dilithium_verify`
+- [ ] `dilithium_correctness` theorem
 
 ### Sigma_Base.thy
 - [ ] Transcript type
@@ -237,3 +283,28 @@
 | 2026-01-25 | Created canon-gadgets-decomp prompt for base-B decomposition |
 | 2026-01-25 | Completed Decomp.thy (gadget infrastructure) |
 | 2026-01-25 | Created canon-crypto-commit-sis prompt for SIS-based commitments |
+| 2026-01-25 | Completed Commit_SIS.thy (binding_implies_sis theorem) |
+| 2026-01-25 | Created canon-rings-polymod prompt for polynomial rings |
+| 2026-01-25 | Completed PolyMod.thy (R_q = Z_q[X]/(X^n+1) infrastructure) |
+| 2026-01-25 | Created canon-rings-modulelwe prompt for Module-LWE/SIS |
+| 2026-01-25 | Completed ModuleLWE.thy (mlwe_context, msis_params, mod_inner_prod) |
+| 2026-01-25 | Created canon-rings-ntt prompt for Number Theoretic Transform (Layer D begins) |
+
+---
+
+## Future Extensions (Post-MVP)
+
+### Layer D — Modern Schemes (after ModuleLWE)
+| Theory | Description | Dependencies |
+|--------|-------------|--------------|
+| `Rings/NTT.thy` | Number Theoretic Transform for O(n log n) poly mult | PolyMod |
+| `Crypto/Kyber.thy` | CRYSTALS-Kyber KEM (ML-KEM) | ModuleLWE, NTT |
+| `Crypto/Dilithium.thy` | CRYSTALS-Dilithium signatures (ML-DSA) | ModuleLWE, NTT |
+| `Crypto/FO_Transform.thy` | Fujisaki-Okamoto CCA transform | Kyber |
+
+### Layer E — LaZer-Grade ZK (after Sigma_Base)
+| Theory | Description | Dependencies |
+|--------|-------------|--------------|
+| `ZK/FiatShamir.thy` | Fiat-Shamir transcript hashing | Sigma_Base |
+| `ZK/RejectionSampling.thy` | Distribution closeness proofs | Sigma_Base, Norms |
+| `ZK/LinearRelations.thy` | Σ-protocols for linear relations | Sigma_Base, ModuleLWE |

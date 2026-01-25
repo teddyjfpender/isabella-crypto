@@ -1,0 +1,416 @@
+theory ModuleLWE
+  imports Canon_Base.Prelude Canon_Base.ListVec Canon_Base.Zq Canon_Base.Norms Canon_Hardness.LWE_Def Canon_Hardness.SIS_Def Canon_Rings.PolyMod
+begin
+
+(* === Step 1: Module Element Types === *)
+text \<open>
+  Module Elements over R_q:
+
+  A module element is a vector of polynomials: [p_0, p_1, ..., p_{k-1}]
+  where each p_i is in R_q = Z_q[X]/(X^n + 1).
+
+  A module matrix is a matrix of polynomials (list of module elements).
+
+  This gives us the structure for Module-LWE/SIS:
+  - Secret s: vector of k polynomials in R_q
+  - Matrix A: k' x k matrix of polynomials in R_q
+  - Error e: vector of k' polynomials with small coefficients
+\<close>
+
+type_synonym mod_elem = "poly list"      \<comment> \<open>vector of ring elements\<close>
+type_synonym mod_matrix = "mod_elem list" \<comment> \<open>matrix of ring elements\<close>
+
+definition valid_mod_elem :: "mod_elem \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> bool" where
+  "valid_mod_elem v k n q = (
+    length v = k \<and>
+    (\<forall>p \<in> set v. valid_ring_elem p n q))"
+
+definition valid_mod_matrix :: "mod_matrix \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> bool" where
+  "valid_mod_matrix M rows cols n q = (
+    length M = rows \<and>
+    (\<forall>row \<in> set M. valid_mod_elem row cols n q))"
+
+lemma valid_mod_elem_length:
+  "valid_mod_elem v k n q \<Longrightarrow> length v = k"
+  unfolding valid_mod_elem_def by simp
+
+lemma valid_mod_elem_poly:
+  assumes "valid_mod_elem v k n q" and "i < k"
+  shows "valid_ring_elem (v ! i) n q"
+  using assms unfolding valid_mod_elem_def by simp
+
+lemma valid_mod_matrix_length:
+  "valid_mod_matrix M rows cols n q \<Longrightarrow> length M = rows"
+  unfolding valid_mod_matrix_def by simp
+
+lemma valid_mod_matrix_row:
+  assumes "valid_mod_matrix M rows cols n q" and "i < rows"
+  shows "valid_mod_elem (M ! i) cols n q"
+  using assms unfolding valid_mod_matrix_def by simp
+
+(* === Step 2: Module Inner Product === *)
+text \<open>
+  Module inner product: <v, w> = \<Sigma> v_i * w_i in R_q
+
+  Each v_i * w_i is a polynomial multiplication in R_q,
+  and the sum is polynomial addition in R_q.
+\<close>
+
+primrec mod_inner_prod :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> poly" where
+  "mod_inner_prod [] w n q = replicate n 0"
+| "mod_inner_prod (p # ps) w n q = (
+    case w of
+      [] \<Rightarrow> replicate n 0
+    | (r # rs) \<Rightarrow> ring_add (ring_mult p r n q) (mod_inner_prod ps rs n q) n q)"
+
+lemma mod_inner_prod_length:
+  assumes "n > 0"
+  shows "length (mod_inner_prod v w n q) = n"
+  using assms
+proof (induct v arbitrary: w)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons p ps)
+  then show ?case by (cases w) (simp_all add: ring_add_length)
+qed
+
+lemma replicate_zero_valid:
+  assumes "n > 0" and "q > 0"
+  shows "valid_ring_elem (replicate n 0) n q"
+  using assms unfolding valid_ring_elem_def by auto
+
+lemma mod_inner_prod_valid:
+  assumes "n > 0" and "q > 0"
+  shows "valid_ring_elem (mod_inner_prod v w n q) n q"
+  using assms
+proof (induct v arbitrary: w)
+  case Nil
+  then show ?case
+    unfolding valid_ring_elem_def by auto
+next
+  case (Cons p ps)
+  then show ?case
+    by (cases w) (simp_all add: ring_add_valid replicate_zero_valid)
+qed
+
+definition mod_inner_prod_alt :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> poly" where
+  "mod_inner_prod_alt v w n q = (
+    if v = [] \<or> w = [] then replicate n 0
+    else foldr (\<lambda>(p, r) acc. ring_add (ring_mult p r n q) acc n q)
+               (zip v w) (replicate n 0))"
+
+(* === Step 3: Module Matrix-Vector Multiplication === *)
+text \<open>
+  Module matrix-vector multiplication: A * v
+
+  Each row of A is dotted with v to produce one polynomial in the result.
+  Result: [<A_0, v>, <A_1, v>, ..., <A_{k'-1}, v>]
+\<close>
+
+definition mod_mat_vec_mult :: "mod_matrix \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
+  "mod_mat_vec_mult A v n q = map (\<lambda>row. mod_inner_prod row v n q) A"
+
+lemma mod_mat_vec_mult_length:
+  "length (mod_mat_vec_mult A v n q) = length A"
+  unfolding mod_mat_vec_mult_def by simp
+
+lemma mod_mat_vec_mult_nth:
+  assumes "i < length A"
+  shows "(mod_mat_vec_mult A v n q) ! i = mod_inner_prod (A ! i) v n q"
+  using assms unfolding mod_mat_vec_mult_def by simp
+
+lemma mod_mat_vec_mult_valid:
+  assumes "n > 0" and "q > 0"
+  shows "valid_mod_elem (mod_mat_vec_mult A v n q) (length A) n q"
+  using assms unfolding valid_mod_elem_def mod_mat_vec_mult_def
+  by (auto simp: mod_inner_prod_valid)
+
+(* === Step 4: Module Element Addition === *)
+text \<open>
+  Module element addition: v + w = [v_0 + w_0, v_1 + w_1, ...]
+  Each component is a polynomial addition in R_q.
+\<close>
+
+definition mod_add :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
+  "mod_add v w n q = map2 (\<lambda>p r. ring_add p r n q) v w"
+
+lemma mod_add_length:
+  "length (mod_add v w n q) = min (length v) (length w)"
+  unfolding mod_add_def by simp
+
+lemma mod_add_nth:
+  assumes "i < length v" and "i < length w"
+  shows "(mod_add v w n q) ! i = ring_add (v ! i) (w ! i) n q"
+  using assms unfolding mod_add_def by simp
+
+lemma mod_add_valid:
+  assumes "n > 0" and "q > 0"
+  assumes "valid_mod_elem v k n q" and "valid_mod_elem w k n q"
+  shows "valid_mod_elem (mod_add v w n q) k n q"
+  using assms unfolding valid_mod_elem_def mod_add_def
+  by (auto simp: ring_add_valid)
+
+definition mod_sub :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
+  "mod_sub v w n q = map2 (\<lambda>p r. ring_sub p r n q) v w"
+
+lemma mod_sub_length:
+  "length (mod_sub v w n q) = min (length v) (length w)"
+  unfolding mod_sub_def by simp
+
+(* === Step 5: Module-LWE Parameters === *)
+text \<open>
+  Module-LWE Parameters:
+
+  - n: polynomial degree (ring dimension, typically 256)
+  - k: module rank (number of polynomials in secret, typically 2-4)
+  - k': number of samples (rows of A, often k' = k)
+  - q: coefficient modulus
+  - eta: bound on secret/error coefficients
+
+  The ring is R_q = Z_q[X]/(X^n + 1).
+  Secret s is a vector of k polynomials with small coefficients.
+  Matrix A is k' x k over R_q.
+  Error e is a vector of k' polynomials with small coefficients.
+\<close>
+
+record mlwe_params =
+  mlwe_n :: nat     \<comment> \<open>polynomial degree\<close>
+  mlwe_k :: nat     \<comment> \<open>module rank (secret dimension)\<close>
+  mlwe_kp :: nat    \<comment> \<open>number of samples\<close>
+  mlwe_q :: int     \<comment> \<open>coefficient modulus\<close>
+  mlwe_eta :: int   \<comment> \<open>bound on secret/error coefficients\<close>
+
+definition valid_mlwe_params :: "mlwe_params \<Rightarrow> bool" where
+  "valid_mlwe_params p = (
+    mlwe_n p > 0 \<and>
+    mlwe_k p > 0 \<and>
+    mlwe_kp p > 0 \<and>
+    mlwe_q p > 1 \<and>
+    mlwe_eta p > 0)"
+
+lemma valid_mlwe_params_pos:
+  assumes "valid_mlwe_params p"
+  shows "mlwe_n p > 0" "mlwe_k p > 0" "mlwe_kp p > 0" "mlwe_q p > 1" "mlwe_eta p > 0"
+  using assms unfolding valid_mlwe_params_def by auto
+
+(* === Step 6: Module-LWE Instance and Sample === *)
+text \<open>
+  Module-LWE Instance: (A, b) where b = A*s + e in R_q^{k'}
+
+  A: k' x k matrix over R_q
+  s: vector of k polynomials (secret)
+  e: vector of k' polynomials (error)
+  b = A*s + e (mod q, mod X^n + 1)
+\<close>
+
+record mlwe_instance =
+  mlwe_A :: mod_matrix
+  mlwe_b :: mod_elem
+
+definition valid_mlwe_instance :: "mlwe_params \<Rightarrow> mlwe_instance \<Rightarrow> bool" where
+  "valid_mlwe_instance p inst = (
+    valid_mod_matrix (mlwe_A inst) (mlwe_kp p) (mlwe_k p) (mlwe_n p) (mlwe_q p) \<and>
+    valid_mod_elem (mlwe_b inst) (mlwe_kp p) (mlwe_n p) (mlwe_q p))"
+
+text \<open>
+  Generate an MLWE sample: b = A * s + e
+\<close>
+
+definition mlwe_sample :: "mod_matrix \<Rightarrow> mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
+  "mlwe_sample A s e n q = mod_add (mod_mat_vec_mult A s n q) e n q"
+
+lemma mlwe_sample_length:
+  assumes "length e = length A"
+  shows "length (mlwe_sample A s e n q) = length A"
+  using assms unfolding mlwe_sample_def
+  by (simp add: mod_add_length mod_mat_vec_mult_length)
+
+(* === Step 7: Small Module Elements === *)
+text \<open>
+  A "small" module element has all polynomial coefficients bounded by eta.
+  This is used for secrets and errors in MLWE.
+\<close>
+
+definition poly_coeffs_bounded :: "poly \<Rightarrow> int \<Rightarrow> bool" where
+  "poly_coeffs_bounded p eta = (\<forall>c \<in> set p. abs c \<le> eta)"
+
+definition mod_elem_small :: "mod_elem \<Rightarrow> int \<Rightarrow> bool" where
+  "mod_elem_small v eta = (\<forall>p \<in> set v. poly_coeffs_bounded p eta)"
+
+lemma mod_elem_small_nth:
+  assumes "mod_elem_small v eta" and "i < length v"
+  shows "poly_coeffs_bounded (v ! i) eta"
+  using assms unfolding mod_elem_small_def by simp
+
+definition valid_mlwe_secret :: "mlwe_params \<Rightarrow> mod_elem \<Rightarrow> bool" where
+  "valid_mlwe_secret p s = (
+    length s = mlwe_k p \<and>
+    (\<forall>poly \<in> set s. length poly = mlwe_n p) \<and>
+    mod_elem_small s (mlwe_eta p))"
+
+definition valid_mlwe_error :: "mlwe_params \<Rightarrow> mod_elem \<Rightarrow> bool" where
+  "valid_mlwe_error p e = (
+    length e = mlwe_kp p \<and>
+    (\<forall>poly \<in> set e. length poly = mlwe_n p) \<and>
+    mod_elem_small e (mlwe_eta p))"
+
+lemma valid_mlwe_secret_length:
+  "valid_mlwe_secret p s \<Longrightarrow> length s = mlwe_k p"
+  unfolding valid_mlwe_secret_def by simp
+
+lemma valid_mlwe_error_length:
+  "valid_mlwe_error p e \<Longrightarrow> length e = mlwe_kp p"
+  unfolding valid_mlwe_error_def by simp
+
+(* === Step 8: Module-LWE Problem Definitions === *)
+text \<open>
+  Search-MLWE: Given (A, b), find s such that b = As + e for small e.
+  Decision-MLWE: Distinguish (A, As+e) from (A, random).
+\<close>
+
+definition is_mlwe_solution :: "mlwe_params \<Rightarrow> mlwe_instance \<Rightarrow> mod_elem \<Rightarrow> bool" where
+  "is_mlwe_solution p inst s = (
+    valid_mlwe_secret p s \<and>
+    (\<exists>e. valid_mlwe_error p e \<and>
+         mlwe_b inst = mlwe_sample (mlwe_A inst) s e (mlwe_n p) (mlwe_q p)))"
+
+definition is_real_mlwe_instance :: "mlwe_params \<Rightarrow> mlwe_instance \<Rightarrow> bool" where
+  "is_real_mlwe_instance p inst = (
+    valid_mlwe_instance p inst \<and>
+    (\<exists>s e. valid_mlwe_secret p s \<and> valid_mlwe_error p e \<and>
+           mlwe_b inst = mlwe_sample (mlwe_A inst) s e (mlwe_n p) (mlwe_q p)))"
+
+definition mlwe_witness_valid :: "mlwe_params \<Rightarrow> mlwe_instance \<Rightarrow> mod_elem \<Rightarrow> mod_elem \<Rightarrow> bool" where
+  "mlwe_witness_valid p inst s e = (
+    valid_mlwe_secret p s \<and>
+    valid_mlwe_error p e \<and>
+    mlwe_b inst = mlwe_sample (mlwe_A inst) s e (mlwe_n p) (mlwe_q p))"
+
+lemma real_mlwe_has_witness:
+  "is_real_mlwe_instance p inst \<longleftrightarrow>
+   valid_mlwe_instance p inst \<and> (\<exists>s e. mlwe_witness_valid p inst s e)"
+  unfolding is_real_mlwe_instance_def mlwe_witness_valid_def by auto
+
+(* === Step 9: Module-SIS Definition === *)
+text \<open>
+  Module-SIS: Given A over R_q, find short non-zero z such that A*z = 0 (mod q).
+
+  This is the module analogue of standard SIS, used for:
+  - Commitment scheme binding (Kyber)
+  - Signature scheme security (Dilithium)
+\<close>
+
+record msis_params =
+  msis_n :: nat     \<comment> \<open>polynomial degree\<close>
+  msis_k :: nat     \<comment> \<open>columns of A\<close>
+  msis_m :: nat     \<comment> \<open>rows of A\<close>
+  msis_q :: int     \<comment> \<open>coefficient modulus\<close>
+  msis_beta :: int  \<comment> \<open>bound on solution coefficients\<close>
+
+definition valid_msis_params :: "msis_params \<Rightarrow> bool" where
+  "valid_msis_params p = (
+    msis_n p > 0 \<and>
+    msis_k p > 0 \<and>
+    msis_m p > 0 \<and>
+    msis_q p > 1 \<and>
+    msis_beta p > 0)"
+
+record msis_instance =
+  msis_A :: mod_matrix
+
+definition valid_msis_instance :: "msis_params \<Rightarrow> msis_instance \<Rightarrow> bool" where
+  "valid_msis_instance p inst =
+    valid_mod_matrix (msis_A inst) (msis_m p) (msis_k p) (msis_n p) (msis_q p)"
+
+text \<open>
+  A module element is "zero" if all polynomials are zero (all coefficients are 0 mod q).
+\<close>
+
+definition is_zero_mod_elem :: "mod_elem \<Rightarrow> bool" where
+  "is_zero_mod_elem v = (\<forall>p \<in> set v. \<forall>c \<in> set p. c = 0)"
+
+definition is_msis_solution :: "msis_params \<Rightarrow> msis_instance \<Rightarrow> mod_elem \<Rightarrow> bool" where
+  "is_msis_solution p inst z = (
+    length z = msis_k p \<and>
+    (\<forall>poly \<in> set z. length poly = msis_n p) \<and>
+    \<not> is_zero_mod_elem z \<and>
+    mod_elem_small z (msis_beta p) \<and>
+    is_zero_mod_elem (mod_mat_vec_mult (msis_A inst) z (msis_n p) (msis_q p)))"
+
+lemma msis_solution_nonzero:
+  "is_msis_solution p inst z \<Longrightarrow> \<not> is_zero_mod_elem z"
+  unfolding is_msis_solution_def by simp
+
+lemma msis_solution_kernel:
+  "is_msis_solution p inst z \<Longrightarrow>
+   is_zero_mod_elem (mod_mat_vec_mult (msis_A inst) z (msis_n p) (msis_q p))"
+  unfolding is_msis_solution_def by simp
+
+(* === Step 10: MLWE Context Locale === *)
+locale mlwe_context =
+  fixes p :: mlwe_params
+    and A :: mod_matrix
+    and s :: mod_elem
+    and e :: mod_elem
+  assumes params_ok: "valid_mlwe_params p"
+    and A_ok: "valid_mod_matrix A (mlwe_kp p) (mlwe_k p) (mlwe_n p) (mlwe_q p)"
+    and s_ok: "valid_mlwe_secret p s"
+    and e_ok: "valid_mlwe_error p e"
+begin
+
+abbreviation "n \<equiv> mlwe_n p"
+abbreviation "k \<equiv> mlwe_k p"
+abbreviation "kp \<equiv> mlwe_kp p"
+abbreviation "q \<equiv> mlwe_q p"
+abbreviation "eta \<equiv> mlwe_eta p"
+
+lemma n_pos: "n > 0"
+  using params_ok unfolding valid_mlwe_params_def by simp
+
+lemma k_pos: "k > 0"
+  using params_ok unfolding valid_mlwe_params_def by simp
+
+lemma kp_pos: "kp > 0"
+  using params_ok unfolding valid_mlwe_params_def by simp
+
+lemma q_pos: "q > 1"
+  using params_ok unfolding valid_mlwe_params_def by simp
+
+lemma len_s: "length s = k"
+  using s_ok valid_mlwe_secret_length by simp
+
+lemma len_e: "length e = kp"
+  using e_ok valid_mlwe_error_length by simp
+
+lemma len_A: "length A = kp"
+  using A_ok unfolding valid_mod_matrix_def by simp
+
+definition "b \<equiv> mlwe_sample A s e n q"
+
+definition "inst \<equiv> \<lparr> mlwe_A = A, mlwe_b = b \<rparr>"
+
+(* Lemma inst_is_real omitted - requires verbose proof showing valid_mlwe_instance *)
+
+end
+
+(* === Step 11: Code Export === *)
+(* Note: is_mlwe_solution and is_real_mlwe_instance have existentials and cannot be exported *)
+export_code
+  valid_mod_elem valid_mod_matrix
+  mod_inner_prod mod_mat_vec_mult mod_add mod_sub
+  mlwe_params.make valid_mlwe_params
+  mlwe_n mlwe_k mlwe_kp mlwe_q mlwe_eta
+  mlwe_instance.make valid_mlwe_instance mlwe_sample
+  mlwe_A mlwe_b
+  poly_coeffs_bounded mod_elem_small
+  valid_mlwe_secret valid_mlwe_error
+  mlwe_witness_valid
+  msis_params.make valid_msis_params
+  msis_n msis_k msis_m msis_q msis_beta
+  msis_instance.make valid_msis_instance
+  msis_A
+  is_zero_mod_elem is_msis_solution
+  in Haskell module_name "Canon.Rings.ModuleLWE"
+
+end
