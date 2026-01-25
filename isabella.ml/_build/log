@@ -1,4 +1,4 @@
-# dune exec isabella_cli -- examples
+# dune build src/js/isabella_js.bc.js
 # OCAMLPARAM: unset
 # Shared cache: enabled-except-user-rules
 # Shared cache location: /Users/theodorepender/.cache/dune/db
@@ -13,4 +13,5 @@
 #  ; build_dir = In_build_dir "default"
 #  ; instrument_with = []
 #  }
-$ /Users/theodorepender/.opam/isabella/bin/ocamlc.opt -config > /var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/dune_750061_output
+$ /Users/theodorepender/.opam/isabella/bin/ocamlc.opt -config > /var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/dune_efdcb2_output
+$ /Users/theodorepender/.opam/isabella/bin/js_of_ocaml --version > /var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/dune_2e3a5e_output
