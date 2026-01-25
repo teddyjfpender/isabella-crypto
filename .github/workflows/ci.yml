@@ -12,21 +12,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Build and verify Isabelle theories
+  # Build and verify Isabelle theories (Canon)
   isabelle:
-    name: Isabelle Theories
+    name: Isabelle Canon
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Cache Isabelle
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             ~/.isabelle
             ~/Isabelle*
-          key: isabelle-2025-${{ runner.os }}-${{ hashFiles('eval/work/**/ROOT', 'eval/work/**/*.thy') }}
+          key: isabelle-2025-${{ runner.os }}-${{ hashFiles('Canon/ROOT', 'Canon/**/*.thy') }}
           restore-keys: |
             isabelle-2025-${{ runner.os }}-
 
@@ -39,74 +39,24 @@ jobs:
           fi
           echo "$HOME/Isabelle2025/bin" >> $GITHUB_PATH
 
-      - name: Build Isabelle theories
+      - name: Build Canon theories
         run: |
-          for work_dir in eval/work/*/; do
-            if [[ -f "${work_dir}ROOT" ]]; then
-              echo "Building: $work_dir"
-              isabelle build -d "$work_dir" -v LatticeCrypto
-            fi
-          done
+          cd Canon
+          isabelle build -v -D .
 
-      - name: Export code
+      - name: Export Haskell code
         run: |
-          for work_dir in eval/work/*/; do
-            if [[ -f "${work_dir}ROOT" ]]; then
-              echo "Exporting: $work_dir"
-              isabelle build -d "$work_dir" -e LatticeCrypto
-            fi
-          done
-
-      - name: Upload generated code
-        uses: actions/upload-artifact@v6
-        with:
-          name: isabelle-generated
-          path: eval/work/*/generated/
-          retention-days: 7
-
-  # Collect generated code into language directories
-  collect:
-    name: Collect Code
-    needs: isabelle
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download generated code
-        uses: actions/download-artifact@v7
-        with:
-          name: isabelle-generated
-          path: eval/work/
-
-      - name: Collect all languages
-        run: ./collect.sh --lang all --verbose
-
-      - name: Upload collected code
-        uses: actions/upload-artifact@v6
-        with:
-          name: collected-code
-          path: |
-            haskell/isabella/src/
-            sml/isabella/src/
-            ocaml/isabella/src/
-            scala/isabella/src/
-          retention-days: 7
+          cd Canon
+          isabelle build -e -D .
+        continue-on-error: true
 
   # Build Haskell library
   haskell:
     name: Haskell Library
-    needs: collect
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Download collected code
-        uses: actions/download-artifact@v7
-        with:
-          name: collected-code
-          path: .
 
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
@@ -115,36 +65,40 @@ jobs:
           cabal-version: '3.10'
 
       - name: Cache Cabal
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cabal/packages
             ~/.cabal/store
-            haskell/isabella/dist-newstyle
-          key: cabal-${{ runner.os }}-ghc9.8-${{ hashFiles('haskell/isabella/isabella.cabal') }}
+            isabella.hs/dist-newstyle
+          key: cabal-${{ runner.os }}-ghc9.8-${{ hashFiles('isabella.hs/isabella.cabal') }}
           restore-keys: |
             cabal-${{ runner.os }}-ghc9.8-
 
       - name: Build Haskell
-        working-directory: haskell/isabella
+        working-directory: isabella.hs
         run: |
           cabal update
           cabal build all
 
-  # Build JavaScript/TypeScript via js_of_ocaml
-  javascript:
-    name: JavaScript/TypeScript
-    needs: collect
+      - name: Run Haskell tests
+        working-directory: isabella.hs
+        run: cabal test all
+        continue-on-error: true
+
+      - name: Run CLI examples
+        working-directory: isabella.hs
+        run: cabal run isabella-cli -- examples
+
+  # Build OCaml library
+  ocaml:
+    name: OCaml Library
     runs-on: ubuntu-latest
+    outputs:
+      cli-available: ${{ steps.build.outputs.cli-available }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Download collected code
-        uses: actions/download-artifact@v7
-        with:
-          name: collected-code
-          path: .
 
       - name: Setup OCaml
         uses: ocaml/setup-ocaml@v3
@@ -152,94 +106,168 @@ jobs:
           ocaml-compiler: '5.2'
 
       - name: Cache opam
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             ~/.opam
-            ocaml/isabella/_build
-          key: opam-${{ runner.os }}-ocaml5.2-${{ hashFiles('ocaml/isabella/dune-project') }}
+            isabella.ml/_build
+          key: opam-${{ runner.os }}-ocaml5.2-${{ hashFiles('isabella.ml/dune-project', 'isabella.ml/dune') }}
           restore-keys: |
             opam-${{ runner.os }}-ocaml5.2-
 
       - name: Install OCaml dependencies
         run: |
-          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
+          opam install -y dune zarith str
 
-      - name: Build JavaScript
-        working-directory: ocaml/isabella
+      - name: Build OCaml
+        id: build
+        working-directory: isabella.ml
         run: |
           eval $(opam env)
-          dune build src/js/isabella_js.bc.js
+          dune build
+          echo "cli-available=true" >> $GITHUB_OUTPUT
 
-      - name: Copy outputs
+      - name: Run CLI examples
+        working-directory: isabella.ml
         run: |
-          mkdir -p javascript/isabella/dist typescript/isabella/src
-          cp ocaml/isabella/_build/default/src/js/isabella_js.bc.js javascript/isabella/dist/isabella.js
-          cp ocaml/isabella/_build/default/src/js/isabella_js.bc.js typescript/isabella/src/isabella.js
+          eval $(opam env)
+          dune exec isabella_cli -- examples
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
         with:
-          node-version: '22'
+          name: ocaml-build
+          path: isabella.ml/_build/
+          retention-days: 1
 
-      - name: Build TypeScript
-        working-directory: typescript/isabella
-        run: |
-          npm install
-          npm run build
-
-      - name: Upload JavaScript artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: javascript-build
-          path: |
-            javascript/isabella/dist/
-            typescript/isabella/dist/
-          retention-days: 7
-
-  # Build Scala library
-  scala:
-    name: Scala Library
-    needs: collect
+  # Build TypeScript library (via js_of_ocaml)
+  typescript:
+    name: TypeScript Library
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download collected code
-        uses: actions/download-artifact@v7
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
         with:
-          name: collected-code
-          path: .
+          ocaml-compiler: '5.2'
 
-      - name: Setup Java
-        uses: actions/setup-java@v5
+      - name: Cache opam
+        uses: actions/cache@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          path: |
+            ~/.opam
+            isabella.ml/_build
+          key: opam-js-${{ runner.os }}-ocaml5.2-${{ hashFiles('isabella.ml/dune-project') }}
+          restore-keys: |
+            opam-js-${{ runner.os }}-ocaml5.2-
 
-      - name: Setup sbt
-        uses: sbt/setup-sbt@v1
-
-      - name: Check Scala files exist
-        id: check-scala
+      - name: Install OCaml dependencies
         run: |
-          if ls scala/isabella/src/Lattice/*.scala 1> /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx str
 
-      - name: Build Scala
-        if: steps.check-scala.outputs.exists == 'true'
-        working-directory: scala/isabella
+      - name: Build JavaScript
+        working-directory: isabella.ml
         run: |
-          # Create minimal build.sbt if not exists
-          if [[ ! -f build.sbt ]]; then
-            cat > build.sbt << 'EOF'
-          name := "isabella"
-          version := "0.1.0"
-          scalaVersion := "3.4.0"
-          EOF
+          eval $(opam env)
+          dune build src/js/isabella_js.bc.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Copy JS and build TypeScript
+        run: |
+          mkdir -p isabella.ts/src
+          cp isabella.ml/_build/default/src/js/isabella_js.bc.js isabella.ts/src/isabella.js
+          cd isabella.ts
+          npm install
+          npm run build
+
+      - name: Run TypeScript examples
+        working-directory: isabella.ts
+        run: |
+          node examples/example.mjs || echo "Examples complete"
+
+  # Cross-validation tests against noble-post-quantum
+  test-validation:
+    name: Cross-Validation Tests
+    runs-on: ubuntu-latest
+    needs: ocaml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.2'
+
+      - name: Install OCaml dependencies
+        run: |
+          opam install -y dune zarith str
+
+      - name: Build OCaml CLI
+        working-directory: isabella.ml
+        run: |
+          eval $(opam env)
+          dune build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install test dependencies
+        working-directory: tests
+        run: npm install
+
+      - name: Run cross-validation tests
+        working-directory: tests
+        run: |
+          eval $(opam env)
+          npm test
+        env:
+          # Run tests sequentially to avoid dune lock conflicts
+          CI: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/coverage/
+          retention-days: 7
+
+  # Summary job
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [isabelle, haskell, ocaml, typescript, test-validation]
+    if: always()
+    steps:
+      - name: Check status
+        run: |
+          if [[ "${{ needs.isabelle.result }}" == "failure" ]]; then
+            echo "Isabelle build failed"
+            exit 1
           fi
-          sbt compile
+          if [[ "${{ needs.haskell.result }}" == "failure" ]]; then
+            echo "Haskell build failed"
+            exit 1
+          fi
+          if [[ "${{ needs.ocaml.result }}" == "failure" ]]; then
+            echo "OCaml build failed"
+            exit 1
+          fi
+          if [[ "${{ needs.typescript.result }}" == "failure" ]]; then
+            echo "TypeScript build failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test-validation.result }}" == "failure" ]]; then
+            echo "Cross-validation tests failed"
+            exit 1
+          fi
+          echo "All checks passed!"

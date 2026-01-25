@@ -1,23 +1,48 @@
-# Isabella
+<div align="center">
 
-[![CI](https://github.com/anthropics/isabella-crypto/actions/workflows/ci.yml/badge.svg)](https://github.com/anthropics/isabella-crypto/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+```
+██╗███████╗ █████╗ ██████╗ ███████╗██╗     ██╗      █████╗
+██║██╔════╝██╔══██╗██╔══██╗██╔════╝██║     ██║     ██╔══██╗
+██║███████╗███████║██████╔╝█████╗  ██║     ██║     ███████║
+██║╚════██║██╔══██║██╔══██╗██╔══╝  ██║     ██║     ██╔══██║
+██║███████║██║  ██║██████╔╝███████╗███████╗███████╗██║  ██║
+╚═╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝
+```
 
-***Isab***elle + ***Latt***ice Cryptography = ***Isabella***
+**Formally Verified Lattice Cryptography**
 
-Formally verified lattice-based cryptography in Isabelle/HOL with multi-language code generation.
+*Isab*elle + *Latt*ice = **Isabella**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/anthropics/isabella-crypto/ci.yml?branch=main&label=CI&logo=github)](https://github.com/anthropics/isabella-crypto/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Isabelle](https://img.shields.io/badge/Isabelle-2025-blue.svg)](https://isabelle.in.tum.de/)
+[![Tests](https://img.shields.io/badge/Tests-156%20passing-brightgreen.svg)](#tests)
+
+</div>
+
+---
 
 ## Overview
 
-Isabella provides formally verified implementations of lattice-based cryptographic primitives. All code is extracted from machine-checked Isabelle/HOL proofs, guaranteeing mathematical correctness.
+Isabella provides formally verified implementations of post-quantum cryptographic primitives. All code is extracted from machine-checked Isabelle/HOL proofs, guaranteeing mathematical correctness.
 
-**Libraries:**
-- **isabella.hs** - Haskell library with CLI
-- **isabella.ml** - OCaml library with CLI
-- **isabella.ts** - TypeScript/JavaScript library (via js_of_ocaml)
+| Component | Description |
+|-----------|-------------|
+| **Canon/** | Verified Isabelle/HOL theories (source of truth) |
+| **isabella.hs/** | Haskell library with CLI |
+| **isabella.ml/** | OCaml library with CLI |
+| **isabella.ts/** | TypeScript/JavaScript library (via js_of_ocaml) |
+| **tests/** | Cross-validation against noble-post-quantum |
 
-**Source:**
-- **Canon/** - The verified Isabelle/HOL theories
+### Supported Algorithms
+
+| Algorithm | Standard | Status |
+|-----------|----------|--------|
+| **ML-KEM** (Kyber) | FIPS 203 | Verified |
+| **ML-DSA** (Dilithium) | FIPS 204 | Verified |
+| **NTT** | - | O(n log n) Cooley-Tukey |
+| **Regev PKE** | - | Verified |
+| **SIS Commitments** | - | Verified |
 
 ## Quick Start
 

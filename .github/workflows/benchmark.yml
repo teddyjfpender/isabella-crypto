@@ -39,24 +39,28 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Scala
-        uses: coursier/setup-action@v1
-        with:
-          apps: scala-cli
-
       - name: Install OCaml dependencies
         run: |
-          opam install -y zarith ocamlfind
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx str
 
-      - name: Build JavaScript (if not exists)
+      - name: Build Haskell
+        working-directory: isabella.hs
         run: |
-          if [[ ! -f "javascript/isabella/dist/isabella.js" ]]; then
-            opam install -y dune zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
-            eval $(opam env)
-            cd ocaml/isabella && dune build src/js/isabella_js.bc.js
-            mkdir -p ../../javascript/isabella/dist
-            cp _build/default/src/js/isabella_js.bc.js ../../javascript/isabella/dist/isabella.js
-          fi
+          cabal update
+          cabal build all
+
+      - name: Build OCaml
+        working-directory: isabella.ml
+        run: |
+          eval $(opam env)
+          dune build
+
+      - name: Build JavaScript
+        run: |
+          eval $(opam env)
+          cd isabella.ml && dune build src/js/isabella_js.bc.js
+          mkdir -p isabella.ts/src
+          cp isabella.ml/_build/default/src/js/isabella_js.bc.js isabella.ts/src/isabella.js
 
       - name: Run benchmarks
         run: |
@@ -64,25 +68,40 @@ jobs:
           ITERATIONS="${{ github.event.inputs.iterations || '10' }}"
 
           eval $(opam env)
-          ./bench/run-benchmarks.sh \
-            --sizes "$SIZES" \
-            --iterations "$ITERATIONS" \
-            --languages "haskell,ocaml,javascript,scala"
+          if [[ -f bench/run-benchmarks.sh ]]; then
+            ./bench/run-benchmarks.sh \
+              --sizes "$SIZES" \
+              --iterations "$ITERATIONS" \
+              --languages "haskell,ocaml,javascript"
+          else
+            echo "Benchmark script not found, skipping"
+          fi
 
       - name: Generate summary
-        run: ./bench/summarize.sh
+        run: |
+          if [[ -f bench/summarize.sh ]]; then
+            ./bench/summarize.sh
+          else
+            echo "No benchmark summary available"
+          fi
 
       - name: Upload benchmark results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: bench/data/
           retention-days: 90
+          if-no-files-found: ignore
 
       - name: Post summary to job
         run: |
           echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./bench/summarize.sh >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          if [[ -f bench/summarize.sh ]]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ./bench/summarize.sh >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No results"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Benchmark infrastructure not yet configured." >> $GITHUB_STEP_SUMMARY
+          fi

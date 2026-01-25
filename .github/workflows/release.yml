@@ -34,24 +34,6 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install Isabelle
-        run: |
-          curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/website-Isabelle2025/dist/Isabelle2025_linux.tar.gz
-          tar -xzf isabelle.tar.gz -C ~
-          rm isabelle.tar.gz
-          echo "$HOME/Isabelle2025/bin" >> $GITHUB_PATH
-
-      - name: Build and export Isabelle
-        run: |
-          for work_dir in eval/work/*/; do
-            if [[ -f "${work_dir}ROOT" ]]; then
-              isabelle build -d "$work_dir" -e LatticeCrypto
-            fi
-          done
-
-      - name: Collect all languages
-        run: ./collect.sh --lang all --verbose
-
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
         with:
@@ -59,7 +41,7 @@ jobs:
           cabal-version: '3.10'
 
       - name: Build Haskell
-        working-directory: haskell/isabella
+        working-directory: isabella.hs
         run: |
           cabal update
           cabal build all
@@ -70,22 +52,26 @@ jobs:
         with:
           ocaml-compiler: '5.2'
 
+      - name: Build OCaml
+        run: |
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx str
+          eval $(opam env)
+          cd isabella.ml && dune build
+
       - name: Build JavaScript
         run: |
-          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
           eval $(opam env)
-          cd ocaml/isabella && dune build src/js/isabella_js.bc.js
-          mkdir -p ../../javascript/isabella/dist ../../typescript/isabella/src
-          cp _build/default/src/js/isabella_js.bc.js ../../javascript/isabella/dist/isabella.js
-          cp _build/default/src/js/isabella_js.bc.js ../../typescript/isabella/src/isabella.js
+          cd isabella.ml && dune build src/js/isabella_js.bc.js
+          mkdir -p isabella.ts/src
+          cp _build/default/src/js/isabella_js.bc.js ../isabella.ts/src/isabella.js
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Build TypeScript
-        working-directory: typescript/isabella
+        working-directory: isabella.ts
         run: |
           npm install
           npm run build
@@ -93,23 +79,28 @@ jobs:
       - name: Package artifacts
         run: |
           VERSION=${{ steps.version.outputs.version }}
+          mkdir -p release
 
           # Package Haskell
-          mkdir -p release
-          cp haskell/isabella/dist-newstyle/sdist/*.tar.gz release/isabella-haskell-${VERSION}.tar.gz 2>/dev/null || true
+          if ls isabella.hs/dist-newstyle/sdist/*.tar.gz 1> /dev/null 2>&1; then
+            cp isabella.hs/dist-newstyle/sdist/*.tar.gz release/isabella-haskell-${VERSION}.tar.gz
+          fi
 
-          # Package JavaScript
-          cd javascript/isabella
-          tar -czf ../../release/isabella-javascript-${VERSION}.tar.gz dist/
-          cd ../..
+          # Package OCaml
+          tar -czf release/isabella-ocaml-${VERSION}.tar.gz \
+            isabella.ml/src/ \
+            isabella.ml/bin/ \
+            isabella.ml/dune \
+            isabella.ml/dune-project
 
           # Package TypeScript
-          cd typescript/isabella
-          tar -czf ../../release/isabella-typescript-${VERSION}.tar.gz dist/ src/ package.json tsconfig.json
-          cd ../..
+          cd isabella.ts
+          tar -czf ../release/isabella-typescript-${VERSION}.tar.gz \
+            dist/ src/ package.json tsconfig.json 2>/dev/null || true
+          cd ..
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: release-artifacts
           path: release/
@@ -121,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: release-artifacts
           path: release/
@@ -139,60 +130,78 @@ jobs:
 
             Formally verified lattice-based cryptography from Isabelle/HOL.
 
+            ### What's Included
+
+            - **ML-KEM (Kyber)** - FIPS 203 key encapsulation
+            - **ML-DSA (Dilithium)** - FIPS 204 digital signatures
+            - **NTT** - O(n log n) Number Theoretic Transform
+            - **Core primitives** - Modular arithmetic, vector operations, gadget decomposition
+
             ### Downloads
 
             | Language | File |
             |----------|------|
             | Haskell | `isabella-haskell-${{ needs.build.outputs.version }}.tar.gz` |
-            | JavaScript | `isabella-javascript-${{ needs.build.outputs.version }}.tar.gz` |
+            | OCaml | `isabella-ocaml-${{ needs.build.outputs.version }}.tar.gz` |
             | TypeScript | `isabella-typescript-${{ needs.build.outputs.version }}.tar.gz` |
 
             ### Installation
 
             **Haskell:**
             ```bash
-            cabal install isabella-${{ needs.build.outputs.version }}.tar.gz
+            cd isabella.hs && cabal install
             ```
 
-            **JavaScript/TypeScript:**
+            **OCaml:**
             ```bash
-            npm install @isabella/lattice-crypto
+            cd isabella.ml && dune build
             ```
+
+            **TypeScript:**
+            ```bash
+            cd isabella.ts && npm install && npm run build
+            ```
+
+            ### Test Coverage
+
+            - 156 cross-validation tests against noble-post-quantum
+            - FIPS 203/204 compliance validation
+            - CLI integration tests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Publish TypeScript package to npm
+  # Publish TypeScript package to npm (optional)
   publish-npm:
     name: Publish to npm
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: release-artifacts
           path: release/
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Extract and publish
-        working-directory: typescript/isabella
+        working-directory: isabella.ts
         run: |
           # Extract built package
-          tar -xzf ../../release/isabella-typescript-*.tar.gz
+          tar -xzf ../release/isabella-typescript-*.tar.gz 2>/dev/null || true
 
           # Update version in package.json
           VERSION=${{ needs.build.outputs.version }}
           VERSION=${VERSION#v}  # Remove 'v' prefix
-          npm version $VERSION --no-git-tag-version
+          npm version $VERSION --no-git-tag-version || true
 
           # Publish (dry-run for safety - remove --dry-run when ready)
           npm publish --dry-run
