@@ -246,4 +246,18 @@ proof -
   qed
 qed
 
+(* Matrix-vector multiplication mod q *)
+definition mat_vec_mult_mod :: "int_matrix => int_vec => int => int_vec" where
+  "mat_vec_mult_mod A v q = vec_mod (mat_vec_mult A v) q"
+
+lemma mat_vec_mult_mod_length [dim_simp]:
+  "length (mat_vec_mult_mod A v q) = length A"
+  unfolding mat_vec_mult_mod_def vec_mod_length mat_vec_mult_length by simp
+
+export_code
+  mod_centered vec_mod vec_mod_centered
+  dist0 encode_bit decode_bit
+  mat_vec_mult_mod
+  in Haskell module_name "Canon.Algebra.Zq"
+
 end
