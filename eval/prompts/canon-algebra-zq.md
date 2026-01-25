@@ -303,105 +303,143 @@ qed
 
 ### Step 8: Noisy Decoding - True Case
 
+**KEY INSIGHT**: The `arith` tactic is weak with `div/mod`. Use a witness approach:
+from `q mod 4 = 0`, derive `4 dvd q`, then obtain witness `k` where `q = 4*k`.
+Now `q div 4 = k` and `q div 2 = 2*k`, and `simp` handles all division.
+
 **USE THIS EXACT CODE**:
 ```isabelle
 lemma decode_bit_half_shift:
-  assumes q_pos: "(q::int) > 0"
+  fixes q x :: int
+  assumes q_pos: "q > 0"
   assumes q_div4: "q mod 4 = 0"
   assumes x_small: "abs x < q div 4"
   shows "decode_bit q (x + q div 2) = True"
 proof -
-  have q4_pos: "q div 4 > 0" using q_pos q_div4 by arith
+  have dvd4: "4 dvd q"
+    using q_div4 by auto
+
+  obtain k where qk: "q = 4 * k"
+    using dvd4 by (elim dvdE)
+
+  have k_pos: "k > 0"
+    using q_pos qk by linarith
+
+  have q4_pos: "q div 4 > 0"
+    using k_pos by (simp add: qk)
+
   have q2_eq: "q div 2 = 2 * (q div 4)"
-    using q_div4 by arith
-  have q2_pos: "q div 2 > 0" using q4_pos q2_eq by arith
+    by (simp add: qk)
 
-  (* x + q div 2 is in range (q div 4, 3 * q div 4) *)
-  have lb: "x + q div 2 > q div 4"
-    using x_small q2_eq by arith
-  have ub: "x + q div 2 < 3 * (q div 4)"
-    using x_small q2_eq by arith
+  have q_eq: "q = 4 * (q div 4)"
+    by (simp add: qk)
 
-  (* This is in the positive part of (-q/2, q/2] after centering *)
+  have x_lt: "x < q div 4" and x_gt: "x > - (q div 4)"
+    using x_small by (simp_all add: abs_less_iff)
+
   have in_range: "x + q div 2 >= 0 \<and> x + q div 2 < q"
-  proof -
-    have "x + q div 2 >= -(q div 4) + q div 2"
-      using x_small by arith
-    hence "x + q div 2 >= q div 4"
-      using q2_eq by arith
-    hence low: "x + q div 2 >= 0" using q4_pos by arith
-    have "x + q div 2 < q div 4 + q div 2"
-      using x_small by arith
-    hence "x + q div 2 < 3 * (q div 4)"
-      using q2_eq by arith
-    hence high: "x + q div 2 < q"
-      using q_div4 by arith
-    show ?thesis using low high by simp
+  proof
+    have "x + q div 2 > - (q div 4) + 2 * (q div 4)"
+      using x_gt q2_eq by linarith
+    hence "x + q div 2 > q div 4"
+      by simp
+    thus "x + q div 2 >= 0"
+      using q4_pos by linarith
+  next
+    have "x + q div 2 < (q div 4) + 2 * (q div 4)"
+      using x_lt q2_eq by linarith
+    hence upper: "x + q div 2 < 3 * (q div 4)"
+      by simp
+    have "3 * (q div 4) < 4 * (q div 4)"
+      using q4_pos by linarith
+    thus "x + q div 2 < q"
+      using upper q_eq by linarith
   qed
 
   have xmod_eq: "(x + q div 2) mod q = x + q div 2"
     using in_range q_pos by simp
 
-  (* Determine if > q div 2 *)
-  have le_half: "x + q div 2 <= q div 2"
-    using x_small by arith
-
-  have mc_eq: "mod_centered (x + q div 2) q = x + q div 2"
-    unfolding mod_centered_def Let_def
-    using xmod_eq le_half by simp
-
-  have "dist0 q (x + q div 2) = abs (x + q div 2)"
-    unfolding dist0_def mc_eq by simp
-
-  have "abs (x + q div 2) >= q div 2 - abs x"
-  proof (cases "x >= 0")
+  show ?thesis
+  proof (cases "x > 0")
     case True
-    hence "x + q div 2 >= 0" using q2_pos by arith
-    hence "abs (x + q div 2) = x + q div 2" by simp
-    also have "x + q div 2 >= q div 2 - abs x"
-      using True by arith
-    finally show ?thesis .
+    have gt_half: "x + q div 2 > q div 2"
+      using True by linarith
+    hence gt_half': "(x + q div 2) mod q > q div 2"
+      using xmod_eq by simp
+
+    have mc_eq: "mod_centered (x + q div 2) q = (x + q div 2) mod q - q"
+      unfolding mod_centered_def Let_def using gt_half' by simp
+    hence mc_val: "mod_centered (x + q div 2) q = x + q div 2 - q"
+      using xmod_eq by simp
+
+    have q_minus_half: "q - q div 2 = q div 2"
+      by (simp add: qk)
+    have mc_val': "mod_centered (x + q div 2) q = x - q div 2"
+      using mc_val q_minus_half by simp
+
+    have mc_neg: "x - q div 2 < 0"
+    proof -
+      have "q div 4 - 2 * (q div 4) = - (q div 4)" by simp
+      hence half_diff: "q div 4 - q div 2 = - (q div 4)"
+        using q2_eq by simp
+      have "x - q div 2 < q div 4 - q div 2"
+        using x_lt by linarith
+      hence "x - q div 2 < - (q div 4)"
+        using half_diff by simp
+      thus ?thesis
+        using q4_pos by linarith
+    qed
+
+    have dist_eq: "dist0 q (x + q div 2) = q div 2 - x"
+      unfolding dist0_def using mc_val' mc_neg by simp
+
+    have gt_q4: "q div 2 - x > q div 4"
+      using x_lt q2_eq by linarith
+
+    show ?thesis
+      unfolding decode_bit_def
+      using dist_eq gt_q4 by simp
+
   next
     case False
-    hence "x < 0" by simp
-    hence "x + q div 2 < q div 2" by arith
-    show ?thesis
-    proof (cases "x + q div 2 >= 0")
-      case True
-      hence "abs (x + q div 2) = x + q div 2" by simp
-      also have "x + q div 2 >= q div 2 + x" by simp
-      also have "q div 2 + x = q div 2 - abs x"
-        using `x < 0` by simp
-      finally show ?thesis .
-    next
-      case False
-      hence neg: "x + q div 2 < 0" by simp
-      hence "abs (x + q div 2) = -(x + q div 2)" by simp
-      also have "-(x + q div 2) = -x - q div 2"
-        by arith
-      also have "-x = abs x" using `x < 0` by simp
-      finally have eq: "abs (x + q div 2) = abs x - q div 2"
-        by arith
-      (* But this contradicts in_range *)
-      have "x + q div 2 >= 0" using in_range by simp
-      hence False using neg by simp
-      thus ?thesis by simp
+    have x_le0: "x <= 0" using False by simp
+
+    have le_half: "x + q div 2 <= q div 2"
+      using x_le0 by linarith
+    have le_half': "(x + q div 2) mod q <= q div 2"
+      using xmod_eq le_half by simp
+
+    have not_gt: "\<not> ((x + q div 2) mod q > q div 2)"
+      using le_half' by linarith
+
+    have mc_eq: "mod_centered (x + q div 2) q = (x + q div 2) mod q"
+      unfolding mod_centered_def Let_def using not_gt by simp
+    hence mc_val: "mod_centered (x + q div 2) q = x + q div 2"
+      using xmod_eq by simp
+
+    have mc_pos: "x + q div 2 > 0"
+    proof -
+      have "- (q div 4) + 2 * (q div 4) = q div 4" by simp
+      hence neg_plus_half: "- (q div 4) + q div 2 = q div 4"
+        using q2_eq by simp
+      have "x + q div 2 > - (q div 4) + q div 2"
+        using x_gt by linarith
+      hence "x + q div 2 > q div 4"
+        using neg_plus_half by simp
+      thus ?thesis
+        using q4_pos by linarith
     qed
+
+    have dist_eq: "dist0 q (x + q div 2) = x + q div 2"
+      unfolding dist0_def using mc_val mc_pos by simp
+
+    have gt_q4: "x + q div 2 > q div 4"
+      using x_gt q2_eq by linarith
+
+    show ?thesis
+      unfolding decode_bit_def
+      using dist_eq gt_q4 by simp
   qed
-
-  have "abs (x + q div 2) > q div 4"
-  proof -
-    have "q div 2 - abs x > q div 2 - q div 4"
-      using x_small by arith
-    hence "q div 2 - abs x > q div 4"
-      using q2_eq by arith
-    thus ?thesis using `abs (x + q div 2) >= q div 2 - abs x` by arith
-  qed
-
-  hence "dist0 q (x + q div 2) > q div 4"
-    using `dist0 q (x + q div 2) = abs (x + q div 2)` by simp
-
-  thus ?thesis unfolding decode_bit_def by simp
 qed
 ```
 
@@ -450,3 +488,6 @@ export_code
 3. **decode_bit_half_shift** uses the `q mod 4 = 0` assumption to ensure q/2 is even
 4. **Avoid `...` in chained calculations** - use explicit terms instead
 5. **Type annotations `(q::int)` are essential** for numeric lemmas to work
+6. **Witness approach for division**: When you have `q mod n = 0`, derive `n dvd q` then obtain witness `k` where `q = n * k`. This eliminates division from goals and lets `simp`/`linarith` handle arithmetic cleanly
+7. **Use `linarith` for inequality chains** after eliminating division via witness substitution
+8. **Avoid `also`/`finally` chains** with division - use explicit substitution steps instead
