@@ -25,8 +25,8 @@ session Canon_Hardness in "Hardness" = Canon_Base +
   options [document = false]
   theories
     LWE_Def
-    (* Add as created:
     SIS_Def
+    (* Add as created:
     NormalForms
     *)
 

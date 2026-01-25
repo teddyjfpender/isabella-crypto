@@ -28,6 +28,7 @@
 | canon-analysis-norms | ✅ | linf_norm, all_bounded, inner_prod_bound |
 | canon-hardness-lwe-def | ✅ | LWE params, lwe_sample, Search/Decision LWE |
 | canon-crypto-regev-pke | ✅ | Regev PKE with correctness theorem |
+| canon-hardness-sis-def | ✅ | SIS params, is_sis_solution, collision_to_sis |
 
 ---
 
@@ -50,7 +51,7 @@
 | Theory | Status | Notes |
 |--------|--------|-------|
 | `Hardness/LWE_Def.thy` | ✅ | Complete with lwe_context locale |
-| `Hardness/SIS_Def.thy` | ⬜ | from SIS work |
+| `Hardness/SIS_Def.thy` | ⬜ | Prompt ready: canon-hardness-sis-def |
 | `Hardness/NormalForms.thy` | ⬜ | migrate NFSIS |
 
 **Blockers**: Phase 1 completion
@@ -61,7 +62,7 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `Crypto/Regev_PKE.thy` | ⬜ | Prompt ready: canon-crypto-regev-pke |
+| `Crypto/Regev_PKE.thy` | ✅ | Complete with correctness theorem |
 | `Gadgets/Decomp.thy` | ⬜ | new: base-B decomposition |
 | `Crypto/Commit_SIS.thy` | ⬜ | new: SIS commitment |
 
@@ -141,11 +142,13 @@
 - [ ] Solution preservation
 
 ### Regev_PKE.thy
-- [ ] `lwe_dims` locale (or use generic)
-- [ ] `lwe_encrypt` definition
-- [ ] `lwe_decrypt` definition
-- [ ] `decryption_error_term` lemma
-- [ ] `correctness_condition` theorem
+- [x] `regev_params` record (extends lwe_params)
+- [x] `regev_keygen` definition
+- [x] `regev_encrypt` definition
+- [x] `regev_decrypt` definition
+- [x] `payload_identity_raw` lemma
+- [x] `regev_correctness` theorem
+- [x] `noise_bound_from_params` lemma
 
 ### Decomp.thy
 - [ ] `decomp_base` definition
@@ -220,3 +223,5 @@
 | 2026-01-25 | Completed Norms.thy with inner_prod_bound lemma |
 | 2026-01-25 | Completed LWE_Def.thy (Phase 2 started) |
 | 2026-01-25 | Created canon-crypto-regev-pke prompt - the "crown jewel" correctness proof |
+| 2026-01-25 | Completed Regev_PKE.thy (Phase 3 started) |
+| 2026-01-25 | Created canon-hardness-sis-def prompt for SIS problem definition |
