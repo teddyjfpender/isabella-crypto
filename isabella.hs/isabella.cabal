@@ -31,8 +31,25 @@ library
     import:           warnings
     exposed-modules:
         Canon
+        -- Algebra
         Canon.Algebra.Zq
+        -- Linear
         Canon.Linear.ListVec
+        -- Analysis
+        Canon.Analysis.Norms
+        -- Gadgets
+        Canon.Gadgets.Decomp
+        -- Hardness
+        Canon.Hardness.LWE_Def
+        Canon.Hardness.SIS_Def
+        -- Rings
+        Canon.Rings.PolyMod
+        Canon.Rings.ModuleLWE
+        Canon.Rings.NTT
+        -- Crypto
+        Canon.Crypto.Regev_PKE
+        Canon.Crypto.Commit_SIS
+        Canon.Crypto.Kyber
 
     build-depends:
         base >= 4.14 && < 5

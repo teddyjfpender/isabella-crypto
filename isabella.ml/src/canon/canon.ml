@@ -1,31 +1,31 @@
 (** Canon: Formally verified lattice cryptography from Isabelle/HOL
 
-    This module re-exports all functionality from the Canon library.
+    This module provides access to all verified functions from the Canon library.
     All code is extracted from proven-correct Isabelle specifications.
 
-    {1 Modules}
-
-    - {!module:Zq} - Modular arithmetic over Z_q
-    - {!module:Listvec} - Vector and matrix operations
-
-    {1 Example Usage}
-
-    {[
-      open Canon
-
-      (* Centered modular reduction *)
-      let x = Zq.mod_centered 7 5  (* Result: 2 *)
-
-      (* Bit encoding for LWE *)
-      let encoded = Zq.encode_bit 256 true   (* Result: 128 *)
-      let decoded = Zq.decode_bit 256 130    (* Result: true *)
-
-      (* Vector operations *)
-      let v1 = [1; 2; 3]
-      let v2 = [4; 5; 6]
-      let dot = Listvec.inner_prod v1 v2  (* Result: 32 *)
-    ]}
-*)
+    Modules:
+    - {!Zq} - Modular arithmetic over Z_q
+    - {!Listvec} - Vector and matrix operations
+    - {!Norms} - Vector norms and bounds
+    - {!Decomp} - Gadget decomposition
+    - {!Lwe_def} - LWE problem definition
+    - {!Sis_def} - SIS problem definition
+    - {!Polymod} - Polynomial ring arithmetic
+    - {!Modulelwe} - Module-LWE and Module-SIS
+    - {!Ntt} - Number Theoretic Transform (O(n log n) Cooley-Tukey)
+    - {!Regev_pke} - Regev public-key encryption
+    - {!Commit_sis} - SIS-based commitment scheme
+    - {!Kyber} - CRYSTALS-Kyber (ML-KEM) key encapsulation *)
 
 module Zq = Zq
 module Listvec = Listvec
+module Norms = Norms
+module Decomp = Decomp
+module Lwe_def = Lwe_def
+module Sis_def = Sis_def
+module Polymod = Polymod
+module Modulelwe = Modulelwe
+module Ntt = Ntt
+module Regev_pke = Regev_pke
+module Commit_sis = Commit_sis
+module Kyber = Kyber

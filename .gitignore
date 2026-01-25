@@ -14,6 +14,10 @@
 **/*.aux
 **/*.toc
 
+# Canon build artifacts
+Canon/_build/
+Canon/.session/
+
 # Keep Isabelle generated code - this is the verified output
 # eval/work/**/generated/  # DO NOT IGNORE - needed for collect.sh
 
