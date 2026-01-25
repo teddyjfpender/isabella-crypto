@@ -47,6 +47,7 @@ SESSION_DIR=""
 VERBOSE=false
 RESET=false
 SKIP_REVIEW=false
+PROOF_TIMEOUT=30  # Seconds before a proof is considered "hanging"
 
 # Logging
 log_info() { echo -e "${DIM}[$(date '+%H:%M:%S')]${NC} ${BLUE}[INFO]${NC} $1"; }
@@ -77,6 +78,7 @@ Options:
   --parent-session <name> Parent session for verification
   --session-dir <path>    Directory containing parent session ROOT file
   --skip-review           Skip LLM review (faster but less reliable)
+  --proof-timeout <secs>  Seconds before proof considered hanging (default: 30)
   --reset                 Clear previous progress and start fresh
   --verbose               Verbose output
   -h, --help              Show this help
@@ -87,6 +89,8 @@ New in v2:
   - LLM code review before Isabelle build
   - Intelligent error analysis
   - Attempt history to avoid repeating mistakes
+  - Hanging proof detection and debugging suggestions
+  - Automatic suggestion of alternative proof methods (metis vs simp)
 EOF
     exit 0
 }
@@ -108,6 +112,7 @@ while [[ $# -gt 0 ]]; do
         --parent-session) PARENT_SESSION="$2"; shift 2 ;;
         --session-dir) SESSION_DIR="$2"; shift 2 ;;
         --skip-review) SKIP_REVIEW=true; shift ;;
+        --proof-timeout) PROOF_TIMEOUT="$2"; shift 2 ;;
         --reset) RESET=true; shift ;;
         --verbose) VERBOSE=true; shift ;;
         -h|--help) usage ;;
@@ -299,6 +304,199 @@ EOF
     set +e
     claude --model "$REVIEW_MODEL" --print < "${TEMP_DIR}/review_prompt.md" > "$review_output" 2>/dev/null
     set -e
+}
+
+# ============================================================================
+# NEW: Hanging Proof Detection and Debugging
+# ============================================================================
+#
+# KEY LEARNING: When proofs hang (especially 'by simp' or 'by auto'), they often
+# loop infinitely on complex terms like integer division or power expressions.
+#
+# The solution is to:
+# 1. Detect hangs early (>30s for a single proof is suspicious)
+# 2. Suggest alternative proof methods - 'by metis' often works when simp/auto hang
+# 3. For chained equality proofs (using step1 step2 ... by simp), metis handles
+#    the transitivity chain without getting stuck on term simplification
+#
+# This was discovered debugging Decomp.thy where proofs like:
+#   using s1 s2 s3 s4 s5 s6 s7 by simp
+# would hang forever, but:
+#   using s1 s2 s3 s4 s5 s6 s7 by metis
+# completed instantly.
+# ============================================================================
+
+# Run build with hang detection - returns 0 on success, 1 on failure, 2 on hang
+build_with_hang_detection() {
+    local build_dir="$1"
+    local build_log="$2"
+    local session_dir="$3"
+
+    local start_time=$(date +%s)
+    local hang_detected=false
+    local hanging_line=""
+
+    # Run build in background
+    if [[ -n "$session_dir" ]]; then
+        isabelle build -d "$session_dir" -d "$build_dir" -v Test > "$build_log" 2>&1 &
+    else
+        isabelle build -d "$build_dir" -v Test > "$build_log" 2>&1 &
+    fi
+    local build_pid=$!
+
+    # Monitor for hangs
+    while kill -0 $build_pid 2>/dev/null; do
+        sleep 2
+
+        # Check for "running for Xs" messages indicating a hang
+        if grep -q "running for [0-9]*\.[0-9]*s" "$build_log" 2>/dev/null; then
+            local running_time=$(grep -o "running for [0-9]*\.[0-9]*s" "$build_log" | tail -1 | grep -o "[0-9]*\." | tr -d '.')
+            if [[ -n "$running_time" ]] && [[ "$running_time" -ge "$PROOF_TIMEOUT" ]]; then
+                hanging_line=$(grep "running for" "$build_log" | tail -1 | grep -o "line [0-9]*" | head -1)
+                hang_detected=true
+                log_warn "Proof hanging at $hanging_line (>${PROOF_TIMEOUT}s)"
+                kill -9 $build_pid 2>/dev/null || true
+                # Also kill any poly processes
+                pkill -9 -f "poly" 2>/dev/null || true
+                sleep 1
+                echo "HANG_DETECTED at $hanging_line" >> "$build_log"
+                return 2
+            fi
+        fi
+    done
+
+    wait $build_pid 2>/dev/null
+    return $?
+}
+
+# Create minimal test theory for debugging a specific proof pattern
+create_debug_theory() {
+    local proof_pattern="$1"
+    local debug_dir="$2"
+    local debug_imports="$3"
+
+    mkdir -p "$debug_dir"
+
+    cat > "${debug_dir}/Debug.thy" <<EOF
+theory Debug
+  imports ${debug_imports:-Main}
+begin
+
+(* Minimal test for hanging proof pattern *)
+${proof_pattern}
+
+end
+EOF
+
+    cat > "${debug_dir}/ROOT" <<EOF
+session Debug = HOL +
+  options [document = false]
+  theories Debug
+EOF
+}
+
+# Test alternative proof methods for a given goal
+test_proof_alternatives() {
+    local goal_context="$1"
+    local original_method="$2"
+    local debug_dir="${TEMP_DIR}/proof_debug"
+    local result_file="${TEMP_DIR}/proof_alternatives.txt"
+
+    log_info "Testing alternative proof methods..."
+
+    local methods=("metis" "blast" "force" "fastforce" "auto" "simp")
+    echo "" > "$result_file"
+
+    for method in "${methods[@]}"; do
+        if [[ "$method" == "$original_method" ]]; then
+            continue
+        fi
+
+        # Create test theory with this method
+        local test_code=$(echo "$goal_context" | sed "s/by $original_method/by $method/g" | sed "s/by ($original_method)/by ($method)/g")
+
+        create_debug_theory "$test_code" "$debug_dir" "Main"
+
+        # Quick test with timeout
+        local test_start=$(date +%s)
+        set +e
+        timeout 10 isabelle build -d "$debug_dir" Debug > "${debug_dir}/test.log" 2>&1
+        local test_exit=$?
+        set -e
+        local test_end=$(date +%s)
+        local test_time=$((test_end - test_start))
+
+        if [[ $test_exit -eq 0 ]] && [[ $test_time -lt 10 ]]; then
+            echo "SUCCESS: 'by $method' works in ${test_time}s" >> "$result_file"
+            log_success "Found working alternative: by $method (${test_time}s)"
+            echo "$method"
+            return 0
+        fi
+    done
+
+    log_warn "No quick alternative found"
+    echo ""
+    return 1
+}
+
+# Extract the hanging proof pattern from theory file
+extract_hanging_proof() {
+    local theory_file="$1"
+    local line_num="$2"
+
+    # Extract context around the hanging line (the lemma/proof containing it)
+    awk -v line="$line_num" '
+        /^lemma|^theorem|^corollary|^proposition/ { start=NR; content="" }
+        NR >= start { content = content $0 "\n" }
+        NR == line { target_start = start }
+        /^qed|^done|^by / && NR > line && target_start { print content; exit }
+    ' "$theory_file"
+}
+
+# Suggest fix for hanging proof
+suggest_hang_fix() {
+    local build_log="$1"
+    local theory_file="$2"
+    local suggestion_file="$3"
+
+    # Extract hanging line info
+    local hanging_info=$(grep "running for\|HANG_DETECTED" "$build_log" | tail -1)
+    local line_num=$(echo "$hanging_info" | grep -o "line [0-9]*" | grep -o "[0-9]*")
+
+    if [[ -z "$line_num" ]]; then
+        echo "Could not determine hanging line" > "$suggestion_file"
+        return 1
+    fi
+
+    # Get the proof method that's hanging
+    local hanging_line=$(sed -n "${line_num}p" "$theory_file" 2>/dev/null || echo "")
+    local original_method=$(echo "$hanging_line" | grep -o "by [a-z_]*\|by ([a-z_]*" | head -1 | sed 's/by //' | tr -d '(')
+
+    cat > "$suggestion_file" <<EOF
+HANGING PROOF DETECTED at line $line_num
+
+Hanging code: $hanging_line
+Original method: ${original_method:-unknown}
+
+RECOMMENDED FIXES (in order of preference):
+
+1. Replace 'by simp' or 'by auto' with 'by metis' for chained equality proofs
+   - simp and auto can loop on division/power terms
+   - metis handles transitivity chains efficiently
+
+2. For proofs with many 'using' facts, try:
+   - 'by metis' instead of 'by simp'
+   - 'by blast' for pure logic
+   - 'by force' or 'by fastforce' as alternatives
+
+3. For sum reindexing proofs, use explicit form:
+   - Instead of: by (rule sum.reindex_cong[of f]) auto
+   - Use: using sum.reindex[OF inj_fact] by simp
+
+4. For division lemmas on integers:
+   - Use 'by (rule zdiv_zmult2_eq)' with explicit premises
+   - Avoid 'by simp add: div_mult2_eq' for integers
+EOF
 }
 
 # Analyze build errors and provide structured feedback
@@ -689,15 +887,15 @@ session Test = HOL +
 EOF
         fi
 
-        # Build
+        # Build with hang detection
         set +e
         if [[ -n "$SESSION_DIR" ]]; then
             if [[ "$SESSION_DIR" != /* ]]; then
                 SESSION_DIR="${PROJECT_ROOT}/${SESSION_DIR}"
             fi
-            isabelle build -d "${SESSION_DIR}" -d "${TEMP_DIR}/test" Test > "${TEMP_DIR}/build.log" 2>&1
+            build_with_hang_detection "${TEMP_DIR}/test" "${TEMP_DIR}/build.log" "${SESSION_DIR}"
         else
-            isabelle build -d "${TEMP_DIR}/test" Test > "${TEMP_DIR}/build.log" 2>&1
+            build_with_hang_detection "${TEMP_DIR}/test" "${TEMP_DIR}/build.log" ""
         fi
         BUILD_EXIT=$?
         set -e
@@ -718,6 +916,39 @@ EOF
 
                 rm -f "$LAST_FEEDBACK_FILE" "$CURRENT_ATTEMPT_FILE"
                 STEP_PASSED=true
+            fi
+        elif [[ $BUILD_EXIT -eq 2 ]]; then
+            # Hanging proof detected - try to debug and suggest fix
+            log_warn "Hanging proof detected - analyzing..."
+
+            HANG_SUGGESTION="${TEMP_DIR}/hang_suggestion.txt"
+            suggest_hang_fix "${TEMP_DIR}/build.log" "${TEMP_DIR}/test/${THEORY_NAME}.thy" "$HANG_SUGGESTION"
+
+            # Extract hanging line info for debugging
+            HANGING_INFO=$(grep "running for\|HANG_DETECTED" "${TEMP_DIR}/build.log" | tail -1)
+            HANGING_LINE=$(echo "$HANGING_INFO" | grep -o "line [0-9]*" | grep -o "[0-9]*")
+
+            if [[ -n "$HANGING_LINE" ]]; then
+                # Get the hanging code
+                HANGING_CODE=$(sed -n "${HANGING_LINE}p" "${TEMP_DIR}/test/${THEORY_NAME}.thy" 2>/dev/null || echo "")
+                log_info "Hanging at line $HANGING_LINE: $HANGING_CODE"
+
+                # Check if it's a 'by simp' or 'by auto' that we can try alternatives for
+                if echo "$HANGING_CODE" | grep -qE "by\s+(simp|auto|\(simp|\(auto)"; then
+                    log_info "Detected simp/auto hang - suggesting metis as alternative"
+                    echo "" >> "$HANG_SUGGESTION"
+                    echo "SPECIFIC FIX: Replace 'by simp' or 'by auto' with 'by metis'" >> "$HANG_SUGGESTION"
+                    echo "This is a common fix for chained equality proofs with division/power terms." >> "$HANG_SUGGESTION"
+                fi
+            fi
+
+            FEEDBACK="PROOF HANGING (>${PROOF_TIMEOUT}s):\n$(cat "$HANG_SUGGESTION")\n\nThe proof at line $HANGING_LINE is taking too long.\nThis usually means simp/auto is looping on complex terms.\n\nTry replacing 'by simp' with 'by metis' for equality chains."
+            echo -e "$FEEDBACK" > "$LAST_FEEDBACK_FILE"
+            echo "Attempt $ATTEMPT: Proof hanging at line $HANGING_LINE" >> "$ATTEMPT_HISTORY_FILE"
+
+            if [[ "$VERBOSE" == "true" ]]; then
+                echo -e "${DIM}--- Hang Analysis ---${NC}"
+                cat "$HANG_SUGGESTION"
             fi
         else
             # Build failed - analyze error

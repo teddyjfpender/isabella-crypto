@@ -29,6 +29,7 @@
 | canon-hardness-lwe-def | ✅ | LWE params, lwe_sample, Search/Decision LWE |
 | canon-crypto-regev-pke | ✅ | Regev PKE with correctness theorem |
 | canon-hardness-sis-def | ✅ | SIS params, is_sis_solution, collision_to_sis |
+| canon-gadgets-decomp | ✅ | Base-B decomposition, gadget_vec, recompose |
 
 ---
 
@@ -51,7 +52,7 @@
 | Theory | Status | Notes |
 |--------|--------|-------|
 | `Hardness/LWE_Def.thy` | ✅ | Complete with lwe_context locale |
-| `Hardness/SIS_Def.thy` | ⬜ | Prompt ready: canon-hardness-sis-def |
+| `Hardness/SIS_Def.thy` | ✅ | Complete with collision_to_sis |
 | `Hardness/NormalForms.thy` | ⬜ | migrate NFSIS |
 
 **Blockers**: Phase 1 completion
@@ -63,7 +64,7 @@
 | Theory | Status | Notes |
 |--------|--------|-------|
 | `Crypto/Regev_PKE.thy` | ✅ | Complete with correctness theorem |
-| `Gadgets/Decomp.thy` | ⬜ | new: base-B decomposition |
+| `Gadgets/Decomp.thy` | ⬜ | Prompt ready: canon-gadgets-decomp |
 | `Crypto/Commit_SIS.thy` | ⬜ | new: SIS commitment |
 
 **Blockers**: Phase 2 completion
@@ -132,9 +133,12 @@
 - [x] `lwe_context` locale
 
 ### SIS_Def.thy
-- [ ] `sis_instance` record
-- [ ] `is_sis_solution` definition
-- [ ] Inhomogeneous variant
+- [x] `sis_params` record
+- [x] `sis_instance` record
+- [x] `is_sis_solution` definition
+- [x] `is_isis_solution` (inhomogeneous variant)
+- [x] `collision_to_sis` lemma
+- [x] `sis_context` locale
 
 ### NormalForms.thy
 - [ ] NFSIS definition
@@ -151,11 +155,13 @@
 - [x] `noise_bound_from_params` lemma
 
 ### Decomp.thy
+- [ ] `digit` definition
 - [ ] `decomp_base` definition
 - [ ] `recompose` definition
-- [ ] `recompose_decomp` theorem
-- [ ] Digit bound lemma
-- [ ] Gadget matrix definition
+- [ ] `recompose_decomp_mod` theorem
+- [ ] `gadget_vec` definition
+- [ ] `inner_prod_gadget_decomp` theorem
+- [ ] `decomp_signed` (centered digits)
 
 ### Commit_SIS.thy
 - [ ] Commitment definition
@@ -225,3 +231,5 @@
 | 2026-01-25 | Created canon-crypto-regev-pke prompt - the "crown jewel" correctness proof |
 | 2026-01-25 | Completed Regev_PKE.thy (Phase 3 started) |
 | 2026-01-25 | Created canon-hardness-sis-def prompt for SIS problem definition |
+| 2026-01-25 | Completed SIS_Def.thy (Phase 2 complete) |
+| 2026-01-25 | Created canon-gadgets-decomp prompt for base-B decomposition |

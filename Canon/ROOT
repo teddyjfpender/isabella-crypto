@@ -36,12 +36,17 @@ session Canon_Crypto in "Crypto" = Canon_Hardness +
   theories
     Regev_PKE
 
+(* Session 4: Gadget constructions *)
+session Canon_Gadgets in "Gadgets" = Canon_Base +
+  options [document = false]
+  theories
+    Decomp
+
 (* Future sessions - uncomment as theories are added:
 
-session Canon_Gadgets = Canon_Hardness +
+session Canon_Commit = Canon_Gadgets +
   theories
-    "Gadgets/Decomp"
-    "Crypto/Commit_SIS"
+    "Commit/Commit_SIS"
 
 session Canon_Rings = Canon_Crypto +
   theories
