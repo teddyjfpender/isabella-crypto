@@ -30,6 +30,7 @@
 | canon-crypto-regev-pke | ✅ | Regev PKE with correctness theorem |
 | canon-hardness-sis-def | ✅ | SIS params, is_sis_solution, collision_to_sis |
 | canon-gadgets-decomp | ✅ | Base-B decomposition, gadget_vec, recompose |
+| canon-crypto-commit-sis | ✅ | SIS commitment with binding_implies_sis |
 
 ---
 
@@ -64,8 +65,8 @@
 | Theory | Status | Notes |
 |--------|--------|-------|
 | `Crypto/Regev_PKE.thy` | ✅ | Complete with correctness theorem |
-| `Gadgets/Decomp.thy` | ⬜ | Prompt ready: canon-gadgets-decomp |
-| `Crypto/Commit_SIS.thy` | ⬜ | new: SIS commitment |
+| `Gadgets/Decomp.thy` | ✅ | Complete with inner_prod_gadget_decomp |
+| `Crypto/Commit_SIS.thy` | ⬜ | Prompt ready: canon-crypto-commit-sis |
 
 **Blockers**: Phase 2 completion
 
@@ -155,20 +156,21 @@
 - [x] `noise_bound_from_params` lemma
 
 ### Decomp.thy
-- [ ] `digit` definition
-- [ ] `decomp_base` definition
-- [ ] `recompose` definition
-- [ ] `recompose_decomp_mod` theorem
-- [ ] `gadget_vec` definition
-- [ ] `inner_prod_gadget_decomp` theorem
-- [ ] `decomp_signed` (centered digits)
+- [x] `digit` definition
+- [x] `decomp_base` definition
+- [x] `recompose` definition
+- [x] `recompose_decomp_mod` theorem
+- [x] `gadget_vec` definition
+- [x] `inner_prod_gadget_decomp` theorem
+- [x] `decomp_signed` (centered digits)
 
 ### Commit_SIS.thy
-- [ ] Commitment definition
-- [ ] Opening definition
-- [ ] Open correctness theorem
-- [ ] Binding definition
-- [ ] Hiding definition
+- [ ] `commit_params` record
+- [ ] `commit` function
+- [ ] `verify_opening` function
+- [ ] `is_binding_break` definition
+- [ ] `binding_implies_sis` theorem
+- [ ] `commit_context` locale
 
 ### Sigma_Base.thy
 - [ ] Transcript type
@@ -233,3 +235,5 @@
 | 2026-01-25 | Created canon-hardness-sis-def prompt for SIS problem definition |
 | 2026-01-25 | Completed SIS_Def.thy (Phase 2 complete) |
 | 2026-01-25 | Created canon-gadgets-decomp prompt for base-B decomposition |
+| 2026-01-25 | Completed Decomp.thy (gadget infrastructure) |
+| 2026-01-25 | Created canon-crypto-commit-sis prompt for SIS-based commitments |
