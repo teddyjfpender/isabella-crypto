@@ -1,0 +1,54 @@
+{
+  "name": "@isabella/canon",
+  "version": "0.1.0",
+  "description": "Formally verified lattice cryptography from Isabelle/HOL",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./runtime": {
+      "import": "./dist/isabella.js",
+      "require": "./dist/isabella.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "npm run build:runtime && npm run build:ts && npm run copy:runtime",
+    "build:runtime": "cd ../isabella.ml && eval $(opam env) && dune build src/js/isabella_js.bc.js && cp _build/default/src/js/isabella_js.bc.js ../isabella.ts/dist/isabella.js",
+    "build:ts": "tsc",
+    "copy:runtime": "cp src/runtime.cjs dist/runtime.cjs",
+    "clean": "rm -rf dist/*.js dist/*.d.ts dist/*.map dist/*.cjs",
+    "test": "node --test examples/test.mjs",
+    "example": "node examples/example.mjs"
+  },
+  "keywords": [
+    "cryptography",
+    "lattice",
+    "lwe",
+    "post-quantum",
+    "verified",
+    "isabelle",
+    "formal-verification"
+  ],
+  "author": "Isabella Project",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/isabella-crypto.git",
+    "directory": "isabella.ts"
+  }
+}

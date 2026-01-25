@@ -18,65 +18,39 @@
 # eval/work/**/generated/  # DO NOT IGNORE - needed for collect.sh
 
 # --------------------------------------------
-# Haskell Build Artifacts
+# Isabella.hs - Haskell Library
 # --------------------------------------------
-haskell/**/.stack-work/
-haskell/**/dist-newstyle/
-haskell/**/*.hi
-haskell/**/*.o
-haskell/**/*.dyn_hi
-haskell/**/*.dyn_o
-haskell/**/cabal.project.local
-haskell/**/cabal.project.local~
+isabella.hs/dist-newstyle/
+isabella.hs/.stack-work/
+isabella.hs/**/*.hi
+isabella.hs/**/*.o
+isabella.hs/**/*.dyn_hi
+isabella.hs/**/*.dyn_o
+isabella.hs/cabal.project.local
+isabella.hs/cabal.project.local~
 *.hie
 
 # --------------------------------------------
-# OCaml/Dune Build Artifacts
+# Isabella.ml - OCaml Library
 # --------------------------------------------
-ocaml/**/_build/
-ocaml/**/*.install
-ocaml/**/.merlin
-ocaml/**/_opam/
+isabella.ml/_build/
+isabella.ml/**/*.install
+isabella.ml/**/.merlin
+isabella.ml/_opam/
 **/.opam-switch/
-# OCaml compiled files (from direct ocamlfind compilation)
-ocaml/**/*.cmi
-ocaml/**/*.cmx
-ocaml/**/*.cmo
-ocaml/**/*.o
 
 # --------------------------------------------
-# JavaScript Build Artifacts
+# Isabella.ts - TypeScript Library
 # --------------------------------------------
-javascript/**/dist/
-javascript/**/node_modules/
-javascript/**/*.js.map
+isabella.ts/dist/
+isabella.ts/node_modules/
+isabella.ts/**/*.tsbuildinfo
 
 # --------------------------------------------
-# TypeScript Build Artifacts
+# Old directories (moved to old/)
 # --------------------------------------------
-typescript/**/dist/
-typescript/**/node_modules/
-typescript/**/src/*.js
-typescript/**/*.js.map
-typescript/**/*.tsbuildinfo
-
-# --------------------------------------------
-# Scala Build Artifacts
-# --------------------------------------------
-scala/**/target/
-scala/**/project/target/
-scala/**/project/project/
-scala/**/.bsp/
-scala/**/.scala-build/
-scala/**/*.class
-scala/**/*.tasty
-
-# --------------------------------------------
-# SML Build Artifacts
-# --------------------------------------------
-sml/**/*.ui
-sml/**/*.uo
-sml/**/.cm/
+# haskell/, ocaml/, javascript/, typescript/, scala/, sml/
+# are now in old/ directory
 
 # --------------------------------------------
 # Eval Harness Artifacts

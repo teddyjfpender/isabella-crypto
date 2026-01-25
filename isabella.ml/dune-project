@@ -18,4 +18,6 @@
    All code is generated from proven-correct specifications.")
  (depends
   (ocaml (>= 4.14))
-  (dune (>= 3.0))))
+  (dune (>= 3.0))
+  (js_of_ocaml (>= 5.0))
+  (js_of_ocaml-ppx (>= 5.0))))

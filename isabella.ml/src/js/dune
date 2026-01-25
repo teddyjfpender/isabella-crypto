@@ -1,0 +1,5 @@
+(executable
+ (name isabella_js)
+ (modes js)
+ (libraries canon js_of_ocaml)
+ (preprocess (pps js_of_ocaml-ppx)))
