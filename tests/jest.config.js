@@ -16,4 +16,6 @@ export default {
   },
   testMatch: ['**/src/**/*.test.ts'],
   verbose: true,
+  // Run tests sequentially to avoid dune build lock conflicts with OCaml CLI
+  maxWorkers: 1,
 };

@@ -300,6 +300,155 @@ let cmd_kyber_decode_msg args =
      | _ -> output_error "Expected a polynomial")
   | _ -> output_error "Usage: kyber-decode-msg \"[poly]\""
 
+(** {1 Dilithium Commands} *)
+
+let cmd_dil_mod_centered args =
+  match args with
+  | [r_str; m_str] ->
+    (match parse_int r_str, parse_int m_str with
+     | Some r, Some m ->
+       let result = Dilithium.mod_centered r m in
+       (match !output_format with
+        | Human -> Printf.printf "mod_centered %d %d = %d\n" r m result
+        | Json -> Printf.printf "{\"r\":%d,\"m\":%d,\"result\":%d}\n" r m result)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: dil-mod-centered R M"
+
+let cmd_dil_power2round args =
+  match args with
+  | [r_str; d_str] ->
+    (match parse_int r_str, parse_int d_str with
+     | Some r, Some d ->
+       let (r1, r0) = Dilithium.power2round_coeff r d in
+       (match !output_format with
+        | Human -> Printf.printf "power2round %d %d = (r1=%d, r0=%d)\n" r d r1 r0
+        | Json -> Printf.printf "{\"r\":%d,\"d\":%d,\"r1\":%d,\"r0\":%d}\n" r d r1 r0)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: dil-power2round R D"
+
+let cmd_dil_decompose args =
+  match args with
+  | [r_str; alpha_str] ->
+    (match parse_int r_str, parse_int alpha_str with
+     | Some r, Some alpha ->
+       let (r1, r0) = Dilithium.decompose_coeff r alpha in
+       (match !output_format with
+        | Human -> Printf.printf "decompose %d %d = (r1=%d, r0=%d)\n" r alpha r1 r0
+        | Json -> Printf.printf "{\"r\":%d,\"alpha\":%d,\"r1\":%d,\"r0\":%d}\n" r alpha r1 r0)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: dil-decompose R ALPHA"
+
+let cmd_dil_highbits args =
+  match args with
+  | [r_str; alpha_str] ->
+    (match parse_int r_str, parse_int alpha_str with
+     | Some r, Some alpha ->
+       let result = Dilithium.highbits_coeff r alpha in
+       (match !output_format with
+        | Human -> Printf.printf "highbits %d %d = %d\n" r alpha result
+        | Json -> Printf.printf "{\"r\":%d,\"alpha\":%d,\"result\":%d}\n" r alpha result)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: dil-highbits R ALPHA"
+
+let cmd_dil_lowbits args =
+  match args with
+  | [r_str; alpha_str] ->
+    (match parse_int r_str, parse_int alpha_str with
+     | Some r, Some alpha ->
+       let result = Dilithium.lowbits_coeff r alpha in
+       (match !output_format with
+        | Human -> Printf.printf "lowbits %d %d = %d\n" r alpha result
+        | Json -> Printf.printf "{\"r\":%d,\"alpha\":%d,\"result\":%d}\n" r alpha result)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: dil-lowbits R ALPHA"
+
+let cmd_dil_makehint args =
+  match args with
+  | [z_str; r_str; alpha_str] ->
+    (match parse_int z_str, parse_int r_str, parse_int alpha_str with
+     | Some z, Some r, Some alpha ->
+       let result = Dilithium.makehint_coeff z r alpha in
+       (match !output_format with
+        | Human -> Printf.printf "makehint z=%d r=%d alpha=%d = %d\n" z r alpha result
+        | Json -> Printf.printf "{\"z\":%d,\"r\":%d,\"alpha\":%d,\"result\":%d}\n" z r alpha result)
+     | _ -> output_error "Expected three integers")
+  | _ -> output_error "Usage: dil-makehint Z R ALPHA"
+
+let cmd_dil_usehint args =
+  match args with
+  | [h_str; r_str; alpha_str] ->
+    (match parse_int h_str, parse_int r_str, parse_int alpha_str with
+     | Some h, Some r, Some alpha ->
+       let result = Dilithium.usehint_coeff h r alpha in
+       (match !output_format with
+        | Human -> Printf.printf "usehint h=%d r=%d alpha=%d = %d\n" h r alpha result
+        | Json -> Printf.printf "{\"h\":%d,\"r\":%d,\"alpha\":%d,\"result\":%d}\n" h r alpha result)
+     | _ -> output_error "Expected three integers")
+  | _ -> output_error "Usage: dil-usehint H R ALPHA"
+
+let cmd_dil_params args =
+  match args with
+  | [variant_str] ->
+    let params = match String.lowercase_ascii variant_str with
+      | "44" | "mldsa44" | "ml-dsa-44" -> Some Dilithium.mldsa44_params
+      | "65" | "mldsa65" | "ml-dsa-65" -> Some Dilithium.mldsa65_params
+      | "87" | "mldsa87" | "ml-dsa-87" -> Some Dilithium.mldsa87_params
+      | _ -> None
+    in
+    (match params with
+     | Some p ->
+       (match !output_format with
+        | Human ->
+          Printf.printf "ML-DSA-%s parameters:\n" variant_str;
+          Printf.printf "  n=%d, q=%d, k=%d, l=%d\n" p.dil_n p.dil_q p.dil_k p.dil_l;
+          Printf.printf "  eta=%d, tau=%d, beta=%d\n" p.dil_eta p.dil_tau p.dil_beta;
+          Printf.printf "  gamma1=%d, gamma2=%d, d=%d, omega=%d\n" p.dil_gamma1 p.dil_gamma2 p.dil_d p.dil_omega
+        | Json ->
+          Printf.printf "{\"n\":%d,\"q\":%d,\"k\":%d,\"l\":%d,\"eta\":%d,\"tau\":%d,\"beta\":%d,\"gamma1\":%d,\"gamma2\":%d,\"d\":%d,\"omega\":%d}\n"
+            p.dil_n p.dil_q p.dil_k p.dil_l p.dil_eta p.dil_tau p.dil_beta p.dil_gamma1 p.dil_gamma2 p.dil_d p.dil_omega)
+     | None -> output_error "Unknown variant. Use 44, 65, or 87")
+  | _ -> output_error "Usage: dil-params VARIANT (44, 65, or 87)"
+
+let cmd_dil_check_bound args =
+  match args with
+  | [value_str; bound_str] ->
+    (match parse_int value_str, parse_int bound_str with
+     | Some value, Some bnd ->
+       let result = Dilithium.coeff_in_range value bnd in
+       (match !output_format with
+        | Human -> Printf.printf "coeff_in_range %d %d = %b (|%d| < %d)\n" value bnd result (abs value) bnd
+        | Json -> Printf.printf "{\"value\":%d,\"bound\":%d,\"result\":%b}\n" value bnd result)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: dil-check-bound VALUE BOUND"
+
+let cmd_dil_hint_weight args =
+  match args with
+  | [hints_str] ->
+    (* Parse [[1,0,1],[0,1,0]] format *)
+    (try
+       let hints_str = String.trim hints_str in
+       let inner = String.sub hints_str 1 (String.length hints_str - 2) in
+       let rows = Str.split (Str.regexp {|\],\[|}) inner in
+       let parse_row row =
+         let row = String.trim row in
+         (* Strip leading [ if present *)
+         let row = if String.length row > 0 && row.[0] = '[' then
+           String.sub row 1 (String.length row - 1)
+         else row in
+         (* Strip trailing ] if present *)
+         let row = if String.length row > 0 && row.[String.length row - 1] = ']' then
+           String.sub row 0 (String.length row - 1)
+         else row in
+         List.map (fun p -> int_of_string (String.trim p)) (String.split_on_char ',' row)
+       in
+       let hints = List.map parse_row rows in
+       let result = Dilithium.hint_weight hints in
+       (match !output_format with
+        | Human -> Printf.printf "hint_weight = %d\n" result
+        | Json -> Printf.printf "{\"result\":%d}\n" result)
+     with _ -> output_error "Expected hint matrix [[h1],[h2],...]")
+  | _ -> output_error "Usage: dil-hint-weight \"[[h1],[h2],...]\""
+
 (** {1 Examples} *)
 
 let time_it f =
@@ -441,10 +590,24 @@ let show_help () =
   print_endline "  kyber-encode-msg M Encode message bits";
   print_endline "  kyber-decode-msg P Decode polynomial to message bits";
   print_endline "";
+  print_endline "Dilithium Commands (ML-DSA):";
+  print_endline "  dil-params VARIANT    Get ML-DSA parameters (44, 65, 87)";
+  print_endline "  dil-mod-centered R M  Centered modular reduction r mod+/- m";
+  print_endline "  dil-power2round R D   Power2Round: split r into (r1, r0)";
+  print_endline "  dil-decompose R A     Decompose: split r into high/low bits";
+  print_endline "  dil-highbits R A      Extract high-order bits";
+  print_endline "  dil-lowbits R A       Extract low-order bits";
+  print_endline "  dil-makehint Z R A    Compute hint bit";
+  print_endline "  dil-usehint H R A     Recover high bits using hint";
+  print_endline "  dil-check-bound V B   Check if |value| < bound";
+  print_endline "  dil-hint-weight H     Compute total hint weight";
+  print_endline "";
   print_endline "Examples:";
   print_endline "  isabella_cli mod-centered 7 5";
   print_endline "  isabella_cli --json ntt-fast \"[1,2,3,4]\" 17 3329 4";
-  print_endline "  isabella_cli kyber-ntt \"[1,0,0,...,0]\"  # 256 coefficients";
+  print_endline "  isabella_cli kyber-ntt \"[1,0,0,...,0]\"";
+  print_endline "  isabella_cli --json dil-params 65";
+  print_endline "  isabella_cli --json dil-power2round 12345 13";
   print_endline "";
   print_endline "All functions are formally verified in Isabelle/HOL."
 
@@ -475,6 +638,17 @@ let run_command cmd args =
   | "kyber-poly-mult" -> cmd_kyber_poly_mult args
   | "kyber-encode-msg" -> cmd_kyber_encode_msg args
   | "kyber-decode-msg" -> cmd_kyber_decode_msg args
+  (* Dilithium commands *)
+  | "dil-mod-centered" -> cmd_dil_mod_centered args
+  | "dil-power2round" -> cmd_dil_power2round args
+  | "dil-decompose" -> cmd_dil_decompose args
+  | "dil-highbits" -> cmd_dil_highbits args
+  | "dil-lowbits" -> cmd_dil_lowbits args
+  | "dil-makehint" -> cmd_dil_makehint args
+  | "dil-usehint" -> cmd_dil_usehint args
+  | "dil-params" -> cmd_dil_params args
+  | "dil-check-bound" -> cmd_dil_check_bound args
+  | "dil-hint-weight" -> cmd_dil_hint_weight args
   | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
 
 let () =

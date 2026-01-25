@@ -35,6 +35,7 @@
 | canon-rings-modulelwe | ✅ | Module-LWE/SIS for Kyber/Dilithium |
 | canon-rings-ntt | ✅ | NTT for O(n log n) polynomial multiplication |
 | canon-crypto-kyber | ✅ | CRYSTALS-Kyber KEM (ML-KEM) |
+| canon-crypto-dilithium | ✅ | CRYSTALS-Dilithium signatures (ML-DSA) |
 
 ---
 
@@ -92,10 +93,10 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `Crypto/Kyber.thy` | ⬜ | Prompt ready: canon-crypto-kyber |
-| `Crypto/Dilithium.thy` | ⬜ | After Kyber |
+| `Crypto/Kyber.thy` | ✅ | kyber_keygen, kyber_encrypt, kyber_decrypt |
+| `Crypto/Dilithium.thy` | ⬜ | Prompt ready: canon-crypto-dilithium |
 
-**Blockers**: None - NTT complete
+**Blockers**: None - Kyber complete
 
 ---
 
@@ -219,19 +220,27 @@
 - [x] `ntt_fast` Cooley-Tukey algorithm
 - [x] `kyber_ntt_params`, `dilithium_ntt_params`
 
-### Kyber.thy (pending - Layer D)
-- [ ] `kyber_params` record (n=256, k, q=3329, eta)
-- [ ] `kyber_keygen`
-- [ ] `kyber_encaps`
-- [ ] `kyber_decaps`
-- [ ] `kyber_correctness` theorem
+### Kyber.thy
+- [x] `kyber_params` record (n=256, k, q=3329, eta)
+- [x] `kyber512_params`, `kyber768_params`, `kyber1024_params`
+- [x] `kyber_ntt`, `kyber_intt`, `kyber_poly_mult_ntt`
+- [x] `kyber_inner_prod_ntt`, `kyber_mat_vec_mult_ntt`
+- [x] `kyber_encode_msg`, `kyber_decode_msg`
+- [x] `kyber_keygen`
+- [x] `kyber_encrypt`, `kyber_decrypt`
+- [x] `kyber_encaps_simple`, `kyber_decaps_simple`
+- [x] `kyber_correct` locale with `kem_correctness` theorem
 
 ### Dilithium.thy (pending - Layer D)
-- [ ] `dilithium_params` record (n=256, k, l, q, eta, gamma)
-- [ ] `dilithium_keygen`
-- [ ] `dilithium_sign`
-- [ ] `dilithium_verify`
-- [ ] `dilithium_correctness` theorem
+- [ ] `dilithium_params` record (n=256, k, l, q=8380417, eta, gamma)
+- [ ] `mldsa44_params`, `mldsa65_params`, `mldsa87_params`
+- [ ] `power2round_coeff`, `power2round_vec`
+- [ ] `highbits_coeff`, `lowbits_coeff`, `decompose_coeff`
+- [ ] `makehint_coeff`, `usehint_coeff`
+- [ ] `dil_keygen`
+- [ ] `dil_sign` (with rejection sampling predicate)
+- [ ] `dil_verify`
+- [ ] `dilithium_correct` locale with `dilithium_correctness` theorem
 
 ### Sigma_Base.thy
 - [ ] Transcript type
@@ -306,6 +315,8 @@
 | 2026-01-25 | Created canon-rings-ntt prompt for Number Theoretic Transform (Layer D begins) |
 | 2026-01-25 | Completed NTT.thy (ntt_naive, ntt_fast, kyber/dilithium params) |
 | 2026-01-25 | Created canon-crypto-kyber prompt for CRYSTALS-Kyber (ML-KEM) |
+| 2026-01-25 | Completed Kyber.thy (kyber_keygen, kyber_encrypt, kyber_decrypt, kem_correctness) |
+| 2026-01-25 | Created canon-crypto-dilithium prompt for CRYSTALS-Dilithium (ML-DSA) |
 
 ---
 

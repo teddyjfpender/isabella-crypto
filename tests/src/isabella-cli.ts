@@ -180,3 +180,130 @@ export function isCliAvailable(): boolean {
     return false;
   }
 }
+
+// ============================================
+// Dilithium CLI Operations
+// ============================================
+
+export interface DilithiumParams {
+  n: number;
+  q: number;
+  k: number;
+  l: number;
+  eta: number;
+  tau: number;
+  beta: number;
+  gamma1: number;
+  gamma2: number;
+  d: number;
+  omega: number;
+}
+
+export interface Power2RoundResult {
+  r: number;
+  d: number;
+  r1: number;
+  r0: number;
+}
+
+export interface DecomposeResult {
+  r: number;
+  alpha: number;
+  r1: number;
+  r0: number;
+}
+
+export interface HintResult {
+  z?: number;
+  h?: number;
+  r: number;
+  alpha: number;
+  result: number;
+}
+
+export interface BoundCheckResult {
+  value: number;
+  bound: number;
+  result: boolean;
+}
+
+/**
+ * Get Dilithium/ML-DSA parameters for a variant
+ */
+export function dilParams(variant: '44' | '65' | '87'): DilithiumParams {
+  const output = runCli(['dil-params', variant]);
+  return parseCliResult<DilithiumParams>(output);
+}
+
+/**
+ * Centered modular reduction
+ */
+export function dilModCentered(r: number, m: number): number {
+  const output = runCli(['dil-mod-centered', r.toString(), m.toString()]);
+  return parseCliResult<{ r: number; m: number; result: number }>(output).result;
+}
+
+/**
+ * Power2Round: split r into (r1, r0) where r = r1 * 2^d + r0
+ */
+export function dilPower2Round(r: number, d: number): Power2RoundResult {
+  const output = runCli(['dil-power2round', r.toString(), d.toString()]);
+  return parseCliResult<Power2RoundResult>(output);
+}
+
+/**
+ * Decompose: split r into high and low bits using alpha
+ */
+export function dilDecompose(r: number, alpha: number): DecomposeResult {
+  const output = runCli(['dil-decompose', r.toString(), alpha.toString()]);
+  return parseCliResult<DecomposeResult>(output);
+}
+
+/**
+ * HighBits: extract high-order bits
+ */
+export function dilHighbits(r: number, alpha: number): number {
+  const output = runCli(['dil-highbits', r.toString(), alpha.toString()]);
+  return parseCliResult<{ r: number; alpha: number; result: number }>(output).result;
+}
+
+/**
+ * LowBits: extract low-order bits
+ */
+export function dilLowbits(r: number, alpha: number): number {
+  const output = runCli(['dil-lowbits', r.toString(), alpha.toString()]);
+  return parseCliResult<{ r: number; alpha: number; result: number }>(output).result;
+}
+
+/**
+ * MakeHint: compute hint bit
+ */
+export function dilMakeHint(z: number, r: number, alpha: number): number {
+  const output = runCli(['dil-makehint', z.toString(), r.toString(), alpha.toString()]);
+  return parseCliResult<HintResult>(output).result;
+}
+
+/**
+ * UseHint: recover high bits using hint
+ */
+export function dilUseHint(h: number, r: number, alpha: number): number {
+  const output = runCli(['dil-usehint', h.toString(), r.toString(), alpha.toString()]);
+  return parseCliResult<HintResult>(output).result;
+}
+
+/**
+ * Check if |value| < bound
+ */
+export function dilCheckBound(value: number, bound: number): boolean {
+  const output = runCli(['dil-check-bound', value.toString(), bound.toString()]);
+  return parseCliResult<BoundCheckResult>(output).result;
+}
+
+/**
+ * Compute hint weight (total number of 1s)
+ */
+export function dilHintWeight(hints: number[][]): number {
+  const hintsStr = '[' + hints.map(row => '[' + row.join(',') + ']').join(',') + ']';
+  const output = runCli(['dil-hint-weight', hintsStr]);
+  return parseCliResult<SingleResult>(output).result;
+}

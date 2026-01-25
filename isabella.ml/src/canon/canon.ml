@@ -15,7 +15,8 @@
     - {!Ntt} - Number Theoretic Transform (O(n log n) Cooley-Tukey)
     - {!Regev_pke} - Regev public-key encryption
     - {!Commit_sis} - SIS-based commitment scheme
-    - {!Kyber} - CRYSTALS-Kyber (ML-KEM) key encapsulation *)
+    - {!Kyber} - CRYSTALS-Kyber (ML-KEM) key encapsulation
+    - {!Dilithium} - CRYSTALS-Dilithium (ML-DSA) digital signatures *)
 
 module Zq = Zq
 module Listvec = Listvec
@@ -29,3 +30,4 @@ module Ntt = Ntt
 module Regev_pke = Regev_pke
 module Commit_sis = Commit_sis
 module Kyber = Kyber
+module Dilithium = Dilithium

@@ -83,7 +83,8 @@ isabella-crypto/
 │   └── Crypto/
 │       ├── Regev_PKE.thy      # Regev public-key encryption
 │       ├── Commit_SIS.thy     # SIS-based commitments
-│       └── Kyber.thy          # CRYSTALS-Kyber (ML-KEM)
+│       ├── Kyber.thy          # CRYSTALS-Kyber (ML-KEM / FIPS 203)
+│       └── Dilithium.thy      # CRYSTALS-Dilithium (ML-DSA / FIPS 204)
 │
 ├── isabella.hs/               # Haskell library
 │   ├── src/Canon/             # Generated/maintained modules
@@ -98,7 +99,8 @@ isabella-crypto/
 │   │   ├── Rings/NTT.hs
 │   │   ├── Crypto/Regev_PKE.hs
 │   │   ├── Crypto/Commit_SIS.hs
-│   │   └── Crypto/Kyber.hs
+│   │   ├── Crypto/Kyber.hs
+│   │   └── Crypto/Dilithium.hs
 │   ├── app/                   # CLI application
 │   └── test/                  # Test suite
 │
@@ -115,7 +117,8 @@ isabella-crypto/
 │   │   ├── ntt.ml
 │   │   ├── regev_pke.ml
 │   │   ├── commit_sis.ml
-│   │   └── kyber.ml
+│   │   ├── kyber.ml
+│   │   └── dilithium.ml
 │   ├── src/cli/               # CLI application
 │   └── src/js/                # js_of_ocaml bindings
 │
@@ -169,7 +172,8 @@ isabella-crypto/
 |--------|-------------|---------------|
 | `Regev_PKE` | Regev public-key encryption | `regev_keygen`, `regev_encrypt`, `regev_decrypt` |
 | `Commit_SIS` | SIS-based commitment scheme | `commit`, `verify_opening` |
-| `Kyber` | CRYSTALS-Kyber (ML-KEM) | `kyber_keygen`, `kyber_encrypt`, `kyber_decrypt`, `kyber_encaps_simple` |
+| `Kyber` | CRYSTALS-Kyber (ML-KEM / FIPS 203) | `kyber_keygen`, `kyber_encrypt`, `kyber_decrypt`, `kyber_encaps_simple` |
+| `Dilithium` | CRYSTALS-Dilithium (ML-DSA / FIPS 204) | `power2round`, `decompose`, `highbits`, `lowbits`, `make_hint`, `use_hint` |
 
 ## Using the Libraries
 
@@ -278,7 +282,7 @@ Canon is organized into multiple Isabelle sessions:
 | `Canon_Hardness` | Canon_Base | LWE_Def, SIS_Def |
 | `Canon_Gadgets` | Canon_Base | Decomp |
 | `Canon_Rings` | Canon_Hardness | PolyMod, ModuleLWE, NTT |
-| `Canon_Crypto` | Canon_Rings | Regev_PKE, Commit_SIS, Kyber |
+| `Canon_Crypto` | Canon_Rings | Regev_PKE, Commit_SIS, Kyber, Dilithium |
 
 ### Code Generation
 
@@ -362,6 +366,192 @@ ralph/step-loop.sh --prompt canon-linear-listvec \
     --session Canon_Base
 ```
 
+## End-to-End Algorithm Development
+
+This section documents the complete workflow for adding a new formally verified cryptographic algorithm to Isabella, from initial specification to tested multi-language implementation.
+
+### Overview
+
+The pipeline consists of six stages:
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  1. Prompt  │───▶│  2. Ralph   │───▶│ 3. Isabelle │
+│   Design    │    │    Loop     │    │    Proof    │
+└─────────────┘    └─────────────┘    └─────────────┘
+                                            │
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  6. Test    │◀───│  5. Code    │◀───│ 4. Library  │
+│   Harness   │    │   Export    │    │ Integration │
+└─────────────┘    └─────────────┘    └─────────────┘
+```
+
+### Stage 1: Prompt Design
+
+Create a structured prompt in `ralph/prompts/` defining the algorithm specification:
+
+```bash
+# Example: ralph/prompts/canon-crypto-dilithium.md
+```
+
+The prompt should include:
+- **Theory name and session**: Where it fits in the Canon hierarchy
+- **Imports**: Dependencies from existing Canon theories
+- **Step-by-step structure**: Incremental definitions with proofs
+- **Parameters and types**: Data structures for the algorithm
+- **Key operations**: Functions to implement with their specifications
+- **Correctness properties**: Lemmas to prove
+- **Export specification**: What to export for code generation
+
+### Stage 2: Ralph Loop Orchestration
+
+Run the step loop with Claude Code (Opus 4.5) to iteratively generate the theory:
+
+```bash
+ralph/step-loop.sh \
+    --prompt canon-crypto-dilithium \
+    --output-dir Canon \
+    --theory-name Dilithium \
+    --theory-path Crypto \
+    --session Canon_Crypto
+```
+
+The loop will:
+1. Generate each step's Isabelle code
+2. Attempt to build and verify proofs
+3. If proofs fail, iterate with fixes (up to N attempts per step)
+4. Continue to the next step on success
+
+**Handling failures**: If a step fails repeatedly, manual intervention may be needed:
+- Check if required lemmas exist in `Canon/Prelude.thy`
+- Look for similar patterns in existing theories (e.g., `Kyber.thy`)
+- Simplify the proof goal or add helper lemmas
+
+### Stage 3: Isabelle Proof Verification
+
+Once the theory compiles, verify the full session:
+
+```bash
+cd Canon && isabelle build -v -D .
+```
+
+Key checks:
+- All lemmas prove without `sorry`
+- No `quick_and_dirty` mode in production
+- Export code commands are present and correct
+
+### Stage 4: Library Integration
+
+Add the theory to each language library:
+
+**Haskell** (`isabella.hs/`):
+```bash
+# Create module at src/Canon/Crypto/Dilithium.hs
+# Add to isabella.cabal exposed-modules
+# Add to src/Canon.hs re-exports
+```
+
+**OCaml** (`isabella.ml/`):
+```bash
+# Create module at src/canon/dilithium.ml
+# Add to src/canon/dune modules list
+# Add to src/canon/canon.ml re-exports
+```
+
+**CLI Commands**: Add operations to `isabella.ml/bin/isabella_cli.ml`:
+```ocaml
+let cmd_dil_power2round args = ...
+(* Register in command dispatch *)
+| "dil-power2round" -> cmd_dil_power2round args
+```
+
+### Stage 5: Code Export
+
+Run the code generation pipeline:
+
+```bash
+./generate.sh              # Full rebuild
+# or
+make haskell ocaml         # Just the libraries
+```
+
+**Note**: Isabelle's raw export may use `zarith` types. Hand-written wrapper modules often provide cleaner interfaces:
+```ocaml
+(* dilithium.ml - Clean interface wrapping raw Isabelle export *)
+let power2round_coeff r d =
+  let two_d = 1 lsl d in
+  let r0 = mod_centered r two_d in
+  let r1 = (r - r0) / two_d in
+  (r1, r0)
+```
+
+### Stage 6: Test Harness Validation
+
+Add comprehensive tests in `tests/`:
+
+**Reference tests** (`tests/src/dilithium.test.ts`):
+```typescript
+// Compare against noble-post-quantum or other reference implementations
+import { ml_dsa44 } from '@noble/post-quantum/ml-dsa';
+
+it('signs and verifies', () => {
+  const keys = generateDsaKeyPair(ml_dsa44);
+  const sig = signMessage(ml_dsa44, keys.secretKey, message);
+  expect(verifySignature(ml_dsa44, keys.publicKey, message, sig)).toBe(true);
+});
+```
+
+**CLI integration tests** (`tests/src/dilithium-integration.test.ts`):
+```typescript
+// Validate CLI against reference implementations
+it('power2round matches reference', () => {
+  const cliResult = dilPower2Round(100000, 13);
+  const refResult = refPower2Round(100000, 13);
+  expect(cliResult.r1).toBe(refResult[0]);
+  expect(cliResult.r0).toBe(refResult[1]);
+});
+```
+
+**CLI wrappers** (`tests/src/isabella-cli.ts`):
+```typescript
+export function dilPower2Round(r: number, d: number): Power2RoundResult {
+  const output = runCli(['dil-power2round', r.toString(), d.toString()]);
+  return parseCliResult<Power2RoundResult>(output);
+}
+```
+
+Run the full test suite:
+```bash
+cd tests && npm test
+```
+
+### Example: Dilithium (ML-DSA)
+
+The CRYSTALS-Dilithium implementation followed this exact workflow:
+
+1. **Prompt**: `ralph/prompts/canon-crypto-dilithium.md` - 12-step specification
+2. **Ralph Loop**: Generated `Canon/Crypto/Dilithium.thy` with proofs
+3. **Verification**: Built with `isabelle build -d Canon Canon_Crypto`
+4. **Integration**:
+   - `isabella.ml/src/canon/dilithium.ml` - OCaml wrapper
+   - 10 CLI commands (`dil-params`, `dil-power2round`, etc.)
+5. **Export**: Haskell/OCaml code generation
+6. **Testing**:
+   - 49 reference tests against noble-post-quantum
+   - 27 CLI integration tests
+   - Cross-validation of compression functions
+
+### Quick Reference
+
+| Stage | Command | Output |
+|-------|---------|--------|
+| Prompt | Edit `ralph/prompts/canon-*.md` | Specification file |
+| Ralph | `ralph/step-loop.sh --prompt ...` | `Canon/<Path>/<Theory>.thy` |
+| Verify | `isabelle build -D Canon` | Proof checking |
+| Integrate | Manual module creation | `isabella.{hs,ml}/` modules |
+| Export | `./generate.sh` | Compiled libraries |
+| Test | `cd tests && npm test` | Test results |
+
 ### Benchmarks
 
 Compare performance across languages:
@@ -378,7 +568,23 @@ make test              # All tests
 make test-haskell      # Haskell only
 make test-ocaml        # OCaml only
 make test-typescript   # TypeScript only
+make test-validation   # Cross-validation against noble-post-quantum
 ```
+
+### Cross-Validation Test Harness
+
+The `tests/` directory contains a comprehensive test suite that validates the Isabelle-generated code against reference implementations:
+
+- **156 tests** across 6 test suites
+- Cross-validation with [noble-post-quantum](https://github.com/paulmillr/noble-post-quantum)
+- CLI integration tests calling the OCaml executable
+- FIPS 203 (ML-KEM) and FIPS 204 (ML-DSA) compliance checks
+
+```bash
+cd tests && npm install && npm test
+```
+
+See `tests/README.md` for detailed test documentation.
 
 ## Kyber (ML-KEM) Support
 
@@ -403,6 +609,32 @@ let recovered = kyber_decrypt sk ciphertext
 ```
 
 The implementation uses O(n log n) NTT via Cooley-Tukey for efficient polynomial multiplication.
+
+## Dilithium (ML-DSA) Support
+
+Isabella includes compression and hint functions for CRYSTALS-Dilithium (FIPS 204 ML-DSA):
+
+```ocaml
+open Canon.Dilithium
+
+(* Parameter sets *)
+mldsa44_params   (* NIST Level 2: k=4, l=4 *)
+mldsa65_params   (* NIST Level 3: k=6, l=5 *)
+mldsa87_params   (* NIST Level 5: k=8, l=7 *)
+
+(* Compression functions *)
+let (r1, r0) = power2round_coeff r 13   (* Power2Round *)
+let (r1, r0) = decompose r alpha        (* Decompose with alpha = 2*gamma2 *)
+let hi = highbits r alpha               (* Extract high bits *)
+let lo = lowbits r alpha                (* Extract low bits *)
+
+(* Hint mechanism *)
+let h = make_hint z r alpha             (* Create hint bit *)
+let recovered = use_hint h r alpha      (* Recover high bits using hint *)
+
+(* Bounds checking *)
+let ok = check_bound value bound        (* Check |value| < bound *)
+```
 
 ## Contributing
 

@@ -160,3 +160,8 @@ bench/data/summary.json
 *.key
 credentials.json
 secrets.json
+
+# --------------------------------------------
+# Blog
+# --------------------------------------------
+blog

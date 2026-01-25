@@ -1,4 +1,4 @@
 (library
  (name canon)
  (public_name isabella.canon)
- (modules zq listvec norms decomp lwe_def sis_def polymod modulelwe ntt regev_pke commit_sis kyber canon))
+ (modules zq listvec norms decomp lwe_def sis_def polymod modulelwe ntt regev_pke commit_sis kyber dilithium canon))
