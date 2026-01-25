@@ -1,0 +1,34 @@
+lib: [
+  "_build/install/default/lib/isabella/META"
+  "_build/install/default/lib/isabella/canon/canon.a" {"canon/canon.a"}
+  "_build/install/default/lib/isabella/canon/canon.cma" {"canon/canon.cma"}
+  "_build/install/default/lib/isabella/canon/canon.cmi" {"canon/canon.cmi"}
+  "_build/install/default/lib/isabella/canon/canon.cmt" {"canon/canon.cmt"}
+  "_build/install/default/lib/isabella/canon/canon.cmx" {"canon/canon.cmx"}
+  "_build/install/default/lib/isabella/canon/canon.cmxa" {"canon/canon.cmxa"}
+  "_build/install/default/lib/isabella/canon/canon.ml" {"canon/canon.ml"}
+  "_build/install/default/lib/isabella/canon/canon__.cmi" {"canon/canon__.cmi"}
+  "_build/install/default/lib/isabella/canon/canon__.cmt" {"canon/canon__.cmt"}
+  "_build/install/default/lib/isabella/canon/canon__.cmx" {"canon/canon__.cmx"}
+  "_build/install/default/lib/isabella/canon/canon__.ml" {"canon/canon__.ml"}
+  "_build/install/default/lib/isabella/canon/canon__Listvec.cmi" {"canon/canon__Listvec.cmi"}
+  "_build/install/default/lib/isabella/canon/canon__Listvec.cmt" {"canon/canon__Listvec.cmt"}
+  "_build/install/default/lib/isabella/canon/canon__Listvec.cmx" {"canon/canon__Listvec.cmx"}
+  "_build/install/default/lib/isabella/canon/canon__Zq.cmi" {"canon/canon__Zq.cmi"}
+  "_build/install/default/lib/isabella/canon/canon__Zq.cmt" {"canon/canon__Zq.cmt"}
+  "_build/install/default/lib/isabella/canon/canon__Zq.cmx" {"canon/canon__Zq.cmx"}
+  "_build/install/default/lib/isabella/canon/listvec.ml" {"canon/listvec.ml"}
+  "_build/install/default/lib/isabella/canon/zq.ml" {"canon/zq.ml"}
+  "_build/install/default/lib/isabella/dune-package"
+  "_build/install/default/lib/isabella/opam"
+]
+libexec: [
+  "_build/install/default/lib/isabella/canon/canon.cmxs" {"canon/canon.cmxs"}
+]
+bin: [
+  "_build/install/default/bin/isabella_cli"
+]
+doc: [
+  "_build/install/default/doc/isabella/LICENSE"
+  "_build/install/default/doc/isabella/README.md"
+]

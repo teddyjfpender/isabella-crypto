@@ -1,0 +1,21 @@
+(lang dune 3.0)
+(name isabella)
+(version 0.1.0)
+
+(generate_opam_files true)
+
+(source (github anthropics/isabella-crypto))
+(license MIT)
+(authors "Isabella Project")
+(maintainers "isabella@example.com")
+
+(package
+ (name isabella)
+ (synopsis "Formally verified lattice cryptography from Isabelle/HOL")
+ (description
+  "Isabella provides lattice-based cryptographic primitives that have been
+   formally verified in Isabelle/HOL and extracted to executable OCaml.
+   All code is generated from proven-correct specifications.")
+ (depends
+  (ocaml (>= 4.14))
+  (dune (>= 3.0))))

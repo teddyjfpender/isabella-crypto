@@ -1,0 +1,62 @@
+(lang dune 3.21)
+(name isabella)
+(version 0.1.0)
+(sections (lib .) (libexec .) (bin ../../bin) (doc ../../doc/isabella))
+(files
+ (lib
+  (META
+   canon/canon.a
+   canon/canon.cma
+   canon/canon.cmi
+   canon/canon.cmt
+   canon/canon.cmx
+   canon/canon.cmxa
+   canon/canon.ml
+   canon/canon__.cmi
+   canon/canon__.cmt
+   canon/canon__.cmx
+   canon/canon__.ml
+   canon/canon__Listvec.cmi
+   canon/canon__Listvec.cmt
+   canon/canon__Listvec.cmx
+   canon/canon__Zq.cmi
+   canon/canon__Zq.cmt
+   canon/canon__Zq.cmx
+   canon/listvec.ml
+   canon/zq.ml
+   dune-package
+   opam))
+ (libexec (canon/canon.cmxs))
+ (bin (isabella_cli))
+ (doc (LICENSE README.md)))
+(library
+ (name isabella.canon)
+ (kind normal)
+ (archives (byte canon/canon.cma) (native canon/canon.cmxa))
+ (plugins (byte canon/canon.cma) (native canon/canon.cmxs))
+ (native_archives canon/canon.a)
+ (main_module_name Canon)
+ (modes byte native)
+ (modules
+  (wrapped
+   (group
+    (alias
+     (obj_name canon__)
+     (visibility public)
+     (kind alias)
+     (source (path Canon__) (impl (path canon/canon__.ml-gen))))
+    (name Canon)
+    (modules
+     (module
+      (obj_name canon)
+      (visibility public)
+      (source (path Canon) (impl (path canon/canon.ml))))
+     (module
+      (obj_name canon__Listvec)
+      (visibility public)
+      (source (path Listvec) (impl (path canon/listvec.ml))))
+     (module
+      (obj_name canon__Zq)
+      (visibility public)
+      (source (path Zq) (impl (path canon/zq.ml))))))
+   (wrapped true))))

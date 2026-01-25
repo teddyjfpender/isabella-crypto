@@ -1,0 +1,4 @@
+(executable
+ (name isabella_cli)
+ (public_name isabella_cli)
+ (libraries canon unix str))

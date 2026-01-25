@@ -1,0 +1,4 @@
+(library
+ (name canon)
+ (public_name isabella.canon)
+ (modules zq listvec canon))

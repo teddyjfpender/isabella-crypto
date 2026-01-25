@@ -1,0 +1,10 @@
+package "canon" (
+  directory = "canon"
+  version = "0.1.0"
+  description = ""
+  requires = ""
+  archive(byte) = "canon.cma"
+  archive(native) = "canon.cmxa"
+  plugin(byte) = "canon.cma"
+  plugin(native) = "canon.cmxs"
+)
