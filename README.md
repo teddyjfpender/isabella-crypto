@@ -9,409 +9,269 @@ Formally verified lattice-based cryptography in Isabelle/HOL with multi-language
 
 ## Overview
 
-This repository contains:
+Isabella provides formally verified implementations of lattice-based cryptographic primitives. All code is extracted from machine-checked Isabelle/HOL proofs, guaranteeing mathematical correctness.
 
-- **Isabelle Theories**: Formal proofs and definitions for lattice-based cryptography
-- **Haskell Library**: Generated and hand-written Haskell code for lattice crypto primitives
-- **Skills**: Agent skills for writing Isabelle theories
-- **Evaluation Harness**: Scripts for testing and validating Isabelle code generation
-- **Ralph Loop**: Iterative orchestrator for generating valid proofs
+**Libraries:**
+- **isabella.hs** - Haskell library with CLI
+- **isabella.ml** - OCaml library with CLI
+- **isabella.ts** - TypeScript/JavaScript library (via js_of_ocaml)
 
-## Prerequisites
+**Source:**
+- **Canon/** - The verified Isabelle/HOL theories
 
-- [Isabelle](https://isabelle.in.tum.de/) (2024 or later)
-- [GHC](https://www.haskell.org/ghc/) and [Cabal](https://www.haskell.org/cabal/)
-- Python 3.8+
-- AI CLI tool:
-  - [OpenAI Codex CLI](https://github.com/openai/codex) (default)
-  - Or [Claude Code CLI](https://github.com/anthropics/claude-code)
+## Quick Start
 
-### Installing Isabelle (macOS)
+### Prerequisites
+
+- [Isabelle](https://isabelle.in.tum.de/) 2024+
+- [GHC](https://www.haskell.org/ghc/) and [Cabal](https://www.haskell.org/cabal/) (for Haskell)
+- [opam](https://opam.ocaml.org/) with OCaml 4.14+ (for OCaml/TypeScript)
+- Node.js 16+ (for TypeScript)
+
+### Building Everything
 
 ```bash
-brew install --cask isabelle
+make all          # Build Canon + all libraries
+make test         # Run all tests
+make examples     # Run examples in all languages
 ```
 
-Or download from https://isabelle.in.tum.de/installation.html
-
-### Installing Codex CLI
+### Individual Targets
 
 ```bash
-npm install -g @openai/codex
+make canon        # Build Isabelle theories
+make haskell      # Build Haskell library
+make ocaml        # Build OCaml library
+make typescript   # Build TypeScript library
 ```
 
 ## Project Structure
 
 ```
 isabella-crypto/
-├── Canon/                 # Lattice Crypto Canon (main verified library)
-│   ├── ROOT               # Isabelle session definitions
+├── Canon/                 # Verified Isabelle theories (source of truth)
+│   ├── ROOT               # Session definitions
 │   ├── Prelude.thy        # Named theorems, mod utilities
-│   ├── Linear/            # Vector/matrix operations
-│   ├── Algebra/           # Z_q, encoding/decoding
-│   ├── Hardness/          # LWE, SIS definitions
-│   ├── Crypto/            # Encryption schemes
-│   └── ...
-├── collect.sh             # Collect generated code (all languages)
-├── build-js.sh            # Build JavaScript/TypeScript from OCaml
-├── haskell/               # Verified Haskell library
-│   └── isabella/
-├── sml/                   # Verified SML library
-│   └── isabella/
-├── ocaml/                 # Verified OCaml library (source for JS)
-│   └── isabella/
-├── scala/                 # Verified Scala library
-│   └── isabella/
-├── javascript/            # Compiled JavaScript (via js_of_ocaml)
-│   └── isabella/
-├── typescript/            # TypeScript package with type definitions
-│   └── isabella/
-├── bench/                 # Cross-language benchmarks
-│   ├── run-benchmarks.sh  # Main benchmark runner
-│   ├── summarize.sh       # Generate comparison report
-│   ├── runners/           # Language-specific runners
-│   └── data/              # Benchmark results (JSON)
+│   ├── Linear/            # Vector/matrix operations (ListVec.thy)
+│   └── Algebra/           # Z_q arithmetic (Zq.thy)
+│
+├── isabella.hs/           # Haskell library (generated from Canon)
+│   ├── src/Canon/         # Generated modules
+│   ├── app/               # CLI application
+│   └── test/              # Test suite
+│
+├── isabella.ml/           # OCaml library (generated from Canon)
+│   ├── src/canon/         # Generated modules
+│   ├── src/cli/           # CLI application
+│   └── src/js/            # js_of_ocaml bindings
+│
+├── isabella.ts/           # TypeScript library (via js_of_ocaml)
+│   ├── src/               # TypeScript wrappers
+│   └── examples/          # Tests and examples
+│
+├── Makefile               # Build orchestration
+├── generate.sh            # Code generation from Isabelle
+│
 ├── eval/                  # Evaluation harness
-│   ├── run-prompt.sh      # Single-shot runner
-│   ├── verify.sh          # Isabelle verification
-│   ├── scaffold.sh        # Project scaffolding
-│   ├── prompts/           # Test prompts (including canon-*)
-│   └── work/              # Generated theories
-├── ralph/                 # Ralph loop orchestrator
-│   ├── isabella-loop.sh   # Iterative work-review runner
-│   └── step-loop.sh       # Step-based incremental runner
-├── plan/                  # Canon roadmap and progress tracking
-├── skills/                # Agent skills for Isabelle
-│   ├── isabelle-basics/
-│   ├── isabelle-proofs/
-│   ├── isabelle-code-generation/
-│   ├── isabelle-lattice-crypto/
-│   ├── isabelle-canon/    # Canon-specific patterns
-│   └── ...
-└── dist/                  # Packaged skills
+├── ralph/                 # Iterative proof orchestrator
+├── bench/                 # Cross-language benchmarks
+└── old/                   # Legacy code (archived)
 ```
 
-## Supported Target Languages
+## Using the Libraries
 
-| Language | Status | Method |
-|----------|--------|--------|
-| Haskell | ✓ Built-in | `export_code ... in Haskell` |
-| SML | ✓ Built-in | `export_code ... in SML` |
-| OCaml | ✓ Built-in | `export_code ... in OCaml` |
-| Scala | ✓ Built-in | `export_code ... in Scala` |
-| JavaScript | ✓ Via js_of_ocaml | OCaml → `./build-js.sh` |
-| TypeScript | ✓ Via js_of_ocaml | OCaml → `./build-js.sh` |
-
-## Quick Start
-
-### Building Isabelle Theories
-
-```bash
-cd isabelle
-isabelle build -d . -v LatticeCrypto
-```
-
-### Collecting Generated Code
-
-```bash
-# After ralph loop completes successfully, collect the generated code:
-./collect.sh              # Haskell only (default)
-./collect.sh --lang all   # All languages
-./collect.sh --lang sml   # Specific language
-./collect.sh --verbose    # Show collected files
-```
-
-Generated modules will be collected into:
-- `haskell/isabella/src/Lattice/*.hs`
-- `sml/isabella/src/Lattice/*.ML`
-- `ocaml/isabella/src/lattice/*.ml`
-- `scala/isabella/src/Lattice/*.scala`
-
-### Building Libraries
-
-```bash
-# Haskell
-cd haskell/isabella && cabal build
-
-# OCaml (native)
-cd ocaml/isabella && dune build
-
-# Scala
-cd scala/isabella && sbt compile
-```
-
-### Building JavaScript/TypeScript
-
-The JavaScript/TypeScript build uses js_of_ocaml to compile OCaml to JS:
-
-```bash
-# First time setup (installs OCaml toolchain via opam)
-./build-js.sh --setup
-
-# Build JavaScript and TypeScript
-./build-js.sh
-```
-
-Output:
-- `javascript/isabella/dist/isabella.js` - Compiled runtime
-- `typescript/isabella/` - TypeScript package with type definitions
-
-### Running Benchmarks
-
-Compare performance across all language targets:
-
-```bash
-# Run all benchmarks
-./bench/run-benchmarks.sh
-
-# Specific function with custom sizes
-./bench/run-benchmarks.sh --function inner_prod --sizes "100,1000,5000"
-
-# View summary report
-./bench/summarize.sh
-```
-
-Results are stored as JSON in `bench/data/<function>/<language>_<size>.json`.
-
-### Using the Haskell Library
+### Haskell
 
 ```haskell
-import qualified Lattice.LWE_Regev as Regev
+import qualified Canon.Algebra.Zq as Zq
+import qualified Canon.Linear.ListVec as Vec
 
--- Encrypt a bit with LWE
-let ciphertext = Regev.lwe_encrypt publicKey q randomVector True
+-- Centered modular reduction
+let x = Zq.mod_centered 15 17  -- => -2
 
--- Decrypt
-let plaintext = Regev.lwe_decrypt secretKey q ciphertext
+-- Vector operations
+let v1 = [1, 2, 3]
+let v2 = [4, 5, 6]
+let sum = Vec.vec_add v1 v2    -- => [5, 7, 9]
+let dot = Vec.inner_prod v1 v2 -- => 32
+
+-- LWE bit encoding
+let encoded = Zq.encode_bit 97 True   -- => 48
+let decoded = Zq.decode_bit 97 48     -- => True
 ```
 
-## Ralph Loop (Recommended)
+```bash
+# Run CLI
+cd isabella.hs && cabal run isabella-cli -- examples
+```
 
-The Ralph Loop is an iterative orchestrator that generates Isabelle theories with **complete proofs**. It runs multiple iterations, feeding Isabelle error messages back to the AI until the proofs compile.
+### OCaml
 
-### Running with Ralph Loop
+```ocaml
+open Canon
+
+(* Centered modular reduction *)
+let x = Zq.mod_centered 15 17  (* => -2 *)
+
+(* Vector operations *)
+let v1 = [1; 2; 3]
+let v2 = [4; 5; 6]
+let sum = Listvec.vec_add v1 v2    (* => [5; 7; 9] *)
+let dot = Listvec.inner_prod v1 v2 (* => 32 *)
+
+(* LWE bit encoding *)
+let encoded = Zq.encode_bit 97 true   (* => 48 *)
+let decoded = Zq.decode_bit 97 48     (* => true *)
+```
+
+```bash
+# Run CLI
+cd isabella.ml && dune exec isabella_cli -- examples
+```
+
+### TypeScript
+
+```typescript
+import { Zq, Vec, Mat } from '@isabella/canon';
+
+// Centered modular reduction
+const x = Zq.modCentered(15, 17);  // => -2
+
+// Vector operations
+const v1 = [1, 2, 3];
+const v2 = [4, 5, 6];
+const sum = Vec.add(v1, v2);    // => [5, 7, 9]
+const dot = Vec.dot(v1, v2);    // => 32
+
+// LWE bit encoding
+const encoded = Zq.encodeBit(97, true);   // => 48
+const decoded = Zq.decodeBit(97, 48);     // => true
+
+// Matrix operations
+const A = [[1, 2, 3], [4, 5, 6]];
+const Ax = Mat.vecMult(A, [1, 1, 1]);     // => [6, 15]
+const AxMod = Zq.matVecMultMod(A, [1, 1, 1], 10);  // => [6, 5]
+```
+
+```bash
+# Run examples
+cd isabella.ts && node examples/example.mjs
+```
+
+## Available Functions
+
+### Zq - Modular Arithmetic
+
+| Function | Description |
+|----------|-------------|
+| `mod_centered(x, q)` | Centered reduction to (-q/2, q/2] |
+| `vec_mod(v, q)` | Element-wise modular reduction |
+| `vec_mod_centered(v, q)` | Element-wise centered reduction |
+| `dist0(q, x)` | Distance from zero in Z_q |
+| `encode_bit(q, b)` | Encode bit for LWE (false→0, true→q/2) |
+| `decode_bit(q, x)` | Decode bit from LWE |
+| `mat_vec_mult_mod(A, v, q)` | Matrix-vector multiplication mod q |
+
+### Vec - Vector Operations
+
+| Function | Description |
+|----------|-------------|
+| `vec_add(v1, v2)` | Element-wise addition |
+| `vec_sub(v1, v2)` | Element-wise subtraction |
+| `scalar_mult(c, v)` | Scalar multiplication |
+| `vec_neg(v)` | Negation |
+| `inner_prod(v1, v2)` | Inner product (dot product) |
+| `vec_concat(v1, v2)` | Concatenation |
+| `split_vec(n, v)` | Split at position n |
+| `valid_vec(n, v)` | Check dimension |
+
+### Mat - Matrix Operations
+
+| Function | Description |
+|----------|-------------|
+| `mat_vec_mult(A, v)` | Matrix-vector multiplication |
+| `transpose(A)` | Matrix transpose |
+| `valid_matrix(m, n, A)` | Check dimensions |
+
+## Canon - Verified Theories
+
+The Canon is the source of truth - all library code is extracted from these formally verified Isabelle theories.
+
+### Building Canon
+
+```bash
+cd Canon && isabelle build -D .
+```
+
+### Structure
+
+| Theory | Contents |
+|--------|----------|
+| `Prelude.thy` | Named theorems, utility lemmas |
+| `Linear/ListVec.thy` | Vector/matrix operations with proofs |
+| `Algebra/Zq.thy` | Z_q arithmetic, LWE encoding/decoding |
+
+### Code Generation
+
+Isabelle's `export_code` generates verified code:
+
+```isabelle
+export_code
+  mod_centered vec_mod encode_bit decode_bit
+  vec_add inner_prod mat_vec_mult transpose
+  in Haskell module_name Canon
+  in OCaml module_name Canon
+```
+
+## Development
+
+### Ralph Loop
+
+The Ralph Loop iteratively generates Isabelle theories with complete proofs:
 
 ```bash
 ralph/isabella-loop.sh \
-    --prompt isabelle-lwe-encryption-01 \
+    --prompt canon-zq \
     --skill isabelle-basics \
     --skill isabelle-proofs \
-    --skill isabelle-datatypes \
-    --skill isabelle-code-generation \
-    --skill isabelle-lattice-crypto \
     --iterations 5
 ```
 
-### How It Works
+### Step Loop
 
-1. **Work Phase**: AI generates an Isabelle theory
-2. **Review Phase**: Isabelle builds the theory (strict mode, no `sorry`)
-3. **Feedback Loop**: If build fails, errors are fed back to AI for next iteration
-4. **Success**: Loop exits when proofs compile, then exports Haskell code
-
-## Lattice Crypto Canon
-
-The **Canon** is a layered Isabelle library for lattice cryptography, built incrementally with complete proofs.
-
-### Canon Structure
-
-| Session | Theories | Description |
-|---------|----------|-------------|
-| `Canon_Base` | Prelude, ListVec, Zq, Norms | Mathematical infrastructure |
-| `Canon_Hardness` | LWE_Def, SIS_Def, NormalForms | Hardness assumptions |
-| `Canon_Crypto` | Regev_PKE, Commit_SIS, Decomp | Cryptographic constructions |
-| `Canon_Rings` | PolyMod, ModuleLWE | Ring variants |
-| `Canon_ZK` | Sigma_Base | Zero-knowledge proofs |
-
-### Building the Canon
+For incremental theory development:
 
 ```bash
-# Build the base layer
-isabelle build -d Canon Canon_Base
-
-# Build everything (once all theories exist)
-isabelle build -d Canon Canon_Full
-```
-
-### Step-Loop for Canon Development
-
-The **step-loop** builds Canon theories incrementally, verifying each step before proceeding:
-
-```bash
-# Standalone theory (no dependencies)
-ralph/step-loop.sh --prompt canon-prelude \
-    --output-dir Canon --theory-name Prelude --session Canon_Base
-
-# Theory with dependencies
 ralph/step-loop.sh --prompt canon-linear-listvec \
     --output-dir Canon --theory-name ListVec --theory-path Linear \
-    --session Canon_Base \
-    --imports 'Canon_Base.Prelude' \
-    --parent-session Canon_Base --session-dir Canon
+    --session Canon_Base
 ```
 
-#### Step-Loop Features
+### Benchmarks
 
-- **Step-by-step verification**: Each step is validated before proceeding
-- **Resume capability**: Run the same command to continue after interruption
-- **Session-based verification**: Test against Canon session for dependency checking
-- **Robust proof patterns**: Prompts include hardened proofs with explicit case splits
-
-See `ralph/README.md` for full step-loop documentation.
-
-### Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--prompt` | Prompt ID from `eval/prompts/` | (required) |
-| `--skill` | Skill to include (repeatable) | - |
-| `--iterations` | Max iterations | 5 |
-| `--provider` | AI provider (openai, anthropic) | openai |
-| `--model` | Model for work phase | gpt-5.2-codex |
-| `--session` | Isabelle session name | LatticeCrypto |
-
-## Single-Shot Evaluation
-
-For quick testing without iteration (allows `sorry`):
-
-### Running a Single Prompt
+Compare performance across languages:
 
 ```bash
-eval/run-prompt.sh --prompt isabelle-vector-ops-01 --skill isabelle-basics --schema default
+./bench/run-benchmarks.sh
+./bench/summarize.sh
 ```
 
-### With Multiple Skills
+## Tests
 
 ```bash
-eval/run-prompt.sh \
-    --prompt isabelle-lwe-encryption-01 \
-    --skill isabelle-basics \
-    --skill isabelle-code-generation \
-    --skill isabelle-lattice-crypto \
-    --schema default --tail
-```
-
-### Debugging Failures
-
-```bash
-eval/debug.sh --latest
-```
-
-### Cleaning Up
-
-```bash
-eval/clean.sh --all
-```
-
-## Installing Skills
-
-Skills are already configured in `.codex/skills/` (symlinks to `skills/`).
-
-### For Codex CLI
-
-Skills are auto-discovered from `.codex/skills/`. No action needed.
-
-### For Claude Code CLI
-
-```bash
-mkdir -p ~/.claude/skills
-cp -R ./skills/isabelle-* ~/.claude/skills/
-```
-
-### Project-scoped (alternative)
-
-```bash
-mkdir -p ./.claude/skills
-cp -R ./skills/isabelle-* ./.claude/skills/
-```
-
-## Proof Requirements
-
-Isabella enforces **complete proofs** - no `sorry` or `oops` allowed. The Ralph Loop iterates until Isabelle accepts all proofs.
-
-### Proof Methods
-
-| Method | Use Case |
-|--------|----------|
-| `by auto` | First choice - combines simp + classical reasoning |
-| `by simp` | Equational goals with rewrite rules |
-| `by blast` | Complex predicate logic |
-| `by arith` | Linear arithmetic |
-| `by (induct x)` | Structural induction on recursive types |
-| `by (cases x)` | Case analysis on constructors |
-
-### Tips for Complete Proofs
-
-1. Start simple - break complex lemmas into smaller steps
-2. Unfold definitions: `unfolding foo_def by auto`
-3. Add simp rules: `by (auto simp add: def1_def def2_def)`
-4. Use auxiliary lemmas for complex subgoals
-
-## Skills Reference
-
-| Skill | Description |
-|-------|-------------|
-| `isabelle-basics` | Theory files, imports, definitions, lemmas |
-| `isabelle-datatypes` | Datatypes, primrec, fun, records |
-| `isabelle-proofs` | Proof methods, induction, Isar (NO sorry!) |
-| `isabelle-code-generation` | Haskell export, code equations |
-| `isabelle-lattice-basics` | Lattice theory, partial orders |
-| `isabelle-lattice-crypto` | LWE, SIS, RLWE, security |
-| `isabelle-algebra` | Groups, rings, polynomial rings |
-| `isabelle-number-theory` | Modular arithmetic, CRT, NTT |
-
-## Lattice Cryptography Topics
-
-The theories cover:
-
-- **Lattice Basics**: Vector operations, inner products, norms
-- **Polynomial Rings**: Z_q[X]/(X^n + 1) arithmetic for RLWE
-- **LWE**: Learning With Errors problem and encryption
-- **Ring-LWE**: More efficient variant using polynomial rings
-
-## About Generated Haskell Code
-
-The Haskell code in `haskell/isabella/` is extracted from Isabelle proofs, not hand-written. It produces GHC warnings (unused imports, incomplete patterns, etc.) but this is normal - the proofs guarantee correctness even where GHC's linter complains. See `haskell/isabella/README.md` for details.
-
-## CI/CD
-
-GitHub Actions workflows automate building and testing:
-
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `ci.yml` | Push to main, PRs | Full build: Isabelle → all languages |
-| `pr-check.yml` | PRs | Fast syntax checks for Isabelle, TypeScript, OCaml, Haskell |
-| `release.yml` | Tags `v*` | Build and publish releases to GitHub, npm |
-| `benchmark.yml` | Tags `v*`, manual | Cross-language performance benchmarks |
-
-### CI Pipeline
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
-│   Isabelle  │────>│   Collect   │────>│  Build Targets  │
-│   Build     │     │   Code      │     │                 │
-└─────────────┘     └─────────────┘     │  ├─ Haskell     │
-                                        │  ├─ JavaScript  │
-                                        │  ├─ TypeScript  │
-                                        │  └─ Scala       │
-                                        └─────────────────┘
-```
-
-### Running Locally
-
-```bash
-# Full build (requires Isabelle, opam, cabal)
-./collect.sh --lang all
-./build-js.sh
-cd haskell/isabella && cabal build
+make test              # All tests
+make test-haskell      # Haskell only (28 tests)
+make test-ocaml        # OCaml only
+make test-typescript   # TypeScript only (28 tests)
 ```
 
 ## Contributing
 
-1. Add new theories in `eval/work/<prompt-name>/`
-2. Run Ralph loop to verify proofs: `ralph/isabella-loop.sh --prompt <name>`
-3. Collect generated code: `./collect.sh --lang all`
-4. Add evaluation prompts in `eval/prompts/`
+1. Add/modify theories in `Canon/`
+2. Build and verify: `make canon`
+3. Generate code: `./generate.sh`
+4. Build libraries: `make all`
+5. Run tests: `make test`
 
 ## License
 
