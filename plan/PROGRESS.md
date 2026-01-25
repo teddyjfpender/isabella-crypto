@@ -34,6 +34,7 @@
 | canon-rings-polymod | ✅ | Polynomial ring R_q = Z_q[X]/(X^n+1) |
 | canon-rings-modulelwe | ✅ | Module-LWE/SIS for Kyber/Dilithium |
 | canon-rings-ntt | ✅ | NTT for O(n log n) polynomial multiplication |
+| canon-crypto-kyber | ✅ | CRYSTALS-Kyber KEM (ML-KEM) |
 
 ---
 
@@ -81,8 +82,20 @@
 |--------|--------|-------|
 | `Rings/PolyMod.thy` | ✅ | ring_mult, ring_add, ring_context locale |
 | `Rings/ModuleLWE.thy` | ✅ | mlwe_context, msis_params, mod_inner_prod |
+| `Rings/NTT.thy` | ✅ | ntt_naive, ntt_fast, kyber/dilithium params |
 
 **Blockers**: None - Phase 4 complete
+
+---
+
+## Phase 4b: CRYSTALS Schemes (Layer D)
+
+| Theory | Status | Notes |
+|--------|--------|-------|
+| `Crypto/Kyber.thy` | ⬜ | Prompt ready: canon-crypto-kyber |
+| `Crypto/Dilithium.thy` | ⬜ | After Kyber |
+
+**Blockers**: None - NTT complete
 
 ---
 
@@ -195,14 +208,16 @@
 - [x] `is_msis_solution`
 - [x] `mlwe_context` locale
 
-### NTT.thy (pending - Layer D)
-- [ ] `primitive_root` definition (2n-th root of unity)
-- [ ] `ntt_forward` transform
-- [ ] `ntt_inverse` transform
-- [ ] `ntt_mult` (pointwise multiplication)
-- [ ] `ntt_correct` theorem (NTT(a*b) = NTT(a) ⊙ NTT(b))
-- [ ] `ntt_inverse_correct` theorem
-- [ ] `ntt_params` record (n, q, omega)
+### NTT.thy
+- [x] `is_primitive_root` definition (2n-th root of unity)
+- [x] `ntt_naive` transform
+- [x] `intt_naive` inverse transform
+- [x] `ntt_pointwise_mult` (pointwise multiplication)
+- [x] `ntt_convolution` theorem
+- [x] `ntt_inverse_correct` theorem
+- [x] `ntt_params` record (n, q, omega)
+- [x] `ntt_fast` Cooley-Tukey algorithm
+- [x] `kyber_ntt_params`, `dilithium_ntt_params`
 
 ### Kyber.thy (pending - Layer D)
 - [ ] `kyber_params` record (n=256, k, q=3329, eta)
@@ -289,6 +304,8 @@
 | 2026-01-25 | Created canon-rings-modulelwe prompt for Module-LWE/SIS |
 | 2026-01-25 | Completed ModuleLWE.thy (mlwe_context, msis_params, mod_inner_prod) |
 | 2026-01-25 | Created canon-rings-ntt prompt for Number Theoretic Transform (Layer D begins) |
+| 2026-01-25 | Completed NTT.thy (ntt_naive, ntt_fast, kyber/dilithium params) |
+| 2026-01-25 | Created canon-crypto-kyber prompt for CRYSTALS-Kyber (ML-KEM) |
 
 ---
 

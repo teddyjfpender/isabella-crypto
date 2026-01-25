@@ -309,6 +309,50 @@ fun ntt_iter_aux :: "poly \<Rightarrow> int \<Rightarrow> int \<Rightarrow> nat 
 definition ntt_fast :: "poly \<Rightarrow> int \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> poly" where
   "ntt_fast a omega q n = ntt_iter_aux (poly_mod a q) omega q n n"
 
+text \<open>
+  Fast Inverse NTT using the same Cooley-Tukey structure.
+
+  The inverse NTT uses:
+  - omega_inv (modular inverse of omega) instead of omega
+  - Final scaling by n_inv (modular inverse of n)
+
+  This achieves O(n log n) complexity for the inverse transform.
+\<close>
+
+definition intt_fast :: "poly \<Rightarrow> int \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> poly" where
+  "intt_fast a_hat omega q n = (
+    let omega_inv = mod_inverse omega q in
+    let n_inv = mod_inverse (int n) q in
+    let result = ntt_iter_aux (poly_mod a_hat q) omega_inv q n n in
+    map (\<lambda>x. (x * n_inv) mod q) result)"
+
+lemma ntt_layer_length:
+  "length (ntt_layer a omega q n len start) = length a"
+proof (induction a omega q n len start rule: ntt_layer.induct)
+  case (1 a omega q n len start)
+  then show ?case
+    by (simp del: ntt_layer.simps
+             add: ntt_layer.simps[of a omega q n len start] Let_def
+             split: prod.splits)
+qed
+
+declare ntt_layer.simps [simp del]
+
+lemma ntt_iter_aux_length:
+  "length (ntt_iter_aux a omega q n len) = length a"
+proof (induction a omega q n len rule: ntt_iter_aux.induct)
+  case (1 a omega q n len)
+  then show ?case
+    by (simp del: ntt_iter_aux.simps
+             add: ntt_iter_aux.simps[of a omega q n len] ntt_layer_length Let_def)
+qed
+
+declare ntt_iter_aux.simps [simp del]
+
+lemma intt_fast_length [simp]:
+  "length (intt_fast a_hat omega q n) = length a_hat"
+  unfolding intt_fast_def Let_def by (simp add: ntt_iter_aux_length)
+
 (* === Step 8: NTT Context Locale === *)
 locale ntt_context =
   fixes p :: ntt_params
@@ -414,7 +458,7 @@ export_code
   ntt_naive ntt_coeff
   intt_naive intt_coeff mod_inverse
   ntt_pointwise_mult
-  butterfly ntt_fast
+  butterfly ntt_fast intt_fast
   kyber_ntt_params dilithium_ntt_params
   in Haskell module_name "Canon.Rings.NTT"
 

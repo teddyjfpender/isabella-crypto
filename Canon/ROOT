@@ -31,11 +31,12 @@ session Canon_Hardness in "Hardness" = Canon_Base +
     *)
 
 (* Session 3: Cryptographic constructions *)
-session Canon_Crypto in "Crypto" = Canon_Hardness +
+session Canon_Crypto in "Crypto" = Canon_Rings +
   options [document = false]
   theories
     Regev_PKE
     Commit_SIS
+    Kyber
 
 (* Session 4: Gadget constructions *)
 session Canon_Gadgets in "Gadgets" = Canon_Base +
