@@ -1,0 +1,8 @@
+
+Attempt 1: Build failed - *** Failed to finish proof (line 342 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.uACA1zdKnm/test/PolyMod.thy"):
+Attempt 2: Review failed - 
+Attempt 3: Build failed - *** Failed to finish proof (line 342 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.uACA1zdKnm/test/PolyMod.thy"):
+Attempt 4: Review failed - 
+Attempt 5: Review failed - Issue 1: Code does not match the exact required code in the ring_mod_below_n lemma proof
+Attempt 6: Build failed - *** Failed to finish proof (line 342 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.uACA1zdKnm/test/PolyMod.thy"):
+Attempt 7: Review failed - Issue 1: The generated code doesn't match the required exact code. In the first case of the proof, the exact code uses `(length p + n - 1 - i) div n + 1 = 1` but the generated code uses `(length p + n - 1 - i) div n + 1 = 2`.

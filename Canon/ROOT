@@ -43,16 +43,17 @@ session Canon_Gadgets in "Gadgets" = Canon_Base +
   theories
     Decomp
 
+(* Session 5: Polynomial ring arithmetic *)
+session Canon_Rings in "Rings" = Canon_Base +
+  options [document = false]
+  theories
+    PolyMod
+
 (* Future sessions - uncomment as theories are added:
 
 session Canon_Commit = Canon_Gadgets +
   theories
     "Commit/Commit_SIS"
-
-session Canon_Rings = Canon_Crypto +
-  theories
-    "Rings/PolyMod"
-    "Rings/ModuleLWE"
 
 session Canon_ZK = Canon_Rings +
   theories
