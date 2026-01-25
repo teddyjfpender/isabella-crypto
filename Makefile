@@ -1,7 +1,8 @@
 # Isabella - Formally Verified Lattice Cryptography
 # Makefile for building and testing libraries
 
-.PHONY: all canon haskell ocaml typescript clean test examples help
+.PHONY: all canon haskell ocaml typescript clean test examples help \
+        test-validation test-vectors
 
 # Default target
 all: canon haskell ocaml typescript
@@ -36,7 +37,7 @@ typescript: ocaml
 	@echo "TypeScript library built successfully"
 
 # Run all tests
-test: test-haskell test-ocaml test-typescript
+test: test-haskell test-ocaml test-typescript test-validation
 
 test-haskell:
 	@echo "Running Haskell tests..."
@@ -49,6 +50,16 @@ test-ocaml:
 test-typescript:
 	@echo "Running TypeScript tests..."
 	@cd isabella.ts && node --test examples/test.mjs
+
+# Cross-validation tests against noble-post-quantum
+test-validation:
+	@echo "Running cross-validation tests..."
+	@cd tests && npm test
+
+# Generate test vectors from noble-post-quantum
+test-vectors:
+	@echo "Generating test vectors..."
+	@cd tests && npm run generate-vectors
 
 # Run examples
 examples: examples-haskell examples-ocaml examples-typescript
@@ -98,10 +109,12 @@ help:
 	@echo "  haskell             Build Haskell library"
 	@echo "  ocaml               Build OCaml library"
 	@echo "  typescript          Build TypeScript library (via js_of_ocaml)"
-	@echo "  test                Run all tests"
+	@echo "  test                Run all tests (including validation)"
 	@echo "  test-haskell        Run Haskell tests"
 	@echo "  test-ocaml          Run OCaml tests"
 	@echo "  test-typescript     Run TypeScript tests"
+	@echo "  test-validation     Run cross-validation tests vs noble-post-quantum"
+	@echo "  test-vectors        Generate test vectors from noble-post-quantum"
 	@echo "  examples            Run examples in all languages"
 	@echo "  examples-haskell    Run Haskell examples"
 	@echo "  examples-ocaml      Run OCaml examples"

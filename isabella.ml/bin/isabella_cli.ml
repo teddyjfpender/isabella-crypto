@@ -2,6 +2,12 @@
 
 open Canon
 
+(** {1 Output format} *)
+
+type output_format = Human | Json
+
+let output_format = ref Human
+
 (** {1 Helpers} *)
 
 let parse_int s =
@@ -28,8 +34,10 @@ let parse_vec s =
 let string_of_vec v =
   "[" ^ String.concat ", " (List.map string_of_int v) ^ "]"
 
-(* Unused for now, but kept for future commands *)
-let[@warning "-32"] _parse_mat s =
+let json_of_vec v =
+  "[" ^ String.concat "," (List.map string_of_int v) ^ "]"
+
+let[@warning "-32"] parse_mat s =
   (* Parse "[[1,2],[3,4]]" *)
   let s = String.trim s in
   if String.length s < 2 then None
@@ -49,8 +57,22 @@ let[@warning "-32"] _parse_mat s =
     ) rows)
     with Failure _ -> None
 
-let[@warning "-32"] _string_of_mat m =
+let[@warning "-32"] string_of_mat m =
   "[" ^ String.concat ", " (List.map string_of_vec m) ^ "]"
+
+let[@warning "-32"] json_of_mat m =
+  "[" ^ String.concat "," (List.map json_of_vec m) ^ "]"
+
+(** JSON output helpers *)
+let[@warning "-32"] output_result key value =
+  match !output_format with
+  | Human -> Printf.printf "%s = %s\n" key value
+  | Json -> Printf.printf "{\"result\":%s}\n" value
+
+let output_error msg =
+  match !output_format with
+  | Human -> Printf.eprintf "Error: %s\n" msg
+  | Json -> Printf.printf "{\"error\":\"%s\"}\n" msg
 
 (** {1 Commands} *)
 
@@ -110,9 +132,173 @@ let cmd_vec_add args =
     (match parse_vec v1_str, parse_vec v2_str with
      | Some v1, Some v2 ->
        let result = Listvec.vec_add v1 v2 in
-       Printf.printf "vec_add %s %s = %s\n" (string_of_vec v1) (string_of_vec v2) (string_of_vec result)
-     | _ -> print_endline "Error: Expected two vectors")
-  | _ -> print_endline "Usage: vec-add \"[v1]\" \"[v2]\""
+       (match !output_format with
+        | Human -> Printf.printf "vec_add %s %s = %s\n" (string_of_vec v1) (string_of_vec v2) (string_of_vec result)
+        | Json -> Printf.printf "{\"result\":%s}\n" (json_of_vec result))
+     | _ -> output_error "Expected two vectors")
+  | _ -> output_error "Usage: vec-add \"[v1]\" \"[v2]\""
+
+(** {1 NTT Commands} *)
+
+let cmd_ntt_fast args =
+  match args with
+  | [vec_str; omega_str; q_str; n_str] ->
+    (match parse_vec vec_str, parse_int omega_str, parse_int q_str, parse_int n_str with
+     | Some vec, Some omega, Some q, Some n ->
+       let result = Ntt.ntt_fast vec omega q n in
+       (match !output_format with
+        | Human -> Printf.printf "ntt_fast (n=%d, q=%d, ω=%d)\n  input:  %s\n  output: %s\n" n q omega (string_of_vec vec) (string_of_vec result)
+        | Json -> Printf.printf "{\"input\":%s,\"output\":%s,\"n\":%d,\"q\":%d,\"omega\":%d}\n" (json_of_vec vec) (json_of_vec result) n q omega)
+     | _ -> output_error "Expected: vector, omega, q, n")
+  | _ -> output_error "Usage: ntt-fast \"[vec]\" OMEGA Q N"
+
+let cmd_intt_fast args =
+  match args with
+  | [vec_str; omega_str; q_str; n_str] ->
+    (match parse_vec vec_str, parse_int omega_str, parse_int q_str, parse_int n_str with
+     | Some vec, Some omega, Some q, Some n ->
+       let result = Ntt.intt_fast vec omega q n in
+       (match !output_format with
+        | Human -> Printf.printf "intt_fast (n=%d, q=%d, ω=%d)\n  input:  %s\n  output: %s\n" n q omega (string_of_vec vec) (string_of_vec result)
+        | Json -> Printf.printf "{\"input\":%s,\"output\":%s,\"n\":%d,\"q\":%d,\"omega\":%d}\n" (json_of_vec vec) (json_of_vec result) n q omega)
+     | _ -> output_error "Expected: vector, omega, q, n")
+  | _ -> output_error "Usage: intt-fast \"[vec]\" OMEGA Q N"
+
+let cmd_ntt_pointwise args =
+  match args with
+  | [v1_str; v2_str; q_str] ->
+    (match parse_vec v1_str, parse_vec v2_str, parse_int q_str with
+     | Some v1, Some v2, Some q ->
+       let result = Ntt.ntt_pointwise_mult v1 v2 q in
+       (match !output_format with
+        | Human -> Printf.printf "ntt_pointwise_mult (q=%d)\n  a: %s\n  b: %s\n  result: %s\n" q (string_of_vec v1) (string_of_vec v2) (string_of_vec result)
+        | Json -> Printf.printf "{\"a\":%s,\"b\":%s,\"result\":%s,\"q\":%d}\n" (json_of_vec v1) (json_of_vec v2) (json_of_vec result) q)
+     | _ -> output_error "Expected: two vectors and q")
+  | _ -> output_error "Usage: ntt-pointwise \"[v1]\" \"[v2]\" Q"
+
+let cmd_power_mod args =
+  match args with
+  | [a_str; k_str; m_str] ->
+    (match parse_int a_str, parse_int k_str, parse_int m_str with
+     | Some a, Some k, Some m ->
+       let result = Ntt.power_mod a k m in
+       (match !output_format with
+        | Human -> Printf.printf "power_mod %d %d %d = %d\n" a k m result
+        | Json -> Printf.printf "{\"result\":%d}\n" result)
+     | _ -> output_error "Expected three integers")
+  | _ -> output_error "Usage: power-mod A K M"
+
+let cmd_mod_inverse args =
+  match args with
+  | [a_str; m_str] ->
+    (match parse_int a_str, parse_int m_str with
+     | Some a, Some m ->
+       let result = Ntt.mod_inverse a m in
+       (match !output_format with
+        | Human -> Printf.printf "mod_inverse %d %d = %d\n" a m result
+        | Json -> Printf.printf "{\"result\":%d}\n" result)
+     | _ -> output_error "Expected two integers")
+  | _ -> output_error "Usage: mod-inverse A M"
+
+let cmd_is_primitive_root args =
+  match args with
+  | [omega_str; n_str; q_str] ->
+    (match parse_int omega_str, parse_int n_str, parse_int q_str with
+     | Some omega, Some n, Some q ->
+       let result = Ntt.is_primitive_root omega n q in
+       (match !output_format with
+        | Human -> Printf.printf "is_primitive_root %d %d %d = %b\n" omega n q result
+        | Json -> Printf.printf "{\"result\":%b}\n" result)
+     | _ -> output_error "Expected three integers")
+  | _ -> output_error "Usage: is-primitive-root OMEGA N Q"
+
+(** {1 Polynomial Ring Commands} *)
+
+let cmd_poly_mult args =
+  match args with
+  | [p1_str; p2_str] ->
+    (match parse_vec p1_str, parse_vec p2_str with
+     | Some p1, Some p2 ->
+       let result = Polymod.poly_mult p1 p2 in
+       (match !output_format with
+        | Human -> Printf.printf "poly_mult\n  a: %s\n  b: %s\n  result: %s\n" (string_of_vec p1) (string_of_vec p2) (string_of_vec result)
+        | Json -> Printf.printf "{\"a\":%s,\"b\":%s,\"result\":%s}\n" (json_of_vec p1) (json_of_vec p2) (json_of_vec result))
+     | _ -> output_error "Expected two polynomials")
+  | _ -> output_error "Usage: poly-mult \"[p1]\" \"[p2]\""
+
+let cmd_ring_mult args =
+  match args with
+  | [p1_str; p2_str; n_str; q_str] ->
+    (match parse_vec p1_str, parse_vec p2_str, parse_int n_str, parse_int q_str with
+     | Some p1, Some p2, Some n, Some q ->
+       let result = Polymod.ring_mult p1 p2 n q in
+       (match !output_format with
+        | Human -> Printf.printf "ring_mult (n=%d, q=%d) mod X^n+1\n  a: %s\n  b: %s\n  result: %s\n" n q (string_of_vec p1) (string_of_vec p2) (string_of_vec result)
+        | Json -> Printf.printf "{\"a\":%s,\"b\":%s,\"result\":%s,\"n\":%d,\"q\":%d}\n" (json_of_vec p1) (json_of_vec p2) (json_of_vec result) n q)
+     | _ -> output_error "Expected two polynomials, n, and q")
+  | _ -> output_error "Usage: ring-mult \"[p1]\" \"[p2]\" N Q"
+
+(** {1 Kyber Commands} *)
+
+let cmd_kyber_ntt args =
+  match args with
+  | [vec_str] ->
+    (match parse_vec vec_str with
+     | Some vec ->
+       let result = Kyber.kyber_ntt vec in
+       (match !output_format with
+        | Human -> Printf.printf "kyber_ntt\n  input:  %s\n  output: %s\n" (string_of_vec vec) (string_of_vec result)
+        | Json -> Printf.printf "{\"input\":%s,\"output\":%s}\n" (json_of_vec vec) (json_of_vec result))
+     | _ -> output_error "Expected a vector")
+  | _ -> output_error "Usage: kyber-ntt \"[vec]\""
+
+let cmd_kyber_intt args =
+  match args with
+  | [vec_str] ->
+    (match parse_vec vec_str with
+     | Some vec ->
+       let result = Kyber.kyber_intt vec in
+       (match !output_format with
+        | Human -> Printf.printf "kyber_intt\n  input:  %s\n  output: %s\n" (string_of_vec vec) (string_of_vec result)
+        | Json -> Printf.printf "{\"input\":%s,\"output\":%s}\n" (json_of_vec vec) (json_of_vec result))
+     | _ -> output_error "Expected a vector")
+  | _ -> output_error "Usage: kyber-intt \"[vec]\""
+
+let cmd_kyber_poly_mult args =
+  match args with
+  | [p1_str; p2_str] ->
+    (match parse_vec p1_str, parse_vec p2_str with
+     | Some p1, Some p2 ->
+       let result = Kyber.kyber_poly_mult_ntt p1 p2 in
+       (match !output_format with
+        | Human -> Printf.printf "kyber_poly_mult_ntt\n  a: %s\n  b: %s\n  result: %s\n" (string_of_vec p1) (string_of_vec p2) (string_of_vec result)
+        | Json -> Printf.printf "{\"a\":%s,\"b\":%s,\"result\":%s}\n" (json_of_vec p1) (json_of_vec p2) (json_of_vec result))
+     | _ -> output_error "Expected two polynomials")
+  | _ -> output_error "Usage: kyber-poly-mult \"[p1]\" \"[p2]\""
+
+let cmd_kyber_encode_msg args =
+  match args with
+  | [msg_str] ->
+    (match parse_vec msg_str with
+     | Some msg ->
+       let result = Kyber.kyber_encode_msg msg in
+       (match !output_format with
+        | Human -> Printf.printf "kyber_encode_msg\n  input:  %s\n  output: %s\n" (string_of_vec msg) (string_of_vec result)
+        | Json -> Printf.printf "{\"input\":%s,\"output\":%s}\n" (json_of_vec msg) (json_of_vec result))
+     | _ -> output_error "Expected a message vector (0s and 1s)")
+  | _ -> output_error "Usage: kyber-encode-msg \"[0,1,0,1,...]\""
+
+let cmd_kyber_decode_msg args =
+  match args with
+  | [poly_str] ->
+    (match parse_vec poly_str with
+     | Some poly ->
+       let result = Kyber.kyber_decode_msg poly in
+       (match !output_format with
+        | Human -> Printf.printf "kyber_decode_msg\n  input:  %s\n  output: %s\n" (string_of_vec poly) (string_of_vec result)
+        | Json -> Printf.printf "{\"input\":%s,\"output\":%s}\n" (json_of_vec poly) (json_of_vec result))
+     | _ -> output_error "Expected a polynomial")
+  | _ -> output_error "Usage: kyber-decode-msg \"[poly]\""
 
 (** {1 Examples} *)
 
@@ -221,9 +407,13 @@ let run_examples () =
 let show_help () =
   print_endline "Isabella - Formally Verified Lattice Cryptography";
   print_endline "";
-  print_endline "Usage: isabella_cli <command> [options]";
+  print_endline "Usage: isabella_cli [--json] <command> [options]";
   print_endline "";
-  print_endline "Commands:";
+  print_endline "Global Options:";
+  print_endline "  --json             Output results in JSON format";
+  print_endline "  --help, -h         Show this help message";
+  print_endline "";
+  print_endline "Basic Commands:";
   print_endline "  examples           Run example computations";
   print_endline "  mod-centered X Q   Compute centered modular reduction";
   print_endline "  dist0 Q X          Compute distance from zero in Z_q";
@@ -232,29 +422,69 @@ let show_help () =
   print_endline "  inner-prod V1 V2   Compute inner product of two vectors";
   print_endline "  vec-add V1 V2      Add two vectors";
   print_endline "";
-  print_endline "Options:";
-  print_endline "  --help, -h         Show this help message";
+  print_endline "NTT Commands:";
+  print_endline "  ntt-fast V W Q N   Fast NTT (Cooley-Tukey)";
+  print_endline "  intt-fast V W Q N  Fast inverse NTT";
+  print_endline "  ntt-pointwise A B Q  Pointwise multiplication in NTT domain";
+  print_endline "  power-mod A K M    Modular exponentiation a^k mod m";
+  print_endline "  mod-inverse A M    Modular multiplicative inverse";
+  print_endline "  is-primitive-root W N Q  Check if omega is primitive root";
+  print_endline "";
+  print_endline "Polynomial Commands:";
+  print_endline "  poly-mult P1 P2 Q  Polynomial multiplication mod q";
+  print_endline "  ring-mult P1 P2 N Q  Ring multiplication mod (X^n+1, q)";
+  print_endline "";
+  print_endline "Kyber Commands:";
+  print_endline "  kyber-ntt V        Kyber NTT (n=256, q=3329)";
+  print_endline "  kyber-intt V       Kyber inverse NTT";
+  print_endline "  kyber-poly-mult A B  Kyber polynomial multiplication via NTT";
+  print_endline "  kyber-encode-msg M Encode message bits";
+  print_endline "  kyber-decode-msg P Decode polynomial to message bits";
   print_endline "";
   print_endline "Examples:";
   print_endline "  isabella_cli mod-centered 7 5";
-  print_endline "  isabella_cli dist0 256 130";
-  print_endline "  isabella_cli encode-bit 256 1";
-  print_endline "  isabella_cli inner-prod \"1,2,3\" \"4,5,6\"";
+  print_endline "  isabella_cli --json ntt-fast \"[1,2,3,4]\" 17 3329 4";
+  print_endline "  isabella_cli kyber-ntt \"[1,0,0,...,0]\"  # 256 coefficients";
   print_endline "";
   print_endline "All functions are formally verified in Isabelle/HOL."
 
 (** {1 Main} *)
 
+let run_command cmd args =
+  match cmd with
+  | "examples" | "example" -> run_examples ()
+  | "mod-centered" -> cmd_mod_centered args
+  | "dist0" -> cmd_dist0 args
+  | "encode-bit" -> cmd_encode_bit args
+  | "decode-bit" -> cmd_decode_bit args
+  | "inner-prod" -> cmd_inner_prod args
+  | "vec-add" -> cmd_vec_add args
+  (* NTT commands *)
+  | "ntt-fast" -> cmd_ntt_fast args
+  | "intt-fast" -> cmd_intt_fast args
+  | "ntt-pointwise" -> cmd_ntt_pointwise args
+  | "power-mod" -> cmd_power_mod args
+  | "mod-inverse" -> cmd_mod_inverse args
+  | "is-primitive-root" -> cmd_is_primitive_root args
+  (* Polynomial commands *)
+  | "poly-mult" -> cmd_poly_mult args
+  | "ring-mult" -> cmd_ring_mult args
+  (* Kyber commands *)
+  | "kyber-ntt" -> cmd_kyber_ntt args
+  | "kyber-intt" -> cmd_kyber_intt args
+  | "kyber-poly-mult" -> cmd_kyber_poly_mult args
+  | "kyber-encode-msg" -> cmd_kyber_encode_msg args
+  | "kyber-decode-msg" -> cmd_kyber_decode_msg args
+  | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
+
 let () =
   let args = Array.to_list Sys.argv |> List.tl in
+  (* Handle --json flag *)
+  let args = match args with
+    | "--json" :: rest -> output_format := Json; rest
+    | _ -> args
+  in
   match args with
   | [] -> show_help ()
   | ["--help"] | ["-h"] | ["help"] -> show_help ()
-  | ["examples"] | ["example"] -> run_examples ()
-  | "mod-centered" :: rest -> cmd_mod_centered rest
-  | "dist0" :: rest -> cmd_dist0 rest
-  | "encode-bit" :: rest -> cmd_encode_bit rest
-  | "decode-bit" :: rest -> cmd_decode_bit rest
-  | "inner-prod" :: rest -> cmd_inner_prod rest
-  | "vec-add" :: rest -> cmd_vec_add rest
-  | cmd :: _ -> Printf.printf "Unknown command: %s\nUse --help for usage.\n" cmd
+  | cmd :: rest -> run_command cmd rest

@@ -51,6 +51,15 @@ isabella.ts/node_modules/
 isabella.ts/**/*.tsbuildinfo
 
 # --------------------------------------------
+# Tests - Cross-validation harness
+# --------------------------------------------
+tests/node_modules/
+tests/dist/
+tests/**/*.tsbuildinfo
+# Keep test vectors (valuable for regression testing)
+# tests/vectors/*.json  # DO NOT IGNORE
+
+# --------------------------------------------
 # Old directories (moved to old/)
 # --------------------------------------------
 # haskell/, ocaml/, javascript/, typescript/, scala/, sml/
