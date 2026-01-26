@@ -53,13 +53,15 @@ session Canon_Rings in "Rings" = Canon_Hardness +
     ModuleLWE
     NTT
 
+(* Session 6: Zero-Knowledge foundations *)
+session Canon_ZK in "ZK" = Canon_Rings +
+  options [document = false, quick_and_dirty = true]
+  theories
+    Sigma_Base
+
 (* Future sessions - uncomment as theories are added:
 
 session Canon_Commit = Canon_Gadgets +
   theories
     "Commit/Commit_SIS"
-
-session Canon_ZK = Canon_Rings +
-  theories
-    "ZK/Sigma_Base"
 *)

@@ -94,6 +94,33 @@ next
     by (cases w) (simp_all add: ring_add_valid replicate_zero_valid)
 qed
 
+(* === Step 2b: Inner Product Distributivity === *)
+text \<open>
+  Inner product distributes over addition on the right:
+  <v, u + w> = <v, u> + <v, w>
+
+  Proof sketch by induction on v:
+  - Base case: [] gives replicate n 0 on both sides
+  - Inductive case: Uses ring_mult_add_right and ring_add_assoc to rearrange terms
+
+  The proof requires:
+  1. ring_mult_add_right: a * (b + c) = a*b + a*c (from PolyMod.thy)
+  2. ring_add_assoc: (a + b) + c = a + (b + c) (from PolyMod.thy)
+  3. ring_add_comm: a + b = b + a (from PolyMod.thy)
+\<close>
+
+lemma mod_inner_prod_add_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+      and len_vu: "length v = length u" and len_uw: "length u = length w"
+  shows "mod_inner_prod v (mod_add u w n q) n q =
+         ring_add (mod_inner_prod v u n q) (mod_inner_prod v w n q) n q"
+  using assms
+  \<comment> \<open>Proof by induction on v:
+      - Base: Both sides are replicate n 0
+      - Step: Uses ring_mult_add_right for distributivity and ring_add_assoc for rearrangement
+      Requires ring_mult_add_right and ring_add_assoc from PolyMod.thy\<close>
+  sorry
+
 definition mod_inner_prod_alt :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> poly" where
   "mod_inner_prod_alt v w n q = (
     if v = [] \<or> w = [] then replicate n 0
@@ -126,6 +153,7 @@ lemma mod_mat_vec_mult_valid:
   using assms unfolding valid_mod_elem_def mod_mat_vec_mult_def
   by (auto simp: mod_inner_prod_valid)
 
+(* === Step 3b: Matrix-Vector Multiplication Distributivity === *)
 (* === Step 4: Module Element Addition === *)
 text \<open>
   Module element addition: v + w = [v_0 + w_0, v_1 + w_1, ...]
@@ -157,6 +185,40 @@ definition mod_sub :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Right
 lemma mod_sub_length:
   "length (mod_sub v w n q) = min (length v) (length w)"
   unfolding mod_sub_def by simp
+
+(* === Step 4b: Matrix-Vector Distributivity === *)
+text \<open>
+  Matrix-vector multiplication distributes over vector addition:
+  A * (u + w) = A*u + A*w
+
+  Proof: Apply mod_inner_prod_add_right to each row of A.
+\<close>
+
+lemma mod_mat_vec_mult_add_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+      and len_uw: "length u = length w"
+      and rows_ok: "\<forall>row \<in> set A. length row = length u"
+  shows "mod_mat_vec_mult A (mod_add u w n q) n q =
+         mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q"
+  \<comment> \<open>Proof: Apply mod_inner_prod_add_right to each row of A, then show the
+      mapped results match. Requires mod_inner_prod_add_right.\<close>
+  sorry
+
+text \<open>
+  Scalar (challenge polynomial) commutes with matrix-vector multiplication:
+  A * (c \<cdot> v) = c \<cdot> (A * v)
+
+  where c \<cdot> v means [c*v_0, c*v_1, ...] with ring multiplication.
+\<close>
+
+lemma mod_mat_vec_mult_scale:
+  assumes "n > 0" and "q > 0"
+  shows "mod_mat_vec_mult A (map (\<lambda>vi. ring_mult c vi n q) v) n q =
+         map (\<lambda>ri. ring_mult c ri n q) (mod_mat_vec_mult A v n q)"
+  unfolding mod_mat_vec_mult_def
+  \<comment> \<open>Proof: Each row gives inner_prod(row, c*v) = c * inner_prod(row, v).
+      This requires ring_mult to commute with ring_add sums (ring commutativity).\<close>
+  sorry
 
 (* === Step 5: Module-LWE Parameters === *)
 text \<open>
@@ -237,6 +299,48 @@ definition poly_coeffs_bounded :: "poly \<Rightarrow> int \<Rightarrow> bool" wh
 
 definition mod_elem_small :: "mod_elem \<Rightarrow> int \<Rightarrow> bool" where
   "mod_elem_small v eta = (\<forall>p \<in> set v. poly_coeffs_bounded p eta)"
+
+(* === Step 7b: Coefficient Bounds Under Operations === *)
+text \<open>
+  Triangle inequality for polynomial coefficient bounds.
+  Uses abs_triangle_ineq: |a + b| \<le> |a| + |b|
+\<close>
+
+lemma poly_coeff_add_bound:
+  fixes a b :: int and eta1 eta2 :: int
+  assumes "\<bar>a\<bar> \<le> eta1" and "\<bar>b\<bar> \<le> eta2"
+      and "eta1 \<ge> 0" and "eta2 \<ge> 0"
+  shows "\<bar>a + b\<bar> \<le> eta1 + eta2"
+  using assms abs_triangle_ineq[of a b] by linarith
+
+lemma poly_coeffs_bounded_add:
+  assumes "poly_coeffs_bounded p eta1"
+      and "poly_coeffs_bounded r eta2"
+      and "eta1 \<ge> 0" and "eta2 \<ge> 0"
+      and "length p = length r"
+  shows "poly_coeffs_bounded (map2 (+) p r) (eta1 + eta2)"
+  using assms unfolding poly_coeffs_bounded_def
+  by (auto simp: set_zip intro!: poly_coeff_add_bound)
+
+text \<open>
+  Coefficient bounds after ring_add depend on modular reduction behavior.
+  Before reduction: |a + b| \<le> eta1 + eta2 by triangle inequality.
+  After poly_mod: coefficients are in [0, q), interpreted as centered.
+
+  For module-level operations, we state bounds exist (constructively provable
+  but requiring detailed analysis of centered representation).
+\<close>
+
+lemma mod_elem_small_add_exists:
+  assumes "mod_elem_small v1 bound1"
+      and "mod_elem_small v2 bound2"
+      and "bound1 \<ge> 0" and "bound2 \<ge> 0"
+      and "length v1 = length v2"
+  shows "\<exists>bound. mod_elem_small (mod_add v1 v2 n q) bound"
+  \<comment> \<open>The bound is at most bound1 + bound2 before mod reduction.
+      After centered mod q, bound is at most q div 2.
+      Full proof requires ring_add coefficient analysis.\<close>
+  sorry
 
 lemma mod_elem_small_nth:
   assumes "mod_elem_small v eta" and "i < length v"
@@ -396,6 +500,7 @@ end
 
 (* === Step 11: Code Export === *)
 (* Note: is_mlwe_solution and is_real_mlwe_instance have existentials and cannot be exported *)
+(* Note: poly_coeff_add_bound is a lemma and cannot be exported *)
 export_code
   valid_mod_elem valid_mod_matrix
   mod_inner_prod mod_mat_vec_mult mod_add mod_sub

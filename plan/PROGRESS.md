@@ -36,6 +36,7 @@
 | canon-rings-ntt | ✅ | NTT for O(n log n) polynomial multiplication |
 | canon-crypto-kyber | ✅ | CRYSTALS-Kyber KEM (ML-KEM) |
 | canon-crypto-dilithium | ✅ | CRYSTALS-Dilithium signatures (ML-DSA) |
+| canon-zk-sigma-base | ✅ | Sigma protocols for ZK proofs |
 
 ---
 
@@ -94,19 +95,22 @@
 | Theory | Status | Notes |
 |--------|--------|-------|
 | `Crypto/Kyber.thy` | ✅ | kyber_keygen, kyber_encrypt, kyber_decrypt |
-| `Crypto/Dilithium.thy` | ⬜ | Prompt ready: canon-crypto-dilithium |
+| `Crypto/Dilithium.thy` | ✅ | dil_keygen, dil_sign, dil_verify |
 
-**Blockers**: None - Kyber complete
+**Blockers**: None - Phase 4b complete (Kyber + Dilithium)
 
 ---
 
-## Phase 5: ZK Framework
+## Phase 5: ZK Framework (LaZer Foundation)
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `ZK/Sigma_Base.thy` | ⬜ | new: 3-move protocols |
+| `ZK/Sigma_Base.thy` | ⬜ | Prompt ready: canon-zk-sigma-base |
+| `ZK/FiatShamir.thy` | ⬜ | Non-interactive via hashing |
+| `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness |
+| `ZK/LinearRelations.thy` | ⬜ | LaZer-style linear proofs |
 
-**Blockers**: Phase 4 completion
+**Blockers**: None - Phase 4b complete (Kyber + Dilithium done)
 
 ---
 
@@ -231,23 +235,29 @@
 - [x] `kyber_encaps_simple`, `kyber_decaps_simple`
 - [x] `kyber_correct` locale with `kem_correctness` theorem
 
-### Dilithium.thy (pending - Layer D)
-- [ ] `dilithium_params` record (n=256, k, l, q=8380417, eta, gamma)
-- [ ] `mldsa44_params`, `mldsa65_params`, `mldsa87_params`
-- [ ] `power2round_coeff`, `power2round_vec`
-- [ ] `highbits_coeff`, `lowbits_coeff`, `decompose_coeff`
-- [ ] `makehint_coeff`, `usehint_coeff`
-- [ ] `dil_keygen`
-- [ ] `dil_sign` (with rejection sampling predicate)
-- [ ] `dil_verify`
-- [ ] `dilithium_correct` locale with `dilithium_correctness` theorem
+### Dilithium.thy (complete - Layer D)
+- [x] `dilithium_params` record (n=256, k, l, q=8380417, eta, gamma)
+- [x] `mldsa44_params`, `mldsa65_params`, `mldsa87_params`
+- [x] `power2round_coeff`, `power2round_vec`
+- [x] `highbits_coeff`, `lowbits_coeff`, `decompose_coeff`
+- [x] `makehint_coeff`, `usehint_coeff`
+- [x] `dil_keygen`
+- [x] `dil_sign` (with rejection sampling predicate)
+- [x] `dil_verify`
+- [x] `dilithium_correct` locale with `dilithium_correctness` theorem
 
-### Sigma_Base.thy
-- [ ] Transcript type
-- [ ] Completeness definition
-- [ ] Soundness definition
-- [ ] HVZK definition
-- [ ] Linear relation instance
+### Sigma_Base.thy (LaZer Foundation)
+- [ ] `transcript` type (commitment, challenge, response)
+- [ ] `sigma_complete` definition
+- [ ] `sigma_special_sound` definition (2-special soundness)
+- [ ] `sigma_hvzk` definition
+- [ ] `linear_sigma_params` record
+- [ ] `linear_relation` definition
+- [ ] `linear_commit`, `linear_respond`, `linear_verify`
+- [ ] `linear_sigma_complete` theorem
+- [ ] `extract_witness` function
+- [ ] `valid_sigma_challenge` (sparse ternary)
+- [ ] `linear_sigma_context` locale
 
 ---
 
@@ -317,6 +327,8 @@
 | 2026-01-25 | Created canon-crypto-kyber prompt for CRYSTALS-Kyber (ML-KEM) |
 | 2026-01-25 | Completed Kyber.thy (kyber_keygen, kyber_encrypt, kyber_decrypt, kem_correctness) |
 | 2026-01-25 | Created canon-crypto-dilithium prompt for CRYSTALS-Dilithium (ML-DSA) |
+| 2026-01-25 | Completed Dilithium.thy (Phase 4b complete) |
+| 2026-01-25 | Created canon-zk-sigma-base prompt (Phase 5 begins - LaZer foundation) |
 
 ---
 

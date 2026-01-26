@@ -146,6 +146,16 @@ lemma poly_scale_distrib:
   unfolding poly_scale_def poly_add_def poly_coeff_def
   by (intro nth_equalityI) (auto simp: algebra_simps)
 
+(* === Step 4b: Polynomial Addition Associativity === *)
+text \<open>
+  Polynomial addition is associative: (p + q) + r = p + (q + r)
+\<close>
+
+lemma poly_add_assoc:
+  "poly_add (poly_add p q) r = poly_add p (poly_add q r)"
+  unfolding poly_add_def poly_coeff_def
+  by (intro nth_equalityI) (auto simp: algebra_simps)
+
 (* === Step 5: Polynomial Multiplication === *)
 text \<open>
   Polynomial multiplication:
@@ -227,6 +237,166 @@ next
   qed
 qed
 
+(* === Step 5b: Polynomial Multiplication Distributivity === *)
+text \<open>
+  Polynomial multiplication distributes over addition:
+  a * (b + c) = a*b + a*c
+
+  Proof uses sum.distrib: (\<Sum>i. f i + g i) = (\<Sum>i. f i) + (\<Sum>i. g i)
+\<close>
+
+lemma poly_mult_coeff_add_right:
+  "poly_mult_coeff a (poly_add b c) k =
+   poly_mult_coeff a b k + poly_mult_coeff a c k"
+proof -
+  have "poly_mult_coeff a (poly_add b c) k =
+        (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff (poly_add b c) (k - j))"
+    unfolding poly_mult_coeff_def by simp
+  also have "... = (\<Sum>j = 0 ..< Suc k. poly_coeff a j * (poly_coeff b (k - j) + poly_coeff c (k - j)))"
+  proof -
+    have "\<forall>j < Suc k. poly_coeff (poly_add b c) (k - j) = poly_coeff b (k - j) + poly_coeff c (k - j)"
+      unfolding poly_add_def poly_coeff_def by auto
+    thus ?thesis by (intro sum.cong) auto
+  qed
+  also have "... = (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff b (k - j) +
+                                        poly_coeff a j * poly_coeff c (k - j))"
+    by (simp add: algebra_simps)
+  also have "... = (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff b (k - j)) +
+                   (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff c (k - j))"
+    by (simp add: sum.distrib)
+  also have "... = poly_mult_coeff a b k + poly_mult_coeff a c k"
+    unfolding poly_mult_coeff_def by simp
+  finally show ?thesis .
+qed
+
+text \<open>
+  Full distributivity lemma for polynomial multiplication.
+  Note: This requires careful handling of empty list cases.
+\<close>
+
+lemma poly_mult_coeff_zero_beyond:
+  assumes "k \<ge> length p + length q - 1" and "p \<noteq> []" and "q \<noteq> []"
+  shows "poly_mult_coeff p q k = 0"
+proof -
+  have len_p: "length p \<ge> 1" using assms(2) by (cases p) auto
+  have len_q: "length q \<ge> 1" using assms(3) by (cases q) auto
+
+  {
+    fix j :: nat assume j_range: "j < Suc k"
+    have "poly_coeff p j * poly_coeff q (k - j) = 0"
+    proof (cases "j < length p")
+      case True
+      have kj_bound: "k - j \<ge> length q"
+        using assms(1) True len_p len_q by linarith
+      thus ?thesis by simp
+    next
+      case False
+      thus ?thesis by simp
+    qed
+  }
+  hence all_zero: "\<forall>j < Suc k. poly_coeff p j * poly_coeff q (k - j) = 0" by blast
+
+  have "(\<Sum>j = 0 ..< Suc k. poly_coeff p j * poly_coeff q (k - j)) =
+        (\<Sum>j = 0 ..< Suc k. 0)"
+    using all_zero by (intro sum.cong) auto
+  also have "... = 0" by simp
+  finally show ?thesis unfolding poly_mult_coeff_def .
+qed
+
+lemma poly_mult_add_right:
+  assumes "b \<noteq> []" and "c \<noteq> []"
+  shows "poly_mult a (poly_add b c) =
+         poly_add (poly_mult a b) (poly_mult a c)"
+proof (cases "a = []")
+  case True
+  then show ?thesis by simp
+next
+  case False
+  have bc_ne: "poly_add b c \<noteq> []"
+  proof -
+    have len_pos: "length (poly_add b c) \<ge> 1"
+    proof -
+      have "length b \<ge> 1" using assms(1) by (cases b) auto
+      hence "max (length b) (length c) \<ge> 1" by simp
+      thus ?thesis by (simp add: poly_add_length)
+    qed
+    thus ?thesis by auto
+  qed
+
+  \<comment> \<open>Length analysis\<close>
+  have len_bc: "length (poly_add b c) = max (length b) (length c)"
+    by (simp add: poly_add_length)
+  have len_left: "length (poly_mult a (poly_add b c)) = length a + max (length b) (length c) - 1"
+    using False bc_ne len_bc by (simp add: poly_mult_length)
+  have len_ab: "length (poly_mult a b) = length a + length b - 1"
+    using False assms(1) by (simp add: poly_mult_length)
+  have len_ac: "length (poly_mult a c) = length a + length c - 1"
+    using False assms(2) by (simp add: poly_mult_length)
+  have len_right: "length (poly_add (poly_mult a b) (poly_mult a c)) =
+                   max (length a + length b - 1) (length a + length c - 1)"
+    by (simp add: poly_add_length len_ab len_ac)
+  have len_eq: "length (poly_mult a (poly_add b c)) =
+                length (poly_add (poly_mult a b) (poly_mult a c))"
+  proof -
+    have "length a \<ge> 1" using False by (cases a) auto
+    have "length b \<ge> 1" using assms(1) by (cases b) auto
+    have "length c \<ge> 1" using assms(2) by (cases c) auto
+    \<comment> \<open>Key: length a + max (length b) (length c) - 1 =
+              max (length a + length b - 1) (length a + length c - 1)\<close>
+    have "length a + max (length b) (length c) - 1 =
+          max (length a + length b - 1) (length a + length c - 1)"
+      using \<open>length a \<ge> 1\<close> \<open>length b \<ge> 1\<close> \<open>length c \<ge> 1\<close> by auto
+    thus ?thesis using len_left len_right by simp
+  qed
+
+  show ?thesis
+  proof (intro nth_equalityI[OF len_eq])
+    fix k assume k_bound: "k < length (poly_mult a (poly_add b c))"
+
+    have left_coeff: "(poly_mult a (poly_add b c)) ! k = poly_mult_coeff a (poly_add b c) k"
+      using k_bound False bc_ne unfolding poly_mult_def by simp
+
+    have k_lt_right: "k < length (poly_add (poly_mult a b) (poly_mult a c))"
+      using k_bound len_eq by simp
+    have k_lt_max: "k < max (length (poly_mult a b)) (length (poly_mult a c))"
+      using k_lt_right by (simp add: poly_add_length)
+
+    have right_coeff: "(poly_add (poly_mult a b) (poly_mult a c)) ! k =
+                       poly_coeff (poly_mult a b) k + poly_coeff (poly_mult a c) k"
+      using k_lt_max by (simp add: poly_add_coeff)
+
+    have mult_coeff_ab: "poly_coeff (poly_mult a b) k = poly_mult_coeff a b k"
+    proof (cases "k < length a + length b - 1")
+      case True
+      thus ?thesis using False assms(1) unfolding poly_mult_def poly_coeff_def by auto
+    next
+      case k_beyond: False
+      have "poly_coeff (poly_mult a b) k = 0"
+        using k_beyond \<open>a \<noteq> []\<close> assms(1) by (simp add: poly_mult_length)
+      moreover have "poly_mult_coeff a b k = 0"
+        using k_beyond \<open>a \<noteq> []\<close> assms(1) poly_mult_coeff_zero_beyond by auto
+      ultimately show ?thesis by simp
+    qed
+
+    have mult_coeff_ac: "poly_coeff (poly_mult a c) k = poly_mult_coeff a c k"
+    proof (cases "k < length a + length c - 1")
+      case True
+      thus ?thesis using False assms(2) unfolding poly_mult_def poly_coeff_def by auto
+    next
+      case k_beyond: False
+      have "poly_coeff (poly_mult a c) k = 0"
+        using k_beyond \<open>a \<noteq> []\<close> assms(2) by (simp add: poly_mult_length)
+      moreover have "poly_mult_coeff a c k = 0"
+        using k_beyond \<open>a \<noteq> []\<close> assms(2) poly_mult_coeff_zero_beyond by auto
+      ultimately show ?thesis by simp
+    qed
+
+    show "(poly_mult a (poly_add b c)) ! k = (poly_add (poly_mult a b) (poly_mult a c)) ! k"
+      using left_coeff right_coeff mult_coeff_ab mult_coeff_ac poly_mult_coeff_add_right
+      by simp
+  qed
+qed
+
 (* === Step 6: Modular Reduction of Coefficients === *)
 text \<open>
   Reduce polynomial coefficients modulo q.
@@ -254,6 +424,40 @@ lemma poly_mod_idem:
   assumes "q > 0"
   shows "poly_mod (poly_mod p q) q = poly_mod p q"
   unfolding poly_mod_def using assms by simp
+
+(* === Step 6b: Centered Coefficient Interpretation === *)
+text \<open>
+  For "smallness" bounds, we interpret coefficients in centered form:
+  coefficients in [0, q) are mapped to (-q/2, q/2] by subtracting q when > q/2.
+
+  This is important for ZK protocols where we need ||z|| < gamma - beta.
+\<close>
+
+definition centered_coeff :: "int \<Rightarrow> int \<Rightarrow> int" where
+  "centered_coeff c q = (if c > q div 2 then c - q else c)"
+
+lemma centered_coeff_bound:
+  assumes "0 \<le> c" and "c < q" and "q > 0"
+  shows "\<bar>centered_coeff c q\<bar> \<le> q div 2 + q mod 2"
+  unfolding centered_coeff_def using assms by auto
+
+lemma centered_coeff_range:
+  assumes "0 \<le> c" and "c < q" and "q > 0"
+  shows "centered_coeff c q > - (q div 2 + 1)"
+    and "centered_coeff c q \<le> q div 2"
+  unfolding centered_coeff_def using assms by auto
+
+text \<open>
+  After poly_mod, all coefficients are in [0, q).
+  We can interpret them as centered for bound analysis.
+\<close>
+
+definition poly_centered :: "poly \<Rightarrow> int \<Rightarrow> poly" where
+  "poly_centered p q = map (\<lambda>c. centered_coeff c q) p"
+
+lemma poly_centered_length [simp]:
+  "length (poly_centered p q) = length p"
+  unfolding poly_centered_def by simp
 
 lemma poly_mod_add:
   assumes "q > 0"
@@ -423,6 +627,268 @@ next
   qed
 qed
 
+(* === Step 7b: Ring Mod Distributivity === *)
+text \<open>
+  ring_mod distributes over poly_add:
+  ring_mod (p + q) n = ring_mod p n + ring_mod q n
+
+  This follows from linearity of the reduction modulo X^n + 1.
+  Each coefficient of ring_mod is a sum of coefficients from the input
+  (with alternating signs for wraparound), and addition distributes over this.
+\<close>
+
+lemma poly_coeff_poly_add:
+  "poly_coeff (poly_add p r) k = poly_coeff p k + poly_coeff r k"
+  unfolding poly_add_def poly_coeff_def by auto
+
+lemma sum_list_map_add:
+  fixes f g :: "nat \<Rightarrow> int"
+  shows "sum_list (map (\<lambda>k. f k + g k) xs) = sum_list (map f xs) + sum_list (map g xs)"
+proof (induct xs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a xs)
+  have "sum_list (map (\<lambda>k. f k + g k) (a # xs)) = f a + g a + sum_list (map (\<lambda>k. f k + g k) xs)"
+    by simp
+  also have "... = f a + g a + (sum_list (map f xs) + sum_list (map g xs))"
+    using Cons by simp
+  also have "... = (f a + sum_list (map f xs)) + (g a + sum_list (map g xs))"
+    by (simp add: algebra_simps)
+  also have "... = sum_list (map f (a # xs)) + sum_list (map g (a # xs))"
+    by simp
+  finally show ?case .
+qed
+
+lemma sum_list_all_zero:
+  fixes f :: "nat \<Rightarrow> int"
+  assumes "\<And>k. k \<in> set xs \<Longrightarrow> f k = 0"
+  shows "sum_list (map f xs) = 0"
+  using assms by (induct xs) auto
+
+(* Helper for showing a mapped sum over a range is zero when all terms are zero *)
+lemma sum_list_map_zero:
+  fixes f :: "'a \<Rightarrow> int"
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> f x = 0"
+  shows "sum_list (map f xs) = 0"
+  using assms by (induct xs) auto
+
+(* A small helper that does NOT loop: extend an upt-sum if the tail is zero. *)
+lemma sum_list_map_upt_extend_zero:
+  fixes f :: "nat \<Rightarrow> int"
+  assumes mn: "m \<le> n"
+      and zero: "\<And>k. m \<le> k \<Longrightarrow> k < n \<Longrightarrow> f k = 0"
+  shows "sum_list (map f [0..<n]) = sum_list (map f [0..<m])"
+proof -
+  have split: "[0..<n] = [0..<m] @ [m..<n]"
+    using mn upt_add_eq_append[of 0 m "n - m"] by simp
+
+  have zeros_in_tail: "\<And>k. k \<in> set [m..<n] \<Longrightarrow> f k = 0"
+    using zero by auto
+
+  have tail0: "sum_list (map f [m..<n]) = 0"
+    using sum_list_map_zero[OF zeros_in_tail] .
+
+  show ?thesis
+    using split tail0 by simp
+qed
+
+lemma range_beyond_length_nat:
+  fixes len n i k :: nat
+  assumes npos: "n > 0"
+      and k_ge: "k \<ge> (len + n - 1 - i) div n + 1"
+  shows "k * n + i \<ge> len"
+proof -
+  let ?A = "len + n - 1"
+  let ?a = "?A - i"
+
+  have A_le_ai: "?A \<le> ?a + i"
+    by (cases "i \<le> ?A") simp_all
+
+  have a_lt: "?a < (?a div n + 1) * n"
+  proof -
+    have mod_bound: "?a mod n < n" using npos by simp
+    have decomp: "?a = ?a div n * n + ?a mod n" by simp
+    have step: "?a div n * n + ?a mod n < ?a div n * n + n"
+    proof -
+      have "?a mod n < n" using mod_bound .
+      thus ?thesis by linarith
+    qed
+    have "?a < ?a div n * n + n"
+      using decomp step by simp
+    thus ?thesis by (simp add: algebra_simps)
+  qed
+
+  have len_le_A: "len \<le> ?A"
+    using npos by simp
+
+  have len_le_base: "len \<le> (?a div n + 1) * n + i"
+  proof -
+    have "?a + i < (?a div n + 1) * n + i"
+      using a_lt by simp
+    hence "?A < (?a div n + 1) * n + i"
+      using A_le_ai by simp
+    thus ?thesis using len_le_A by simp
+  qed
+
+  have base_le_k: "((?a div n + 1) * n + i) \<le> (k * n + i)"
+  proof -
+    have t_le_k: "?a div n + 1 \<le> k" using k_ge by simp
+    have "((?a div n + 1) * n) \<le> (k * n)"
+      using mult_le_mono1[OF t_le_k] by simp
+    thus ?thesis by simp
+  qed
+
+  show ?thesis
+    using le_trans[OF len_le_base base_le_k] .
+qed
+
+lemma range_beyond_length:
+  assumes "n > 0" and "k \<ge> (length p + n - 1 - i) div n + 1"
+  shows "k * n + i \<ge> length p"
+  using range_beyond_length_nat[OF assms] .
+
+lemma ring_mod_coeff_add:
+  assumes npos: "n > 0"
+  shows "ring_mod_coeff (poly_add p r) n i =
+         ring_mod_coeff p n i + ring_mod_coeff r n i"
+proof -
+  let ?len_sum = "max (length p) (length r)"
+  let ?t_sum   = "(?len_sum + n - 1 - i) div n + 1"
+  let ?t_p     = "(length p + n - 1 - i) div n + 1"
+  let ?t_r     = "(length r + n - 1 - i) div n + 1"
+
+  have len_add: "length (poly_add p r) = ?len_sum"
+    by (simp add: poly_add_length)
+
+  let ?f_p = "\<lambda>k. (if even k then 1 else -1) * poly_coeff p (k * n + i)"
+  let ?f_r = "\<lambda>k. (if even k then 1 else -1) * poly_coeff r (k * n + i)"
+  let ?f_sum = "\<lambda>k. (if even k then 1 else -1) * poly_coeff (poly_add p r) (k * n + i)"
+
+  have f_sum: "\<And>k. ?f_sum k = ?f_p k + ?f_r k"
+    using poly_coeff_poly_add by (simp add: algebra_simps)
+
+  have sum_map_add_eq:
+    "sum_list (map (\<lambda>k. ?f_p k + ?f_r k) [0..< ?t_sum]) =
+     sum_list (map ?f_p [0..< ?t_sum]) + sum_list (map ?f_r [0..< ?t_sum])"
+    using sum_list_map_add[of ?f_p ?f_r "[0..< ?t_sum]"] by simp
+
+  (* Monotonicity: because length p \<le> max(length p)(length r), we get ?t_p \<le> ?t_sum (same for r). *)
+  have t_p_le: "?t_p \<le> ?t_sum"
+  proof -
+    have lp_le: "length p \<le> ?len_sum" by simp
+    have "length p + n - 1 - i \<le> ?len_sum + n - 1 - i"
+      using lp_le by simp
+    hence "(length p + n - 1 - i) div n \<le> (?len_sum + n - 1 - i) div n"
+      by (rule div_le_mono)
+    thus ?thesis by simp
+  qed
+
+  have t_r_le: "?t_r \<le> ?t_sum"
+  proof -
+    have lr_le: "length r \<le> ?len_sum" by simp
+    have "length r + n - 1 - i \<le> ?len_sum + n - 1 - i"
+      using lr_le by simp
+    hence "(length r + n - 1 - i) div n \<le> (?len_sum + n - 1 - i) div n"
+      by (rule div_le_mono)
+    thus ?thesis by simp
+  qed
+
+  have sum_p_to_tsum:
+    "sum_list (map ?f_p [0..< ?t_sum]) = sum_list (map ?f_p [0..< ?t_p])"
+  proof -
+    have zero: "\<And>k. ?t_p \<le> k \<Longrightarrow> k < ?t_sum \<Longrightarrow> ?f_p k = 0"
+    proof -
+      fix k assume kp: "?t_p \<le> k" and _ : "k < ?t_sum"
+      have "k \<ge> (length p + n - 1 - i) div n + 1" using kp by simp
+      hence "k * n + i \<ge> length p"
+        using range_beyond_length_nat[OF npos, of "length p" i k] by simp
+      thus "?f_p k = 0" by simp
+    qed
+    show ?thesis
+      using sum_list_map_upt_extend_zero[OF t_p_le, of ?f_p] zero by simp
+  qed
+
+  have sum_r_to_tsum:
+    "sum_list (map ?f_r [0..< ?t_sum]) = sum_list (map ?f_r [0..< ?t_r])"
+  proof -
+    have zero: "\<And>k. ?t_r \<le> k \<Longrightarrow> k < ?t_sum \<Longrightarrow> ?f_r k = 0"
+    proof -
+      fix k assume kr: "?t_r \<le> k" and _ : "k < ?t_sum"
+      have "k \<ge> (length r + n - 1 - i) div n + 1" using kr by simp
+      hence "k * n + i \<ge> length r"
+        using range_beyond_length_nat[OF npos, of "length r" i k] by simp
+      thus "?f_r k = 0" by simp
+    qed
+    show ?thesis
+      using sum_list_map_upt_extend_zero[OF t_r_le, of ?f_r] zero by simp
+  qed
+
+  have map_sum:
+    "map ?f_sum [0..< ?t_sum] = map (\<lambda>k. ?f_p k + ?f_r k) [0..< ?t_sum]"
+  proof (rule map_cong)
+    show "[0..< ?t_sum] = [0..< ?t_sum]" by simp
+  next
+    fix x assume "x \<in> set [0..< ?t_sum]"
+    show "?f_sum x = ?f_p x + ?f_r x"
+      using f_sum by simp
+  qed
+
+  have lhs: "ring_mod_coeff (poly_add p r) n i = sum_list (map ?f_sum [0..< ?t_sum])"
+    unfolding ring_mod_coeff_def len_add by simp
+
+  have rhs: "ring_mod_coeff p n i + ring_mod_coeff r n i =
+             sum_list (map ?f_p [0..< ?t_p]) + sum_list (map ?f_r [0..< ?t_r])"
+    unfolding ring_mod_coeff_def by simp
+
+  have step1: "sum_list (map ?f_sum [0..< ?t_sum]) = sum_list (map (\<lambda>k. ?f_p k + ?f_r k) [0..< ?t_sum])"
+    using map_sum by presburger
+
+  have step2: "sum_list (map (\<lambda>k. ?f_p k + ?f_r k) [0..< ?t_sum]) =
+               sum_list (map ?f_p [0..< ?t_sum]) + sum_list (map ?f_r [0..< ?t_sum])"
+    using sum_map_add_eq .
+
+  have step3: "sum_list (map ?f_p [0..< ?t_sum]) + sum_list (map ?f_r [0..< ?t_sum]) =
+               sum_list (map ?f_p [0..< ?t_p]) + sum_list (map ?f_r [0..< ?t_r])"
+    using sum_p_to_tsum sum_r_to_tsum by simp
+
+  show ?thesis
+    using lhs rhs step1 step2 step3 by simp
+qed
+
+lemma ring_mod_add:
+  assumes npos: "n > 0"
+  shows "ring_mod (poly_add p r) n =
+         poly_add (ring_mod p n) (ring_mod r n)"
+proof (intro nth_equalityI)
+  show "length (ring_mod (poly_add p r) n) =
+        length (poly_add (ring_mod p n) (ring_mod r n))"
+    using npos by (simp add: ring_mod_length poly_add_length)
+next
+  fix i assume i_bound: "i < length (ring_mod (poly_add p r) n)"
+  hence i_lt_n: "i < n" using npos by (simp add: ring_mod_length)
+
+  have lhs: "(ring_mod (poly_add p r) n) ! i = ring_mod_coeff (poly_add p r) n i"
+    using i_lt_n npos unfolding ring_mod_def by simp
+
+  have rhs: "(poly_add (ring_mod p n) (ring_mod r n)) ! i =
+             ring_mod_coeff p n i + ring_mod_coeff r n i"
+  proof -
+    have "(poly_add (ring_mod p n) (ring_mod r n)) ! i =
+          poly_coeff (ring_mod p n) i + poly_coeff (ring_mod r n) i"
+      using i_lt_n npos by (simp add: poly_add_coeff ring_mod_length poly_add_length)
+    also have "... = (ring_mod p n) ! i + (ring_mod r n) ! i"
+      using i_lt_n npos unfolding poly_coeff_def by (simp add: ring_mod_length)
+    also have "... = ring_mod_coeff p n i + ring_mod_coeff r n i"
+      using i_lt_n npos unfolding ring_mod_def by simp
+    finally show ?thesis .
+  qed
+
+  show "(ring_mod (poly_add p r) n) ! i =
+        (poly_add (ring_mod p n) (ring_mod r n)) ! i"
+    using lhs rhs ring_mod_coeff_add[OF npos] by simp
+qed
+
 (* === Step 8: Ring Multiplication === *)
 text \<open>
   Multiplication in R_q = Z_q[X]/(X^n + 1):
@@ -473,6 +939,47 @@ lemma ring_add_valid:
   shows "valid_ring_elem (ring_add p r n q) n q"
   using assms unfolding valid_ring_elem_def ring_add_def
   by (simp add: ring_mod_length poly_mod_range)
+
+(* === Step 8b: Ring Distributivity === *)
+text \<open>
+  Ring multiplication distributes over ring addition in R_q = Z_q[X]/(X^n + 1):
+  a * (b + c) = a*b + a*c (mod X^n + 1, mod q)
+
+  Proof outline:
+  1. poly_mult distributes over poly_add (poly_mult_coeff_add_right)
+  2. ring_mod distributes over addition (with sign handling for X^n + 1)
+  3. poly_mod distributes (via mod_add_eq)
+\<close>
+
+lemma ring_mult_add_right:
+  assumes "n > 0" and "q > 0"
+  shows "ring_mult a (ring_add b c n q) n q =
+         ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
+  \<comment> \<open>Proof lifts poly_mult_add_right through ring_mod and poly_mod.
+      Requires showing ring_mod and poly_mod preserve the distributive structure.\<close>
+  sorry
+
+lemma ring_mult_add_left:
+  assumes "n > 0" and "q > 0"
+  shows "ring_mult (ring_add a b n q) c n q =
+         ring_add (ring_mult a c n q) (ring_mult b c n q) n q"
+  \<comment> \<open>Symmetric to ring_mult_add_right, uses polynomial commutativity\<close>
+  sorry
+
+text \<open>
+  Ring addition commutativity and associativity in R_q.
+\<close>
+
+lemma ring_add_comm:
+  "ring_add p r n q = ring_add r p n q"
+  unfolding ring_add_def by (simp add: poly_add_comm)
+
+lemma ring_add_assoc:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_add (ring_add p r n q) s n q = ring_add p (ring_add r s n q) n q"
+  \<comment> \<open>Follows from poly_add_assoc and the fact that ring_mod/poly_mod
+      preserve associativity of addition in R_q = Z_q[X]/(X^n+1).\<close>
+  sorry
 
 (* === Step 9: Ring Parameters Record === *)
 text \<open>
@@ -536,6 +1043,7 @@ export_code
   poly_add poly_neg poly_sub
   poly_scale poly_mult poly_mult_coeff
   poly_mod ring_mod ring_mod_coeff
+  centered_coeff poly_centered
   ring_mult ring_add ring_sub
   ring_params.make valid_ring_params valid_ring_elem
   ring_n ring_q
