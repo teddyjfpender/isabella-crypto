@@ -951,19 +951,70 @@ text \<open>
   3. poly_mod distributes (via mod_add_eq)
 \<close>
 
+text \<open>
+  Helper lemma: poly_mod on poly_add of two poly_mod results
+  simplifies via mod_add_eq.
+\<close>
+
+lemma poly_mod_add_distrib:
+  assumes qpos: "q > 0"
+  shows "poly_mod (poly_add (poly_mod p q) (poly_mod r q)) q =
+         poly_mod (poly_add p r) q"
+proof (intro nth_equalityI)
+  let ?lhs = "poly_mod (poly_add (poly_mod p q) (poly_mod r q)) q"
+  let ?rhs = "poly_mod (poly_add p r) q"
+  let ?len = "max (length p) (length r)"
+
+  have len_lhs: "length ?lhs = ?len"
+    by (simp add: poly_add_length)
+  have len_rhs: "length ?rhs = ?len"
+    by (simp add: poly_add_length)
+
+  show "length ?lhs = length ?rhs"
+    using len_lhs len_rhs by simp
+next
+  fix i assume "i < length (poly_mod (poly_add (poly_mod p q) (poly_mod r q)) q)"
+  hence i_lt: "i < max (length p) (length r)"
+    by (simp add: poly_add_length)
+
+  have lhs_i: "(poly_mod (poly_add (poly_mod p q) (poly_mod r q)) q) ! i =
+               (poly_coeff (poly_mod p q) i + poly_coeff (poly_mod r q) i) mod q"
+    using i_lt by (simp add: poly_add_coeff poly_add_length poly_mod_def poly_coeff_def)
+
+  have rhs_i: "(poly_mod (poly_add p r) q) ! i =
+               (poly_coeff p i + poly_coeff r i) mod q"
+    using i_lt by (simp add: poly_add_coeff poly_add_length poly_mod_def poly_coeff_def)
+
+  have "(poly_coeff (poly_mod p q) i + poly_coeff (poly_mod r q) i) mod q =
+        ((poly_coeff p i mod q) + (poly_coeff r i mod q)) mod q"
+    unfolding poly_coeff_def poly_mod_def using i_lt by auto
+  also have "... = (poly_coeff p i + poly_coeff r i) mod q"
+    by (simp add: mod_add_eq)
+  finally show "(poly_mod (poly_add (poly_mod p q) (poly_mod r q)) q) ! i =
+                (poly_mod (poly_add p r) q) ! i"
+    using lhs_i rhs_i by simp
+qed
+
+text \<open>
+  The main distributivity lemma for ring multiplication.
+  In R_q = Z_q[X]/(X^n+1), multiplication distributes over addition.
+\<close>
+
 lemma ring_mult_add_right:
-  assumes "n > 0" and "q > 0"
+  assumes npos: "n > 0" and qpos: "q > 0"
   shows "ring_mult a (ring_add b c n q) n q =
          ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
-  \<comment> \<open>Proof lifts poly_mult_add_right through ring_mod and poly_mod.
-      Requires showing ring_mod and poly_mod preserve the distributive structure.\<close>
+  \<comment> \<open>Distributivity in quotient ring R_q. Requires showing that multiplying
+      by the reduced representative (ring_add b c) gives the same result as
+      the sum of products. Uses poly_mult_add_right, ring_mod_add, poly_mod properties.
+      Full proof requires careful handling of the quotient ring structure.\<close>
   sorry
 
 lemma ring_mult_add_left:
-  assumes "n > 0" and "q > 0"
+  assumes npos: "n > 0" and qpos: "q > 0"
   shows "ring_mult (ring_add a b n q) c n q =
          ring_add (ring_mult a c n q) (ring_mult b c n q) n q"
-  \<comment> \<open>Symmetric to ring_mult_add_right, uses polynomial commutativity\<close>
+  \<comment> \<open>Symmetric to ring_mult_add_right\<close>
   sorry
 
 text \<open>
@@ -974,12 +1025,167 @@ lemma ring_add_comm:
   "ring_add p r n q = ring_add r p n q"
   unfolding ring_add_def by (simp add: poly_add_comm)
 
+(* Helper: ring_mod of a polynomial that's already length n *)
+lemma ring_mod_already_n:
+  assumes npos: "n > 0" and len_n: "length p = n"
+  shows "ring_mod p n = p"
+proof (intro nth_equalityI)
+  show "length (ring_mod p n) = length p"
+    using npos len_n by (simp add: ring_mod_length)
+next
+  fix i assume i_lt: "i < length (ring_mod p n)"
+  hence i_lt_n: "i < n" using npos by (simp add: ring_mod_length)
+
+  have rm_nth: "(ring_mod p n) ! i = ring_mod_coeff p n i"
+    using i_lt_n npos unfolding ring_mod_def by simp
+
+  have coeff: "ring_mod_coeff p n i = poly_coeff p i"
+    using ring_mod_coeff_below_n[OF npos _ i_lt_n] len_n by simp
+
+  show "(ring_mod p n) ! i = p ! i"
+    using rm_nth coeff i_lt_n len_n by (simp add: poly_coeff_nth)
+qed
+
+(* Helper: poly_mod of poly_add can absorb inner poly_mod on left *)
+lemma poly_mod_poly_add_left:
+  assumes qpos: "q > 0"
+  shows "poly_mod (poly_add (poly_mod a q) b) q = poly_mod (poly_add a b) q"
+proof (intro nth_equalityI)
+  show "length (poly_mod (poly_add (poly_mod a q) b) q) =
+        length (poly_mod (poly_add a b) q)"
+    by (simp add: poly_add_length)
+next
+  fix i assume "i < length (poly_mod (poly_add (poly_mod a q) b) q)"
+  hence i_lt: "i < max (length a) (length b)"
+    by (simp add: poly_add_length)
+
+  have lhs: "(poly_mod (poly_add (poly_mod a q) b) q) ! i =
+             (poly_coeff (poly_mod a q) i + poly_coeff b i) mod q"
+    using i_lt by (simp add: poly_mod_def poly_add_coeff poly_add_length poly_coeff_def)
+
+  have rhs: "(poly_mod (poly_add a b) q) ! i =
+             (poly_coeff a i + poly_coeff b i) mod q"
+    using i_lt by (simp add: poly_mod_def poly_add_coeff poly_add_length poly_coeff_def)
+
+  have "poly_coeff (poly_mod a q) i = (poly_coeff a i) mod q"
+    unfolding poly_coeff_def poly_mod_def by auto
+
+  hence "(poly_coeff (poly_mod a q) i + poly_coeff b i) mod q =
+         ((poly_coeff a i mod q) + poly_coeff b i) mod q"
+    by simp
+  also have "... = (poly_coeff a i + poly_coeff b i) mod q"
+    by (simp add: mod_add_left_eq)
+  finally show "(poly_mod (poly_add (poly_mod a q) b) q) ! i =
+                (poly_mod (poly_add a b) q) ! i"
+    using lhs rhs by simp
+qed
+
+(* Symmetric version for right *)
+lemma poly_mod_poly_add_right:
+  assumes qpos: "q > 0"
+  shows "poly_mod (poly_add a (poly_mod b q)) q = poly_mod (poly_add a b) q"
+  using poly_mod_poly_add_left[OF qpos] poly_add_comm by metis
+
 lemma ring_add_assoc:
   assumes npos: "n > 0" and qpos: "q > 0"
   shows "ring_add (ring_add p r n q) s n q = ring_add p (ring_add r s n q) n q"
-  \<comment> \<open>Follows from poly_add_assoc and the fact that ring_mod/poly_mod
-      preserve associativity of addition in R_q = Z_q[X]/(X^n+1).\<close>
-  sorry
+proof -
+  let ?pr = "ring_add p r n q"
+  let ?rs = "ring_add r s n q"
+
+  have len_pr: "length ?pr = n" using ring_add_length[OF npos] .
+  have len_rs: "length ?rs = n" using ring_add_length[OF npos] .
+
+  (* LHS expansion *)
+  have lhs: "ring_add ?pr s n q = poly_mod (ring_mod (poly_add ?pr s) n) q"
+    unfolding ring_add_def ..
+
+  (* Use ring_mod_add to expand *)
+  have "ring_mod (poly_add ?pr s) n = poly_add (ring_mod ?pr n) (ring_mod s n)"
+    using ring_mod_add[OF npos] .
+  also have "... = poly_add ?pr (ring_mod s n)"
+    using ring_mod_already_n[OF npos len_pr] by simp
+  finally have lhs_rm: "ring_mod (poly_add ?pr s) n = poly_add ?pr (ring_mod s n)" .
+
+  (* Expand ?pr *)
+  have pr_def: "?pr = poly_mod (ring_mod (poly_add p r) n) q"
+    unfolding ring_add_def ..
+
+  (* LHS = poly_mod (poly_add (poly_mod (...) q) (ring_mod s n)) q *)
+  have lhs_full: "ring_add ?pr s n q =
+                  poly_mod (poly_add (poly_mod (ring_mod (poly_add p r) n) q) (ring_mod s n)) q"
+    using lhs lhs_rm pr_def by simp
+
+  (* Use poly_mod_poly_add_left to remove inner poly_mod *)
+  have lhs_simp: "ring_add ?pr s n q =
+                  poly_mod (poly_add (ring_mod (poly_add p r) n) (ring_mod s n)) q"
+    using lhs_full poly_mod_poly_add_left[OF qpos] by simp
+
+  (* RHS expansion *)
+  have rhs: "ring_add p ?rs n q = poly_mod (ring_mod (poly_add p ?rs) n) q"
+    unfolding ring_add_def ..
+
+  have "ring_mod (poly_add p ?rs) n = poly_add (ring_mod p n) (ring_mod ?rs n)"
+    using ring_mod_add[OF npos] .
+  also have "... = poly_add (ring_mod p n) ?rs"
+    using ring_mod_already_n[OF npos len_rs] by simp
+  finally have rhs_rm: "ring_mod (poly_add p ?rs) n = poly_add (ring_mod p n) ?rs" .
+
+  have rs_def: "?rs = poly_mod (ring_mod (poly_add r s) n) q"
+    unfolding ring_add_def ..
+
+  have rhs_full: "ring_add p ?rs n q =
+                  poly_mod (poly_add (ring_mod p n) (poly_mod (ring_mod (poly_add r s) n) q)) q"
+    using rhs rhs_rm rs_def by simp
+
+  have rhs_simp: "ring_add p ?rs n q =
+                  poly_mod (poly_add (ring_mod p n) (ring_mod (poly_add r s) n)) q"
+    using rhs_full poly_mod_poly_add_right[OF qpos] by simp
+
+  (* Use ring_mod_add on both sides *)
+  have "ring_mod (poly_add p r) n = poly_add (ring_mod p n) (ring_mod r n)"
+    using ring_mod_add[OF npos] .
+  hence lhs_inner: "poly_add (ring_mod (poly_add p r) n) (ring_mod s n) =
+                    poly_add (poly_add (ring_mod p n) (ring_mod r n)) (ring_mod s n)"
+    by simp
+
+  have "ring_mod (poly_add r s) n = poly_add (ring_mod r n) (ring_mod s n)"
+    using ring_mod_add[OF npos] .
+  hence rhs_inner: "poly_add (ring_mod p n) (ring_mod (poly_add r s) n) =
+                    poly_add (ring_mod p n) (poly_add (ring_mod r n) (ring_mod s n))"
+    by simp
+
+  (* Now use poly_add_assoc *)
+  have assoc: "poly_add (poly_add (ring_mod p n) (ring_mod r n)) (ring_mod s n) =
+               poly_add (ring_mod p n) (poly_add (ring_mod r n) (ring_mod s n))"
+    using poly_add_assoc .
+
+  show ?thesis
+    using lhs_simp rhs_simp lhs_inner rhs_inner assoc by simp
+qed
+
+(* Helper: 4-term ring_add shuffle: (a + b) + (c + d) = (a + c) + (b + d) *)
+lemma ring_add_four_shuffle:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_add (ring_add a b n q) (ring_add c d n q) n q =
+         ring_add (ring_add a c n q) (ring_add b d n q) n q"
+proof -
+  have step1: "ring_add (ring_add a b n q) (ring_add c d n q) n q =
+               ring_add a (ring_add b (ring_add c d n q) n q) n q"
+    using ring_add_assoc[OF npos qpos] by simp
+  have step2: "ring_add b (ring_add c d n q) n q =
+               ring_add (ring_add b c n q) d n q"
+    using ring_add_assoc[OF npos qpos] by simp
+  have step3: "ring_add b c n q = ring_add c b n q"
+    using ring_add_comm by simp
+  have step4: "ring_add (ring_add c b n q) d n q =
+               ring_add c (ring_add b d n q) n q"
+    using ring_add_assoc[OF npos qpos] by simp
+  have step5: "ring_add a (ring_add c (ring_add b d n q) n q) n q =
+               ring_add (ring_add a c n q) (ring_add b d n q) n q"
+    using ring_add_assoc[OF npos qpos] by simp
+  show ?thesis using step1 step2 step3 step4 step5 by simp
+qed
 
 (* === Step 9: Ring Parameters Record === *)
 text \<open>

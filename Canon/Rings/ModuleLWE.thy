@@ -109,17 +109,164 @@ text \<open>
   3. ring_add_comm: a + b = b + a (from PolyMod.thy)
 \<close>
 
+text \<open>
+  Adding the zero element (replicate n 0) in R_q yields the identity.
+  Key insight: poly_coeff (replicate n 0) i = 0 for all i, so adding zeros
+  to any polynomial p doesn't change its ring_mod_coeff values.
+\<close>
+
+lemma poly_coeff_replicate_zero:
+  "poly_coeff (replicate m 0) i = 0"
+  unfolding poly_coeff_def by simp
+
+lemma poly_add_replicate_zero_coeff:
+  "poly_coeff (poly_add p (replicate m 0)) i = poly_coeff p i"
+proof -
+  have "poly_coeff (poly_add p (replicate m 0)) i =
+        poly_coeff p i + poly_coeff (replicate m 0) i"
+    unfolding poly_add_def poly_coeff_def by auto
+  also have "... = poly_coeff p i + 0"
+    using poly_coeff_replicate_zero by simp
+  finally show ?thesis by simp
+qed
+
+lemma ring_mod_coeff_add_zeros:
+  assumes npos: "n > 0"
+  shows "ring_mod_coeff (poly_add p (replicate m 0)) n i = ring_mod_coeff p n i"
+  \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.
+      The sums have different bounds but the extra terms are zero.
+      Full proof requires careful handling of sum bounds with range_beyond_length_nat.\<close>
+  sorry
+
+lemma ring_add_zero_right:
+  assumes "n > 0" and "q > 0"
+  shows "ring_add p (replicate n 0) n q = poly_mod (ring_mod p n) q"
+proof -
+  have "ring_add p (replicate n 0) n q = poly_mod (ring_mod (poly_add p (replicate n 0)) n) q"
+    unfolding ring_add_def by simp
+  also have "ring_mod (poly_add p (replicate n 0)) n = ring_mod p n"
+  proof (intro nth_equalityI)
+    show "length (ring_mod (poly_add p (replicate n 0)) n) = length (ring_mod p n)"
+      using assms by (simp add: ring_mod_length)
+  next
+    fix i assume "i < length (ring_mod (poly_add p (replicate n 0)) n)"
+    hence i_lt: "i < n" using assms by (simp add: ring_mod_length)
+    show "(ring_mod (poly_add p (replicate n 0)) n) ! i = (ring_mod p n) ! i"
+      using i_lt assms ring_mod_coeff_add_zeros[OF \<open>n > 0\<close>]
+      unfolding ring_mod_def by simp
+  qed
+  finally show ?thesis .
+qed
+
+lemma ring_add_zero_left:
+  assumes "n > 0" and "q > 0"
+  shows "ring_add (replicate n 0) p n q = poly_mod (ring_mod p n) q"
+  using ring_add_zero_right[OF assms] ring_add_comm by metis
+
+(* Module element addition - defined here to be available for mod_inner_prod_add_right *)
+definition mod_add :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
+  "mod_add v w n q = map2 (\<lambda>p r. ring_add p r n q) v w"
+
+lemma mod_add_nil [simp]: "mod_add [] [] n q = []"
+  unfolding mod_add_def by simp
+
+lemma mod_add_cons:
+  "mod_add (p # ps) (r # rs) n q = ring_add p r n q # mod_add ps rs n q"
+  unfolding mod_add_def by simp
+
 lemma mod_inner_prod_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_vu: "length v = length u" and len_uw: "length u = length w"
   shows "mod_inner_prod v (mod_add u w n q) n q =
          ring_add (mod_inner_prod v u n q) (mod_inner_prod v w n q) n q"
   using assms
-  \<comment> \<open>Proof by induction on v:
-      - Base: Both sides are replicate n 0
-      - Step: Uses ring_mult_add_right for distributivity and ring_add_assoc for rearrangement
-      Requires ring_mult_add_right and ring_add_assoc from PolyMod.thy\<close>
-  sorry
+proof (induct v arbitrary: u w)
+  case Nil
+  hence u_nil: "u = []" and w_nil: "w = []" by simp_all
+
+  \<comment> \<open>LHS: mod_inner_prod [] (mod_add [] [] n q) = replicate n 0\<close>
+  have lhs: "mod_inner_prod [] (mod_add [] [] n q) n q = replicate n 0"
+    by simp
+
+  \<comment> \<open>RHS: ring_add (replicate n 0) (replicate n 0) = replicate n 0\<close>
+  have poly_add_zeros: "poly_add (replicate n 0) (replicate n 0) = replicate n 0"
+  proof (intro nth_equalityI)
+    show "length (poly_add (replicate n 0) (replicate n 0)) = length (replicate n 0)"
+      by (simp add: poly_add_length)
+  next
+    fix i assume "i < length (poly_add (replicate n 0) (replicate n 0))"
+    hence i_lt: "i < n" by (simp add: poly_add_length)
+    show "(poly_add (replicate n 0) (replicate n 0)) ! i = (replicate n 0) ! i"
+      using i_lt by (simp add: poly_add_coeff poly_coeff_replicate_zero)
+  qed
+
+  have ring_mod_zeros: "ring_mod (replicate n 0) n = replicate n 0"
+    using npos ring_mod_below_n[of n "replicate n 0"] by simp
+
+  have poly_mod_zeros: "poly_mod (replicate n 0) q = replicate n 0"
+    unfolding poly_mod_def using qpos by simp
+
+  have rhs: "ring_add (replicate n 0) (replicate n 0) n q = replicate n 0"
+    unfolding ring_add_def
+    using poly_add_zeros ring_mod_zeros poly_mod_zeros by simp
+
+  show ?case
+    using u_nil w_nil lhs rhs by simp
+next
+  case (Cons p ps)
+  then obtain u0 us where u_def: "u = u0 # us"
+    by (metis length_Suc_conv)
+  from Cons obtain w0 ws where w_def: "w = w0 # ws"
+    by (metis length_Suc_conv u_def)
+
+  have len_ps_us: "length ps = length us"
+    using Cons.prems u_def by simp
+  have len_us_ws: "length us = length ws"
+    using Cons.prems u_def w_def by simp
+
+  have IH: "mod_inner_prod ps (mod_add us ws n q) n q =
+            ring_add (mod_inner_prod ps us n q) (mod_inner_prod ps ws n q) n q"
+    using Cons.hyps[OF npos qpos len_ps_us len_us_ws] .
+
+  have mod_add_cons: "mod_add u w n q = ring_add u0 w0 n q # mod_add us ws n q"
+    using u_def w_def unfolding mod_add_def by simp
+
+  \<comment> \<open>LHS: inner (p # ps) (mod_add (u0 # us) (w0 # ws))
+         = ring_add (ring_mult p (ring_add u0 w0)) (inner ps (mod_add us ws))\<close>
+  have lhs: "mod_inner_prod (p # ps) (mod_add u w n q) n q =
+             ring_add (ring_mult p (ring_add u0 w0 n q) n q)
+                      (mod_inner_prod ps (mod_add us ws n q) n q) n q"
+    using mod_add_cons by simp
+
+  \<comment> \<open>RHS: ring_add (inner (p # ps) u) (inner (p # ps) w)
+         = ring_add (ring_add (ring_mult p u0) (inner ps us))
+                    (ring_add (ring_mult p w0) (inner ps ws))\<close>
+  have rhs: "ring_add (mod_inner_prod (p # ps) u n q)
+                      (mod_inner_prod (p # ps) w n q) n q =
+             ring_add (ring_add (ring_mult p u0 n q) (mod_inner_prod ps us n q) n q)
+                      (ring_add (ring_mult p w0 n q) (mod_inner_prod ps ws n q) n q) n q"
+    using u_def w_def by simp
+
+  \<comment> \<open>Apply ring_mult_add_right: p * (u0 + w0) = p*u0 + p*w0\<close>
+  have mult_distrib: "ring_mult p (ring_add u0 w0 n q) n q =
+                      ring_add (ring_mult p u0 n q) (ring_mult p w0 n q) n q"
+    using ring_mult_add_right[OF npos qpos] .
+
+  \<comment> \<open>The final rearrangement:
+      ring_add (ring_add (p*u0) (p*w0)) (ring_add (inner ps us) (inner ps ws))
+      = ring_add (ring_add (p*u0) (inner ps us)) (ring_add (p*w0) (inner ps ws))
+      Uses ring_add associativity and commutativity\<close>
+  have lhs_simp: "mod_inner_prod (p # ps) (mod_add u w n q) n q =
+                  ring_add (ring_add (ring_mult p u0 n q) (ring_mult p w0 n q) n q)
+                           (ring_add (mod_inner_prod ps us n q) (mod_inner_prod ps ws n q) n q) n q"
+    using lhs mult_distrib IH by simp
+  have rhs_simp: "ring_add (mod_inner_prod (p # ps) u n q)
+                           (mod_inner_prod (p # ps) w n q) n q =
+                  ring_add (ring_add (ring_mult p u0 n q) (mod_inner_prod ps us n q) n q)
+                           (ring_add (ring_mult p w0 n q) (mod_inner_prod ps ws n q) n q) n q"
+    using rhs by simp
+  show ?case using lhs_simp rhs_simp ring_add_four_shuffle[OF npos qpos] by simp
+qed
 
 definition mod_inner_prod_alt :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> poly" where
   "mod_inner_prod_alt v w n q = (
@@ -154,14 +301,12 @@ lemma mod_mat_vec_mult_valid:
   by (auto simp: mod_inner_prod_valid)
 
 (* === Step 3b: Matrix-Vector Multiplication Distributivity === *)
-(* === Step 4: Module Element Addition === *)
+(* === Step 4: Module Element Addition (additional lemmas) === *)
 text \<open>
   Module element addition: v + w = [v_0 + w_0, v_1 + w_1, ...]
   Each component is a polynomial addition in R_q.
+  (Definition moved earlier for use in mod_inner_prod_add_right)
 \<close>
-
-definition mod_add :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
-  "mod_add v w n q = map2 (\<lambda>p r. ring_add p r n q) v w"
 
 lemma mod_add_length:
   "length (mod_add v w n q) = min (length v) (length w)"
@@ -200,9 +345,59 @@ lemma mod_mat_vec_mult_add_right:
       and rows_ok: "\<forall>row \<in> set A. length row = length u"
   shows "mod_mat_vec_mult A (mod_add u w n q) n q =
          mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q"
-  \<comment> \<open>Proof: Apply mod_inner_prod_add_right to each row of A, then show the
-      mapped results match. Requires mod_inner_prod_add_right.\<close>
-  sorry
+proof -
+  have len_mod_add: "length (mod_add u w n q) = length u"
+    using len_uw by (simp add: mod_add_length)
+
+  \<comment> \<open>Each row satisfies the inner product distributivity\<close>
+  have row_distrib: "\<And>row. row \<in> set A \<Longrightarrow>
+        mod_inner_prod row (mod_add u w n q) n q =
+        ring_add (mod_inner_prod row u n q) (mod_inner_prod row w n q) n q"
+  proof -
+    fix row assume row_in: "row \<in> set A"
+    have len_row_u: "length row = length u"
+      using rows_ok row_in by simp
+    show "mod_inner_prod row (mod_add u w n q) n q =
+          ring_add (mod_inner_prod row u n q) (mod_inner_prod row w n q) n q"
+      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw] .
+  qed
+
+  have len_eq: "length (mod_mat_vec_mult A (mod_add u w n q) n q) =
+                length (mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q)"
+    by (simp add: mod_mat_vec_mult_length mod_add_length)
+
+  have nth_eq: "\<And>i. i < length (mod_mat_vec_mult A (mod_add u w n q) n q) \<Longrightarrow>
+               (mod_mat_vec_mult A (mod_add u w n q) n q) ! i =
+               (mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q) ! i"
+  proof -
+    fix i assume i_bound: "i < length (mod_mat_vec_mult A (mod_add u w n q) n q)"
+    hence i_lt_A: "i < length A" by (simp add: mod_mat_vec_mult_length)
+    hence A_i_in_set: "A ! i \<in> set A" by simp
+
+    have lhs_i: "(mod_mat_vec_mult A (mod_add u w n q) n q) ! i =
+                  mod_inner_prod (A ! i) (mod_add u w n q) n q"
+      using mod_mat_vec_mult_nth[OF i_lt_A] .
+    have step1: "mod_inner_prod (A ! i) (mod_add u w n q) n q =
+                 ring_add (mod_inner_prod (A ! i) u n q) (mod_inner_prod (A ! i) w n q) n q"
+      using row_distrib[OF A_i_in_set] .
+    have i_lt_uMv: "i < length (mod_mat_vec_mult A u n q)"
+      using i_lt_A by (simp add: mod_mat_vec_mult_length)
+    have i_lt_wMv: "i < length (mod_mat_vec_mult A w n q)"
+      using i_lt_A by (simp add: mod_mat_vec_mult_length)
+    have step2: "ring_add (mod_inner_prod (A ! i) u n q) (mod_inner_prod (A ! i) w n q) n q =
+                 ring_add ((mod_mat_vec_mult A u n q) ! i) ((mod_mat_vec_mult A w n q) ! i) n q"
+      using mod_mat_vec_mult_nth[OF i_lt_A] by simp
+    have step3: "ring_add ((mod_mat_vec_mult A u n q) ! i) ((mod_mat_vec_mult A w n q) ! i) n q =
+                 (mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q) ! i"
+      using mod_add_nth[OF i_lt_uMv i_lt_wMv] by simp
+    show "(mod_mat_vec_mult A (mod_add u w n q) n q) ! i =
+          (mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q) ! i"
+      using lhs_i step1 step2 step3 by simp
+  qed
+
+  show ?thesis
+    using nth_equalityI[OF len_eq nth_eq] .
+qed
 
 text \<open>
   Scalar (challenge polynomial) commutes with matrix-vector multiplication:
@@ -331,16 +526,51 @@ text \<open>
   but requiring detailed analysis of centered representation).
 \<close>
 
+text \<open>Helper: any module element has some bound (trivially exists)\<close>
+
+lemma mod_elem_small_exists:
+  "\<exists>B. mod_elem_small v B"
+proof -
+  (* Collect all coefficients from all polynomials in v *)
+  let ?all_coeffs = "concat v"
+  let ?all_abs = "map abs ?all_coeffs"
+
+  (* If v is empty or all polynomials are empty, any bound works *)
+  show ?thesis
+  proof (cases "?all_coeffs = []")
+    case True
+    (* No coefficients, so B = 0 works *)
+    have "mod_elem_small v 0"
+      unfolding mod_elem_small_def poly_coeffs_bounded_def
+      using True by (auto simp: concat_eq_Nil_conv)
+    thus ?thesis by blast
+  next
+    case False
+    (* Take B = Max of all |c| *)
+    let ?B = "Max (set ?all_abs)"
+    have finite_abs: "finite (set ?all_abs)" by simp
+    have nonempty_abs: "set ?all_abs \<noteq> {}" using False by auto
+
+    have "\<And>p c. p \<in> set v \<Longrightarrow> c \<in> set p \<Longrightarrow> abs c \<le> ?B"
+    proof -
+      fix p c assume p_in: "p \<in> set v" and c_in: "c \<in> set p"
+      have "c \<in> set (concat v)" using p_in c_in by auto
+      hence "abs c \<in> set ?all_abs" by auto
+      thus "abs c \<le> ?B" using Max_ge[OF finite_abs] by auto
+    qed
+    hence "mod_elem_small v ?B"
+      unfolding mod_elem_small_def poly_coeffs_bounded_def by auto
+    thus ?thesis by blast
+  qed
+qed
+
 lemma mod_elem_small_add_exists:
   assumes "mod_elem_small v1 bound1"
       and "mod_elem_small v2 bound2"
       and "bound1 \<ge> 0" and "bound2 \<ge> 0"
       and "length v1 = length v2"
   shows "\<exists>bound. mod_elem_small (mod_add v1 v2 n q) bound"
-  \<comment> \<open>The bound is at most bound1 + bound2 before mod reduction.
-      After centered mod q, bound is at most q div 2.
-      Full proof requires ring_add coefficient analysis.\<close>
-  sorry
+  using mod_elem_small_exists[of "mod_add v1 v2 n q"] by blast
 
 lemma mod_elem_small_nth:
   assumes "mod_elem_small v eta" and "i < length v"
