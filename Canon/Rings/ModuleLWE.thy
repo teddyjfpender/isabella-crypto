@@ -136,7 +136,15 @@ lemma ring_mod_coeff_add_zeros:
   \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.
       The sums have different bounds but the extra terms are zero.
       Full proof requires careful handling of sum bounds with range_beyond_length_nat.\<close>
-  sorry
+proof -
+  have zeros: "ring_mod_coeff (replicate m 0) n i = 0"
+    unfolding ring_mod_coeff_def by (simp add: poly_coeff_replicate_zero)
+  have add: "ring_mod_coeff (poly_add p (replicate m 0)) n i =
+             ring_mod_coeff p n i + ring_mod_coeff (replicate m 0) n i"
+    using ring_mod_coeff_add[OF npos] by simp
+  show ?thesis
+    using add zeros by simp
+qed
 
 lemma ring_add_zero_right:
   assumes "n > 0" and "q > 0"
@@ -177,6 +185,9 @@ lemma mod_add_cons:
 lemma mod_inner_prod_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_vu: "length v = length u" and len_uw: "length u = length w"
+      and len_v: "\<forall>p \<in> set v. length p = n"
+      and len_u: "\<forall>p \<in> set u. length p = n"
+      and len_w: "\<forall>p \<in> set w. length p = n"
   shows "mod_inner_prod v (mod_add u w n q) n q =
          ring_add (mod_inner_prod v u n q) (mod_inner_prod v w n q) n q"
   using assms
@@ -224,9 +235,16 @@ next
   have len_us_ws: "length us = length ws"
     using Cons.prems u_def w_def by simp
 
+  have len_ps: "\<forall>p \<in> set ps. length p = n"
+    using Cons.prems by simp
+  have len_us: "\<forall>p \<in> set us. length p = n"
+    using Cons.prems u_def by simp
+  have len_ws: "\<forall>p \<in> set ws. length p = n"
+    using Cons.prems w_def by simp
+
   have IH: "mod_inner_prod ps (mod_add us ws n q) n q =
             ring_add (mod_inner_prod ps us n q) (mod_inner_prod ps ws n q) n q"
-    using Cons.hyps[OF npos qpos len_ps_us len_us_ws] .
+    using Cons.hyps[OF npos qpos len_ps_us len_us_ws len_ps len_us len_ws] .
 
   have mod_add_cons: "mod_add u w n q = ring_add u0 w0 n q # mod_add us ws n q"
     using u_def w_def unfolding mod_add_def by simp
@@ -250,7 +268,16 @@ next
   \<comment> \<open>Apply ring_mult_add_right: p * (u0 + w0) = p*u0 + p*w0\<close>
   have mult_distrib: "ring_mult p (ring_add u0 w0 n q) n q =
                       ring_add (ring_mult p u0 n q) (ring_mult p w0 n q) n q"
-    using ring_mult_add_right[OF npos qpos] .
+  proof -
+    have len_p: "length p = n"
+      using Cons.prems by simp
+    have len_u0: "length u0 = n"
+      using Cons.prems u_def by simp
+    have len_w0: "length w0 = n"
+      using Cons.prems w_def by simp
+    show ?thesis
+      using ring_mult_add_right[OF npos qpos len_p len_u0 len_w0] .
+  qed
 
   \<comment> \<open>The final rearrangement:
       ring_add (ring_add (p*u0) (p*w0)) (ring_add (inner ps us) (inner ps ws))
@@ -343,6 +370,9 @@ lemma mod_mat_vec_mult_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_uw: "length u = length w"
       and rows_ok: "\<forall>row \<in> set A. length row = length u"
+      and row_lens: "\<forall>row \<in> set A. \<forall>p \<in> set row. length p = n"
+      and u_lens: "\<forall>p \<in> set u. length p = n"
+      and w_lens: "\<forall>p \<in> set w. length p = n"
   shows "mod_mat_vec_mult A (mod_add u w n q) n q =
          mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q"
 proof -
@@ -359,7 +389,8 @@ proof -
       using rows_ok row_in by simp
     show "mod_inner_prod row (mod_add u w n q) n q =
           ring_add (mod_inner_prod row u n q) (mod_inner_prod row w n q) n q"
-      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw] .
+      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw]
+      using row_lens row_in u_lens w_lens by auto
   qed
 
   have len_eq: "length (mod_mat_vec_mult A (mod_add u w n q) n q) =
@@ -413,7 +444,7 @@ lemma mod_mat_vec_mult_scale:
   unfolding mod_mat_vec_mult_def
   \<comment> \<open>Proof: Each row gives inner_prod(row, c*v) = c * inner_prod(row, v).
       This requires ring_mult to commute with ring_add sums (ring commutativity).\<close>
-  sorry
+  by simp
 
 (* === Step 5: Module-LWE Parameters === *)
 text \<open>
