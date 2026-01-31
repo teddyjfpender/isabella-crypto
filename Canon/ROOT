@@ -50,6 +50,7 @@ session Canon_Rings in "Rings" = Canon_Hardness +
   options [document = false, quick_and_dirty = true]
   theories
     PolyMod
+    QuotientRing
     ModuleLWE
     NTT
 
