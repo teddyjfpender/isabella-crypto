@@ -336,8 +336,40 @@ definition hint_weight :: "nat list list \<Rightarrow> nat" where
 
 lemma usehint_makehint_correct:
   "usehint_coeff (makehint_coeff z r alpha) r alpha = highbits_coeff (r + z) alpha"
-  unfolding usehint_coeff_def makehint_coeff_def highbits_coeff_def
-  sorry \<comment> \<open>Requires careful case analysis on hint bit\<close>
+proof -
+  let ?h = "makehint_coeff z r alpha"
+  let ?r1 = "highbits_coeff r alpha"
+  let ?r1_z = "highbits_coeff (r + z) alpha"
+  let ?r0 = "lowbits_coeff r alpha"
+  let ?m = "(dil_ntt_q - 1) div alpha"
+
+  show ?thesis
+  proof (cases "?r1 = ?r1_z")
+    case True
+    \<comment> \<open>When high bits match, hint is 0 and usehint returns r1\<close>
+    hence "?h = 0"
+      unfolding makehint_coeff_def by simp
+    hence "usehint_coeff ?h r alpha = ?r1"
+      unfolding usehint_coeff_def highbits_coeff_def decompose_coeff_def Let_def
+      by simp
+    thus ?thesis using True by simp
+  next
+    case False
+    \<comment> \<open>When high bits differ, hint is 1 and usehint adjusts r1 based on r0 sign\<close>
+    hence h_is_1: "?h = 1"
+      unfolding makehint_coeff_def by simp
+    \<comment> \<open>The adjustment depends on whether r0 > 0:
+        - If r0 > 0: adding z pushed us up, so we add 1 to r1
+        - If r0 <= 0: adding z pushed us down, so we subtract 1 from r1
+        Both cases are correct because the hint encodes which direction the carry went\<close>
+    show ?thesis
+      unfolding usehint_coeff_def makehint_coeff_def highbits_coeff_def lowbits_coeff_def
+                decompose_coeff_def Let_def
+      using False
+      \<comment> \<open>This requires arithmetic reasoning about centered mod and decomposition\<close>
+      sorry
+  qed
+qed
 
 (* === Step 6: Infinity Norm Bounds === *)
 text \<open>

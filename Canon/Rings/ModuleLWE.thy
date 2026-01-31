@@ -133,10 +133,144 @@ qed
 lemma ring_mod_coeff_add_zeros:
   assumes npos: "n > 0"
   shows "ring_mod_coeff (poly_add p (replicate m 0)) n i = ring_mod_coeff p n i"
-  \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.
-      The sums have different bounds but the extra terms are zero.
-      Full proof requires careful handling of sum bounds with range_beyond_length_nat.\<close>
-  sorry
+proof -
+  \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.\<close>
+  have coeff_eq: "\<And>k. poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k"
+    using poly_add_replicate_zero_coeff by simp
+
+  \<comment> \<open>The ring_mod_coeff sums terms with alternating signs.
+      Since all coefficients are equal, the sums differ only in their bounds.
+      But poly_coeff returns 0 beyond the polynomial length, so extra terms are 0.\<close>
+
+  let ?p' = "poly_add p (replicate m 0)"
+
+  \<comment> \<open>Define a common function for the summand\<close>
+  let ?f = "\<lambda>k. (if even k then 1 else -1) * poly_coeff p (k * n + i)"
+
+  \<comment> \<open>ring_mod_coeff sums ?f over [0 ..< bound] where bound depends on length\<close>
+  \<comment> \<open>For both p' and p, using coeff_eq, the summand is the same function ?f\<close>
+
+  have lhs_eq: "ring_mod_coeff ?p' n i =
+                sum_list (map ?f [0 ..< (length ?p' + n - 1 - i) div n + 1])"
+    unfolding ring_mod_coeff_def using coeff_eq by simp
+
+  have rhs_eq: "ring_mod_coeff p n i =
+                sum_list (map ?f [0 ..< (length p + n - 1 - i) div n + 1])"
+    unfolding ring_mod_coeff_def by simp
+
+  \<comment> \<open>Key: ?f k = 0 when k * n + i >= length p (poly_coeff returns 0 beyond length)\<close>
+  have f_zero: "\<And>k. k * n + i \<ge> length p \<Longrightarrow> ?f k = 0"
+    unfolding poly_coeff_def by simp
+
+  \<comment> \<open>The effective bound is where k * n + i < length p, i.e., k < (length p - i) / n + something\<close>
+  \<comment> \<open>Beyond that, all terms are 0, so different upper bounds give same sum\<close>
+
+  \<comment> \<open>Let t_eff be the smallest k where k * n + i >= length p\<close>
+  let ?t_eff = "(length p + n - 1 - i) div n + 1"
+
+  \<comment> \<open>For k >= ?t_eff, we have k * n + i >= length p, so ?f k = 0\<close>
+  have eff_bound: "\<And>k. k \<ge> ?t_eff \<Longrightarrow> ?f k = 0"
+  proof -
+    fix k assume k_ge: "k \<ge> ?t_eff"
+    have "k * n + i \<ge> length p"
+    proof -
+      \<comment> \<open>k >= (length p + n - 1 - i) div n + 1\<close>
+      \<comment> \<open>So k * n >= ((length p + n - 1 - i) div n + 1) * n\<close>
+      \<comment> \<open>           = ((length p + n - 1 - i) div n) * n + n\<close>
+      \<comment> \<open>           >= (length p + n - 1 - i) - mod + n\<close>
+      \<comment> \<open>           >= length p - i (since mod < n)\<close>
+
+      have k_ge_bound: "k \<ge> (length p + n - 1 - i) div n + 1"
+        using k_ge by simp
+      hence "k * n \<ge> ((length p + n - 1 - i) div n + 1) * n"
+        using mult_le_mono1 by blast
+      hence kn_ge: "k * n \<ge> ((length p + n - 1 - i) div n) * n + n"
+        by (simp add: algebra_simps)
+
+      \<comment> \<open>div-mod identity: x = (x div n) * n + x mod n\<close>
+      have div_mod: "(length p + n - 1 - i) = ((length p + n - 1 - i) div n) * n + (length p + n - 1 - i) mod n"
+        by simp
+
+      have mod_lt: "(length p + n - 1 - i) mod n < n"
+        using npos by simp
+
+      \<comment> \<open>So ((length p + n - 1 - i) div n) * n = (length p + n - 1 - i) - mod\<close>
+      \<comment> \<open>And ((length p + n - 1 - i) div n) * n + n >= (length p + n - 1 - i) - mod + n\<close>
+      \<comment> \<open>                                          >= (length p + n - 1 - i) - (n-1) + n\<close>
+      \<comment> \<open>                                          = length p - i + 1\<close>
+      \<comment> \<open>                                          >= length p - i\<close>
+
+      have "((length p + n - 1 - i) div n) * n + n \<ge> (length p + n - 1 - i) - (n - 1) + n"
+      proof -
+        have eq1: "((length p + n - 1 - i) div n) * n + (length p + n - 1 - i) mod n = (length p + n - 1 - i)"
+          by simp
+        hence "((length p + n - 1 - i) div n) * n = (length p + n - 1 - i) - (length p + n - 1 - i) mod n"
+          by arith
+        moreover have "(length p + n - 1 - i) mod n \<le> n - 1"
+          using mod_lt npos by linarith
+        ultimately have "((length p + n - 1 - i) div n) * n \<ge> (length p + n - 1 - i) - (n - 1)"
+          by linarith
+        thus ?thesis by linarith
+      qed
+      hence "((length p + n - 1 - i) div n) * n + n \<ge> length p - i + 1"
+        using npos by linarith
+      hence "k * n \<ge> length p - i + 1"
+        using kn_ge by linarith
+      hence "k * n \<ge> length p - i"
+        by linarith
+      thus ?thesis by linarith
+    qed
+    thus "?f k = 0" using f_zero by simp
+  qed
+
+  \<comment> \<open>Both bounds include at least ?t_eff, and ?f k = 0 for k >= ?t_eff\<close>
+  \<comment> \<open>So both sums equal sum over [0 ..< ?t_eff]\<close>
+
+  have lhs_bound: "(length ?p' + n - 1 - i) div n + 1 \<ge> ?t_eff"
+  proof -
+    have len_eq: "length ?p' = max (length p) m" by (simp add: poly_add_length)
+    have "length p \<le> max (length p) m" by simp
+    hence "length p + n - 1 - i \<le> max (length p) m + n - 1 - i" by linarith
+    hence "(length p + n - 1 - i) div n \<le> (max (length p) m + n - 1 - i) div n"
+      using div_le_mono by blast
+    hence "(length p + n - 1 - i) div n \<le> (length ?p' + n - 1 - i) div n"
+      using len_eq by simp
+    thus ?thesis by simp
+  qed
+
+  have "sum_list (map ?f [0 ..< (length ?p' + n - 1 - i) div n + 1]) =
+        sum_list (map ?f [0 ..< ?t_eff])"
+  proof -
+    let ?b' = "(length ?p' + n - 1 - i) div n + 1"
+    have split: "[0 ..< ?b'] = [0 ..< ?t_eff] @ [?t_eff ..< ?b']"
+      using lhs_bound upt_add_eq_append[of 0 ?t_eff "?b' - ?t_eff"] by auto
+    have "sum_list (map ?f [0 ..< ?b']) =
+          sum_list (map ?f [0 ..< ?t_eff]) + sum_list (map ?f [?t_eff ..< ?b'])"
+      using split by simp
+    moreover have "sum_list (map ?f [?t_eff ..< ?b']) = 0"
+    proof -
+      have all_zero: "\<forall>x \<in> set (map ?f [?t_eff ..< ?b']). x = (0::int)"
+      proof
+        fix x assume "x \<in> set (map ?f [?t_eff ..< ?b'])"
+        then obtain k where "k \<in> set [?t_eff ..< ?b']" and "x = ?f k" by auto
+        hence "k \<ge> ?t_eff" by auto
+        thus "x = 0" using eff_bound \<open>x = ?f k\<close> by simp
+      qed
+      thus ?thesis using sum_list_all_zero_int by simp
+    qed
+    ultimately show ?thesis by simp
+  qed
+  hence lhs_sum: "ring_mod_coeff ?p' n i = sum_list (map ?f [0 ..< ?t_eff])"
+    using lhs_eq by simp
+
+  have "sum_list (map ?f [0 ..< (length p + n - 1 - i) div n + 1]) =
+        sum_list (map ?f [0 ..< ?t_eff])"
+    by simp
+  hence rhs_sum: "ring_mod_coeff p n i = sum_list (map ?f [0 ..< ?t_eff])"
+    using rhs_eq by simp
+
+  show ?thesis using lhs_sum rhs_sum by simp
+qed
 
 lemma ring_add_zero_right:
   assumes "n > 0" and "q > 0"
