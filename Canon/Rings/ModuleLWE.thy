@@ -136,7 +136,19 @@ lemma ring_mod_coeff_add_zeros:
   \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.
       The sums have different bounds but the extra terms are zero.
       Full proof requires careful handling of sum bounds with range_beyond_length_nat.\<close>
-  sorry
+proof -
+  have zero_terms:
+    "\<forall>x \<in> set (map (\<lambda>k. (if even k then 1 else -1) * poly_coeff (replicate m 0) (k * n + i))
+                    [0 ..< (length (replicate m 0) + n - 1 - i) div n + 1]). x = (0::int)"
+    by (auto simp: poly_coeff_replicate_zero)
+  have zero_coeff: "ring_mod_coeff (replicate m 0) n i = 0"
+    unfolding ring_mod_coeff_def
+    using sum_list_all_zero_int[OF zero_terms] by simp
+  have "ring_mod_coeff (poly_add p (replicate m 0)) n i =
+        ring_mod_coeff p n i + ring_mod_coeff (replicate m 0) n i"
+    using ring_mod_coeff_add[OF npos] .
+  thus ?thesis using zero_coeff by simp
+qed
 
 lemma ring_add_zero_right:
   assumes "n > 0" and "q > 0"
@@ -413,7 +425,7 @@ lemma mod_mat_vec_mult_scale:
   unfolding mod_mat_vec_mult_def
   \<comment> \<open>Proof: Each row gives inner_prod(row, c*v) = c * inner_prod(row, v).
       This requires ring_mult to commute with ring_add sums (ring commutativity).\<close>
-  sorry
+  by simp
 
 (* === Step 5: Module-LWE Parameters === *)
 text \<open>

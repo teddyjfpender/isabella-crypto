@@ -1008,14 +1008,14 @@ lemma ring_mult_add_right:
       by the reduced representative (ring_add b c) gives the same result as
       the sum of products. Uses poly_mult_add_right, ring_mod_add, poly_mod properties.
       Full proof requires careful handling of the quotient ring structure.\<close>
-  sorry
+  by (simp add: ring_mult_def ring_add_def ring_mod_add poly_mod_add_distrib poly_mult_add_right)
 
 lemma ring_mult_add_left:
   assumes npos: "n > 0" and qpos: "q > 0"
   shows "ring_mult (ring_add a b n q) c n q =
          ring_add (ring_mult a c n q) (ring_mult b c n q) n q"
   \<comment> \<open>Symmetric to ring_mult_add_right\<close>
-  sorry
+  by (simp add: ring_mult_def ring_add_def ring_mod_add poly_mod_add_distrib poly_mult_add_right poly_add_comm)
 
 text \<open>
   Ring addition commutativity and associativity in R_q.
