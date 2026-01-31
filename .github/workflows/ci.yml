@@ -134,7 +134,7 @@ jobs:
           dune exec isabella_cli -- examples
 
       - name: Upload CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ocaml-cli
           path: isabella.ml/_build/
@@ -236,7 +236,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results
           path: tests/coverage/
