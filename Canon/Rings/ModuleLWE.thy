@@ -1,5 +1,5 @@
 theory ModuleLWE
-  imports Canon_Base.Prelude Canon_Base.ListVec Canon_Base.Zq Canon_Base.Norms Canon_Hardness.LWE_Def Canon_Hardness.SIS_Def Canon_Rings.PolyMod
+  imports Canon_Base.Prelude Canon_Base.ListVec Canon_Base.Zq Canon_Base.Norms Canon_Hardness.LWE_Def Canon_Hardness.SIS_Def Canon_Rings.PolyMod Canon_Rings.QuotientRing
 begin
 
 (* === Step 1: Module Element Types === *)
@@ -101,10 +101,10 @@ text \<open>
 
   Proof sketch by induction on v:
   - Base case: [] gives replicate n 0 on both sides
-  - Inductive case: Uses ring_mult_add_right and ring_add_assoc to rearrange terms
+  - Inductive case: Uses ring_mult_add_right_via_quotient and ring_add_assoc to rearrange terms
 
   The proof requires:
-  1. ring_mult_add_right: a * (b + c) = a*b + a*c (from PolyMod.thy)
+  1. ring_mult_add_right_via_quotient: a * (b + c) = a*b + a*c (from QuotientRing.thy)
   2. ring_add_assoc: (a + b) + c = a + (b + c) (from PolyMod.thy)
   3. ring_add_comm: a + b = b + a (from PolyMod.thy)
 \<close>
@@ -381,10 +381,10 @@ next
                       (ring_add (ring_mult p w0 n q) (mod_inner_prod ps ws n q) n q) n q"
     using u_def w_def by simp
 
-  \<comment> \<open>Apply ring_mult_add_right: p * (u0 + w0) = p*u0 + p*w0\<close>
+  \<comment> \<open>Apply ring_mult_add_right_via_quotient: p * (u0 + w0) = p*u0 + p*w0\<close>
   have mult_distrib: "ring_mult p (ring_add u0 w0 n q) n q =
                       ring_add (ring_mult p u0 n q) (ring_mult p w0 n q) n q"
-    using ring_mult_add_right[OF npos qpos] .
+    using ring_mult_add_right_via_quotient[OF npos qpos] .
 
   \<comment> \<open>The final rearrangement:
       ring_add (ring_add (p*u0) (p*w0)) (ring_add (inner ps us) (inner ps ws))

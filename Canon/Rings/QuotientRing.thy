@@ -270,20 +270,50 @@ qed
 
 text \<open>ring_mod_coeff preserves mod equivalence when poly_coeff values are equivalent.
       This is a key structural lemma: ring_mod_coeff is a linear combination of
-      poly_coeff values with signs ±1, so coefficient-wise mod equivalence propagates.\<close>
+      poly_coeff values with signs ±1, so coefficient-wise mod equivalence propagates.
+
+      Proof sketch:
+      1. Both ring_mod_coeff results are signed sums of poly_coeff values
+      2. The sums may have different ranges (depending on polynomial lengths)
+      3. But poly_coeff returns 0 beyond length, so extending to common range is safe
+      4. sum_list_signed_mod_eq shows the extended sums are equal mod q
+
+      The arithmetic reasoning for bound extension requires complex div/mult lemmas.
+      Marked sorry for quick_and_dirty build; full proof deferred.\<close>
+
 lemma ring_mod_coeff_mod_cong:
   assumes "\<And>j. poly_coeff p1 j mod q = poly_coeff p2 j mod (q::int)"
   shows "ring_mod_coeff p1 n i mod q = ring_mod_coeff p2 n i mod q"
-proof -
-  \<comment> \<open>Key insight: for any k, poly_coeff p1 (k*n+i) mod q = poly_coeff p2 (k*n+i) mod q\<close>
-  have coeff_eq: "\<And>k. poly_coeff p1 (k * n + i) mod q = poly_coeff p2 (k * n + i) mod q"
-    using assms by simp
+proof (cases "n = 0")
+  case True
+  \<comment> \<open>When n = 0, ring_mod_coeff p 0 i = poly_coeff p i (single term sum)\<close>
+  have "ring_mod_coeff p1 0 i = poly_coeff p1 i"
+    unfolding ring_mod_coeff_def by simp
+  moreover have "ring_mod_coeff p2 0 i = poly_coeff p2 i"
+    unfolding ring_mod_coeff_def by simp
+  ultimately show ?thesis using True assms[of i] by simp
+next
+  case npos: False
+  hence n_gt0: "n > 0" by simp
 
-  \<comment> \<open>ring_mod_coeff is sum of ±poly_coeff(k*n+i) terms.
-      When coefficients agree mod q, the signed sums also agree mod q.
-      Full proof requires showing sum extension to common bound preserves result
-      (since poly_coeff returns 0 beyond length). Deferred to AFP integration.\<close>
-  show ?thesis using coeff_eq
+  \<comment> \<open>Main case: n > 0.
+
+      Structure of the proof:
+      1. ring_mod_coeff is a signed sum: sum over k of (±1) * poly_coeff p (k*n+i)
+      2. By assumption, poly_coeff p1 j ≡ poly_coeff p2 j (mod q) for all j
+      3. Each term in the signed sum satisfies (±1)*f ≡ (±1)*g (mod q) when f ≡ g (mod q)
+      4. The sums may have different bounds (based on polynomial lengths)
+      5. But poly_coeff returns 0 beyond length, so extending to a common bound is safe
+      6. Therefore the signed sums are equivalent mod q
+
+      Key lemmas used:
+      - neg_mod_cong: (-a) mod q = (-b) mod q when a mod q = b mod q
+      - sum_list_signed_mod_eq: signed sums preserve mod equivalence term-by-term
+      - poly_coeff_beyond: poly_coeff p i = 0 when i ≥ length p
+
+      Full arithmetic for bound extension deferred.\<close>
+
+  show ?thesis using assms n_gt0
     unfolding ring_mod_coeff_def Let_def
     sorry
 qed
@@ -362,25 +392,198 @@ proof -
   finally show ?thesis .
 qed
 
+section \<open>Key Lemma: ring_mult Respects ring_mod\<close>
+
+text \<open>
+  The crucial property: ring_mult a (ring_mod b n) n q = ring_mult a b n q
+
+  This shows that multiplication respects the X^n ≡ -1 equivalence.
+
+  Proof idea: In R_q[X]/(X^n+1), we have X^n ≡ -1. The ring_mod operation
+  folds coefficients at positions k ≥ n back to positions k mod n with
+  alternating signs (capturing X^n = -1, X^{2n} = 1, etc.).
+
+  When we multiply by a and then apply ring_mod, the high-degree terms
+  from b contribute the same (after folding) as if we first reduced b.
+
+  This is analogous to AFP's CRYSTALS-Kyber to_qr_mult lemma.
+\<close>
+
+lemma ring_mult_ring_mod_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_mult a (ring_mod b n) n q = ring_mult a b n q"
+proof -
+  \<comment> \<open>Key insight: ring_mod b n is the canonical representative of b's equivalence class.
+      Since multiplication is well-defined on the quotient ring,
+      multiplying by the canonical representative gives the same result.
+
+      The formal proof requires showing that for each coefficient position i in [0,n):
+      ring_mod_coeff (poly_mult a (ring_mod b n)) n i mod q =
+      ring_mod_coeff (poly_mult a b) n i mod q
+
+      This follows from the fact that ring_mod distributes across poly_mult
+      when we account for the X^n = -1 folding.\<close>
+
+  show ?thesis
+    unfolding ring_mult_def
+    \<comment> \<open>Full proof requires showing poly_mult distributes across ring_mod.
+        Deferred - AFP integration would provide this via quotient type machinery.\<close>
+    sorry
+qed
+
+text \<open>Symmetric lemma for left argument.\<close>
+lemma ring_mult_ring_mod_left:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_mult (ring_mod a n) b n q = ring_mult a b n q"
+  \<comment> \<open>Follows by symmetric argument to ring_mult_ring_mod_right\<close>
+  sorry
+
+section \<open>Distributivity in the Quotient Ring\<close>
+
+text \<open>
+  With ring_mult_poly_mod_right and ring_mult_ring_mod_right, we can prove
+  distributivity: ring_mult a (ring_add b c n q) n q =
+                  ring_add (ring_mult a b n q) (ring_mult a c n q) n q
+\<close>
+
+text \<open>Helper lemma: poly_mult distributes over poly_add, with case handling for empty lists.\<close>
+lemma poly_mult_add_right_general:
+  "poly_mult a (poly_add b c) = poly_add (poly_mult a b) (poly_mult a c)"
+proof (cases "b = []")
+  case True
+  thus ?thesis by simp
+next
+  case bne: False
+  show ?thesis
+  proof (cases "c = []")
+    case True
+    thus ?thesis by simp
+  next
+    case cne: False
+    show ?thesis using poly_mult_add_right[OF bne cne] by simp
+  qed
+qed
+
+lemma ring_mult_add_right_via_quotient:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_mult a (ring_add b c n q) n q =
+         ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
+proof -
+  \<comment> \<open>Step 1: Expand ring_add\<close>
+  have "ring_add b c n q = poly_mod (ring_mod (poly_add b c) n) q"
+    unfolding ring_add_def ..
+
+  \<comment> \<open>Step 2: Use ring_mult_poly_mod_right to remove outer poly_mod\<close>
+  have step2: "ring_mult a (poly_mod (ring_mod (poly_add b c) n) q) n q =
+               ring_mult a (ring_mod (poly_add b c) n) n q"
+    using ring_mult_poly_mod_right[OF npos qpos] by simp
+
+  \<comment> \<open>Step 3: Use ring_mult_ring_mod_right to remove ring_mod\<close>
+  have step3: "ring_mult a (ring_mod (poly_add b c) n) n q =
+               ring_mult a (poly_add b c) n q"
+    using ring_mult_ring_mod_right[OF npos qpos] by simp
+
+  \<comment> \<open>Step 4: Use poly_mult_add_right_general for polynomial distributivity\<close>
+  have step4: "ring_mult a (poly_add b c) n q =
+               poly_mod (ring_mod (poly_mult a (poly_add b c)) n) q"
+    unfolding ring_mult_def ..
+
+  have dist: "poly_mult a (poly_add b c) = poly_add (poly_mult a b) (poly_mult a c)"
+    by (rule poly_mult_add_right_general)
+
+  hence step4': "ring_mult a (poly_add b c) n q =
+                 poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q"
+    unfolding ring_mult_def by simp
+
+  \<comment> \<open>Step 5: Show ring_mod distributes over poly_add\<close>
+  have step5: "poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q =
+               ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
+  proof -
+    \<comment> \<open>Use ring_mod_add: ring_mod distributes over poly_add\<close>
+    have rm_dist: "ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n =
+                   poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)"
+      using ring_mod_add[OF npos] .
+
+    \<comment> \<open>LHS becomes:\<close>
+    have lhs: "poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q =
+               poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q"
+      using rm_dist by simp
+
+    \<comment> \<open>Expand RHS using ring_add_def and ring_mult_def\<close>
+    let ?ab = "poly_mod (ring_mod (poly_mult a b) n) q"
+    let ?ac = "poly_mod (ring_mod (poly_mult a c) n) q"
+
+    have rhs_expand: "ring_add (ring_mult a b n q) (ring_mult a c n q) n q =
+                      poly_mod (ring_mod (poly_add ?ab ?ac) n) q"
+      unfolding ring_add_def ring_mult_def by simp
+
+    \<comment> \<open>Key: ring_mod of poly_add with already-reduced polynomials\<close>
+    \<comment> \<open>Use ring_mod_add and the fact that ?ab and ?ac have length n\<close>
+    have len_ab: "length ?ab = n" using npos by (simp add: ring_mod_length)
+    have len_ac: "length ?ac = n" using npos by (simp add: ring_mod_length)
+
+    \<comment> \<open>ring_mod (poly_add ?ab ?ac) n = poly_add (ring_mod ?ab n) (ring_mod ?ac n)\<close>
+    have "ring_mod (poly_add ?ab ?ac) n = poly_add (ring_mod ?ab n) (ring_mod ?ac n)"
+      using ring_mod_add[OF npos] .
+
+    \<comment> \<open>Since ?ab and ?ac have length n, ring_mod is identity (after padding)\<close>
+    have rm_ab: "ring_mod ?ab n = ?ab" using ring_mod_already_n[OF npos len_ab] .
+    have rm_ac: "ring_mod ?ac n = ?ac" using ring_mod_already_n[OF npos len_ac] .
+
+    have rhs_simp: "ring_mod (poly_add ?ab ?ac) n = poly_add ?ab ?ac"
+      using ring_mod_add[OF npos] rm_ab rm_ac by simp
+
+    \<comment> \<open>So RHS = poly_mod (poly_add ?ab ?ac) q\<close>
+    have rhs_eq: "ring_add (ring_mult a b n q) (ring_mult a c n q) n q =
+                  poly_mod (poly_add ?ab ?ac) q"
+      using rhs_expand rhs_simp by simp
+
+    \<comment> \<open>Now we need: poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q
+                     = poly_mod (poly_add ?ab ?ac) q
+        Use poly_mod_poly_add_left and poly_mod_poly_add_right (in reverse)\<close>
+
+    \<comment> \<open>First: absorb ?ab's poly_mod using poly_mod_poly_add_left[symmetric]\<close>
+    have step_a: "poly_mod (poly_add ?ab (ring_mod (poly_mult a c) n)) q =
+                  poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q"
+      using poly_mod_poly_add_left[OF qpos,
+                                   of "ring_mod (poly_mult a b) n" "ring_mod (poly_mult a c) n"]
+      by simp
+
+    \<comment> \<open>Second: absorb ?ac's poly_mod using poly_mod_poly_add_right[symmetric]\<close>
+    have step_b: "poly_mod (poly_add ?ab ?ac) q =
+                  poly_mod (poly_add ?ab (ring_mod (poly_mult a c) n)) q"
+      using poly_mod_poly_add_right[OF qpos, of ?ab "ring_mod (poly_mult a c) n"]
+      by simp
+
+    have lhs_eq: "poly_mod (poly_add (ring_mod (poly_mult a b) n)
+                                     (ring_mod (poly_mult a c) n)) q =
+                  poly_mod (poly_add ?ab ?ac) q"
+      using step_a step_b by simp
+
+    show ?thesis using lhs lhs_eq rhs_eq by simp
+  qed
+
+  show ?thesis
+    using step2 step3 step4' step5
+    unfolding ring_add_def by simp
+qed
+
 section \<open>Summary\<close>
 
 text \<open>
   We have established the key structural lemmas:
   1. poly_mod_poly_mult_poly_mod: poly_mod (poly_mult a (poly_mod b q)) q = poly_mod (poly_mult a b) q
   2. ring_mult_poly_mod_right: ring_mult a (poly_mod b q) n q = ring_mult a b n q
+  3. ring_mult_ring_mod_right: ring_mult a (ring_mod b n) n q = ring_mult a b n q (sorry)
+  4. ring_mult_add_right_via_quotient: distributivity in R_q (partially sorry)
 
-  These show that multiplication respects the mod q equivalence.
+  These show that multiplication respects the quotient ring equivalence.
 
-  The remaining piece for full distributivity is showing multiplication respects
-  the mod (X^n + 1) equivalence:
-  3. ring_mult a (ring_mod b n) n q = ring_mult a b n q
+  Remaining work:
+  - Complete ring_mult_ring_mod_right by showing poly_mult distributes with ring_mod
+  - Complete the distributivity proof by showing ring_mod distributes over poly_add
 
-  This requires showing that X^n \<equiv> -1 propagates through multiplication.
-  With (2) and (3), distributivity follows from poly_mult_add_right.
-
-  For full formalization, consider importing AFP's quotient ring infrastructure:
-  - CRYSTALS-Kyber provides Z_q[X]/(X^n+1) as a proper quotient type
-  - Berlekamp-Zassenhaus provides Poly_Mod locale with mult_Mp lemmas
+  For full formalization, AFP's quotient type machinery would make these proofs automatic.
 \<close>
 
 end
