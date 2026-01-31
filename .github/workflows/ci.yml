@@ -44,7 +44,7 @@ jobs:
           cd Canon
           isabelle build -v -D .
 
-      - name: Export Haskell code
+      - name: Export code
         run: |
           cd Canon
           isabelle build -e -D .
@@ -136,7 +136,7 @@ jobs:
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ocaml-build
+          name: ocaml-cli
           path: isabella.ml/_build/
           retention-days: 1
 
@@ -219,10 +219,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tests/package-lock.json
 
       - name: Install test dependencies
         working-directory: tests
-        run: npm install
+        run: npm ci
 
       - name: Run cross-validation tests
         working-directory: tests
@@ -230,7 +232,6 @@ jobs:
           eval $(opam env)
           npm test
         env:
-          # Run tests sequentially to avoid dune lock conflicts
           CI: true
 
       - name: Upload test results

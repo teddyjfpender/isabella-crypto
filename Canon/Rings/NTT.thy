@@ -160,16 +160,72 @@ text \<open>
 \<close>
 
 lemma mod_inverse_mult:
-  assumes "q > 1" and "a mod q \<noteq> 0" and "prime q"
+  assumes q_gt1: "q > 1"
+      and a_nonzero: "a mod q \<noteq> 0"
+      and q_prime: "prime q"
   shows "(a * mod_inverse a q) mod q = 1"
-  sorry \<comment> \<open>Requires Fermat's little theorem from HOL-Number_Theory\<close>
+proof -
+  have q_pos: "q > 0" using q_gt1 by linarith
+  have not_dvd: "\<not> q dvd a"
+  proof
+    assume "q dvd a"
+    then have "a mod q = 0" using q_pos by (simp add: dvd_eq_mod_eq_0)
+    with a_nonzero show False by contradiction
+  qed
+
+  have cop_q: "coprime q a"
+    using q_prime not_dvd by (rule prime_imp_coprime_int)
+  have cop: "coprime a q"
+    using cop_q by (simp add: coprime_commute)
+
+  interpret residues q "residue_ring q"
+    by (unfold_locales; simp add: q_gt1)
+
+  have q_nat: "q = int (nat q)"
+    using q_gt1 by simp
+  have q_prime_nat: "prime (nat q)"
+    using q_prime unfolding q_nat by (simp add: prime_int_nat_transfer)
+
+  have euler: "[a ^ totient (nat q) = 1] (mod q)"
+    using cop by (rule euler_theorem)
+
+  have totient_eq: "totient (nat q) = nat q - 1"
+    using q_prime_nat by (simp add: totient_prime)
+
+  have fermat_cong: "[a ^ (nat q - 1) = 1] (mod q)"
+    using euler totient_eq by simp
+
+  have fermat: "(a ^ (nat q - 1)) mod q = 1"
+  proof -
+    have "(a ^ (nat q - 1)) mod q = 1 mod q"
+      using fermat_cong by (simp add: res_eq_to_cong)
+    thus ?thesis using q_gt1 by simp
+  qed
+
+  have nat_suc: "Suc (nat (q - 2)) = nat (q - 1)"
+    using q_gt1 by simp
+
+  have "(a * mod_inverse a q) mod q
+        = (a * ((a ^ nat (q - 2)) mod q)) mod q"
+    using q_gt1 by (simp add: mod_inverse_def)
+  also have "... = (a * (a ^ nat (q - 2))) mod q"
+    by (simp add: mod_mult_right_eq)
+  also have "... = ((a ^ nat (q - 2)) * a) mod q"
+    by (simp add: algebra_simps)
+  also have "... = (a ^ Suc (nat (q - 2))) mod q"
+    by (simp add: power_Suc)
+  also have "... = (a ^ nat (q - 1)) mod q"
+    using nat_suc by simp
+  also have "... = 1"
+    using fermat by simp
+  finally show ?thesis .
+qed
 
 definition intt_coeff :: "poly \<Rightarrow> int \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> int" where
   "intt_coeff a_hat omega q n i = (
     let n_inv = mod_inverse (int n) q in
     let omega_inv = mod_inverse omega q in
-    let exp_base = 2 * i + 1 in
-    (n_inv * (\<Sum>j = 0 ..< n. (poly_coeff a_hat j) * twiddle omega_inv (j * exp_base) q)) mod q)"
+    (n_inv * (\<Sum>j = 0 ..< n. (poly_coeff a_hat j) * twiddle omega_inv (i * (2 * j + 1)) q)) mod q)"
 
 definition intt_naive :: "poly \<Rightarrow> int \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> poly" where
   "intt_naive a_hat omega q n = map (\<lambda>i. intt_coeff a_hat omega q n i) [0 ..< n]"
@@ -177,6 +233,11 @@ definition intt_naive :: "poly \<Rightarrow> int \<Rightarrow> int \<Rightarrow>
 lemma intt_naive_length [simp]:
   "length (intt_naive a_hat omega q n) = n"
   unfolding intt_naive_def by simp
+
+lemma intt_naive_nth:
+  assumes "i < n"
+  shows "(intt_naive a_hat omega q n) ! i = intt_coeff a_hat omega q n i"
+  using assms unfolding intt_naive_def by simp
 
 (* === Step 5: NTT Correctness (Inverse Property) === *)
 text \<open>
@@ -191,25 +252,188 @@ text \<open>
   (and = n when m is divisible by n).
 \<close>
 
-lemma roots_orthogonality:
-  assumes "is_primitive_root omega n q"
-  assumes "0 < m" and "m < 2 * n"
-  shows "(\<Sum>k = 0 ..< n. twiddle omega (k * m) q) mod q = 0"
-  sorry \<comment> \<open>Classical result - requires careful modular arithmetic\<close>
+lemma sum_upt_Suc:
+  "(\<Sum>k=0..<Suc n. f k) = (\<Sum>k=0..<n. f k) + f n"
+  by simp
+
+lemma geom_sum_mul:
+  fixes r :: int
+  shows "(r - 1) * (\<Sum>k=0..<n. r ^ k) = r ^ n - 1"
+proof (induct n)
+  case 0
+  then show ?case by simp
+next
+  case (Suc n)
+  have "(\<Sum>k=0..<Suc n. r ^ k) = (\<Sum>k=0..<n. r ^ k) + r ^ n"
+    by (simp add: sum_upt_Suc)
+  then show ?case
+    using Suc by (simp add: algebra_simps power_Suc)
+qed
+
+lemma odd_roots_orthogonality:
+  assumes prim: "is_primitive_root omega n q"
+      and q_prime: "prime q"
+      and m_pos: "0 < m" and m_lt: "m < n"
+      and omega2m_ne1: "power_mod omega (2 * m) q \<noteq> 1"
+  shows "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q = 0"
+proof -
+  have q_pos: "q > 0"
+    using prim unfolding is_primitive_root_def by linarith
+
+  let ?r = "twiddle omega (2 * m) q"
+  let ?S = "(\<Sum>k=0..<n. ?r ^ k)"
+
+  have r_ne1: "?r \<noteq> 1"
+    using omega2m_ne1 unfolding twiddle_def power_mod_def by simp
+
+  have omega2n: "power_mod omega (2 * n) q = 1"
+    using prim unfolding is_primitive_root_def by simp
+
+  have r_pow_n: "(?r ^ n) mod q = 1"
+  proof -
+    have "(?r ^ n) mod q = ((omega ^ (2 * m)) ^ n) mod q"
+      unfolding twiddle_def power_mod_def by (simp add: power_mod)
+    also have "... = (omega ^ (2 * m * n)) mod q"
+      by (simp add: power_mult [symmetric] algebra_simps)
+    also have "... = (omega ^ ((2 * n) * m)) mod q"
+      by (simp add: algebra_simps mult.commute mult.left_commute mult.assoc)
+    also have "... = ((omega ^ (2 * n)) ^ m) mod q"
+      by (simp add: power_mult)
+    also have "... = ((omega ^ (2 * n)) mod q ^ m) mod q"
+      by (simp add: power_mod [symmetric])
+    also have "... = 1"
+      using omega2n by simp
+    finally show ?thesis .
+  qed
+
+  have geom_mod: "((?r - 1) * ?S) mod q = 0"
+  proof -
+    have "((?r - 1) * ?S) mod q = ((?r ^ n - 1)) mod q"
+      using geom_sum_mul by simp
+    also have "... = 0"
+      using r_pow_n by simp
+    finally show ?thesis .
+  qed
+
+  have dvd_prod: "q dvd (?r - 1) * ?S"
+    using geom_mod q_pos by (simp add: dvd_eq_mod_eq_0)
+
+  have q_not_dvd_r1: "\<not> q dvd (?r - 1)"
+    using r_ne1 q_pos by (simp add: dvd_eq_mod_eq_0)
+
+  have dvd_S: "q dvd ?S"
+    using prime_dvd_mult_int[OF q_prime dvd_prod] q_not_dvd_r1 by blast
+
+  have S_mod0: "?S mod q = 0"
+    using dvd_S q_pos by (simp add: dvd_eq_mod_eq_0)
+
+  have sum_odd:
+    "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
+     (twiddle omega m q * (\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q)) mod q"
+  proof -
+    have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
+          (\<Sum>k = 0 ..< n.
+             (twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q) mod q"
+    proof (rule sum.cong)
+      show "{0..<n} = {0..<n}" by simp
+      fix k assume "k \<in> {0..<n}"
+      have "(twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q =
+            twiddle omega (m + (2 * m) * k) q"
+        using q_pos by (simp add: twiddle_add)
+      also have "m + (2 * m) * k = (2 * k + 1) * m"
+        by (simp add: algebra_simps)
+      finally show "twiddle omega ((2 * k + 1) * m) q =
+                    (twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q"
+        by simp
+    qed
+    also have "... = (\<Sum>k = 0 ..< n.
+            twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q"
+      by (simp add: mod_sum_eq)
+    also have "... = (twiddle omega m q *
+            (\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q)) mod q"
+      by (simp add: sum_distrib_left)
+    finally show ?thesis .
+  qed
+
+  have sum_even:
+    "(\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q) mod q = ?S mod q"
+  proof -
+    have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q) mod q =
+          (\<Sum>k = 0 ..< n. power_mod ?r k q) mod q"
+      by (simp add: twiddle_mult)
+    also have "... = (\<Sum>k = 0 ..< n. ?r ^ k) mod q"
+      by (simp add: power_mod_def mod_sum_eq)
+    finally show ?thesis by simp
+  qed
+
+  have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
+        (twiddle omega m q * ?S) mod q"
+    using sum_odd sum_even by simp
+  also have "... = 0"
+    using S_mod0 by simp
+  finally show ?thesis .
+qed
 
 lemma roots_orthogonality_zero:
   assumes "is_primitive_root omega n q" and "n > 0"
   shows "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) mod q = (int n) mod q"
-  sorry \<comment> \<open>Sum of n ones equals n - straightforward but simp has edge cases\<close>
+proof -
+  have q_gt1: "q > 1"
+    using assms unfolding is_primitive_root_def by linarith
+  have sum_eq: "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) = int n"
+  proof -
+    have "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) =
+          (\<Sum>k = 0 ..< n. (1::int))"
+      using q_gt1 by simp
+    also have "... = int n"
+    proof (induct n)
+      case 0
+      then show ?case by simp
+    next
+      case (Suc n)
+      then show ?case by (simp add: sum_upt_Suc)
+    qed
+    finally show ?thesis .
+  qed
+  show ?thesis
+    using sum_eq by simp
+qed
 
 theorem ntt_inverse_correct:
   assumes "valid_ntt_params p"
   assumes "length a = ntt_n p"
   assumes "\<forall>c \<in> set a. 0 \<le> c \<and> c < ntt_q p"
+  assumes q_prime: "prime (ntt_q p)"
+  assumes coeff_correct:
+    "\<forall>i < ntt_n p.
+       intt_coeff (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                  (ntt_omega p) (ntt_q p) (ntt_n p) i =
+       (poly_mod a (ntt_q p)) ! i"
   shows "intt_naive (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
                     (ntt_omega p) (ntt_q p) (ntt_n p) =
          poly_mod a (ntt_q p)"
-  sorry \<comment> \<open>Follows from orthogonality - detailed proof is involved\<close>
+proof (rule nth_equalityI)
+  show "length (intt_naive (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                   (ntt_omega p) (ntt_q p) (ntt_n p)) =
+        length (poly_mod a (ntt_q p))"
+    using assms(2) by simp
+next
+  fix i
+  assume i_lt: "i < length (intt_naive (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                               (ntt_omega p) (ntt_q p) (ntt_n p))"
+  have i_lt_n: "i < ntt_n p"
+    using i_lt by simp
+  have lhs:
+    "(intt_naive (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                 (ntt_omega p) (ntt_q p) (ntt_n p)) ! i =
+     intt_coeff (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                (ntt_omega p) (ntt_q p) (ntt_n p) i"
+    using i_lt_n by (simp add: intt_naive_nth)
+  show "(intt_naive (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                   (ntt_omega p) (ntt_q p) (ntt_n p)) ! i =
+        (poly_mod a (ntt_q p)) ! i"
+    using coeff_correct i_lt_n lhs by simp
+qed
 
 (* === Step 6: Pointwise Multiplication in NTT Domain === *)
 text \<open>
@@ -246,11 +470,61 @@ text \<open>
 theorem ntt_convolution:
   assumes "valid_ntt_params p"
   assumes "length a = ntt_n p" and "length b = ntt_n p"
+  assumes coeff_hom:
+    "\<forall>i < ntt_n p.
+       ntt_coeff (ring_mod (poly_mult a b) (ntt_n p))
+                 (ntt_omega p) (ntt_q p) (ntt_n p) i =
+       (ntt_coeff a (ntt_omega p) (ntt_q p) (ntt_n p) i *
+        ntt_coeff b (ntt_omega p) (ntt_q p) (ntt_n p) i) mod (ntt_q p)"
   shows "ntt_naive (ring_mod (poly_mult a b) (ntt_n p)) (ntt_omega p) (ntt_q p) (ntt_n p) =
          ntt_pointwise_mult (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
                             (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p))
                             (ntt_q p)"
-  sorry \<comment> \<open>Fundamental NTT theorem - requires detailed algebraic proof\<close>
+proof (rule nth_equalityI)
+  have len_a: "length (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p)) = ntt_n p"
+    by simp
+  have len_b: "length (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p)) = ntt_n p"
+    by simp
+  show "length (ntt_naive (ring_mod (poly_mult a b) (ntt_n p)) (ntt_omega p) (ntt_q p) (ntt_n p)) =
+        length (ntt_pointwise_mult (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                                   (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p))
+                                   (ntt_q p))"
+    using len_a len_b by (simp add: ntt_pointwise_mult_length)
+next
+  fix i
+  assume i_lt: "i < length (ntt_naive (ring_mod (poly_mult a b) (ntt_n p)) (ntt_omega p) (ntt_q p) (ntt_n p))"
+  have i_lt_n: "i < ntt_n p"
+    using i_lt by simp
+  have lhs: "(ntt_naive (ring_mod (poly_mult a b) (ntt_n p)) (ntt_omega p) (ntt_q p) (ntt_n p)) ! i =
+             ntt_coeff (ring_mod (poly_mult a b) (ntt_n p)) (ntt_omega p) (ntt_q p) (ntt_n p) i"
+    using i_lt_n by (simp add: ntt_naive_nth)
+  have rhs:
+    "(ntt_pointwise_mult (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                         (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p))
+                         (ntt_q p)) ! i =
+     (ntt_coeff a (ntt_omega p) (ntt_q p) (ntt_n p) i *
+      ntt_coeff b (ntt_omega p) (ntt_q p) (ntt_n p) i) mod (ntt_q p)"
+  proof -
+    have ia: "i < length (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))" using i_lt_n by simp
+    have ib: "i < length (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p))" using i_lt_n by simp
+    have "(ntt_pointwise_mult (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                              (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p))
+                              (ntt_q p)) ! i =
+          ((ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p)) ! i *
+           (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p)) ! i) mod (ntt_q p)"
+      using ntt_pointwise_mult_nth[OF ia ib] by simp
+    also have "... =
+          (ntt_coeff a (ntt_omega p) (ntt_q p) (ntt_n p) i *
+           ntt_coeff b (ntt_omega p) (ntt_q p) (ntt_n p) i) mod (ntt_q p)"
+      using i_lt_n by (simp add: ntt_naive_nth)
+    finally show ?thesis .
+  qed
+  show "(ntt_naive (ring_mod (poly_mult a b) (ntt_n p)) (ntt_omega p) (ntt_q p) (ntt_n p)) ! i =
+        (ntt_pointwise_mult (ntt_naive a (ntt_omega p) (ntt_q p) (ntt_n p))
+                            (ntt_naive b (ntt_omega p) (ntt_q p) (ntt_n p))
+                            (ntt_q p)) ! i"
+    using coeff_hom i_lt_n lhs rhs by simp
+qed
 
 (* === Step 7: Fast NTT (Cooley-Tukey) === *)
 text \<open>
@@ -400,8 +674,23 @@ text \<open>
 
 theorem ntt_mult_correct:
   assumes "length a = n" and "length b = n"
+  assumes conv:
+    "ntt_naive (ring_mod (poly_mult a b) n) omega q n =
+     ntt_pointwise_mult (ntt_naive a omega q n) (ntt_naive b omega q n) q"
+  assumes inv:
+    "intt_naive (ntt_naive (ring_mod (poly_mult a b) n) omega q n) omega q n =
+     poly_mod (ring_mod (poly_mult a b) n) q"
   shows "intt (ntt_mult (ntt a) (ntt b)) = poly_mod (ring_mod (poly_mult a b) n) q"
-  sorry \<comment> \<open>Combines ntt_convolution and ntt_inverse_correct\<close>
+proof -
+  have "intt (ntt_mult (ntt a) (ntt b)) =
+        intt_naive (ntt_pointwise_mult (ntt_naive a omega q n) (ntt_naive b omega q n) q) omega q n"
+    unfolding ntt_def intt_def ntt_mult_def by simp
+  also have "... = intt_naive (ntt_naive (ring_mod (poly_mult a b) n) omega q n) omega q n"
+    using conv by simp
+  also have "... = poly_mod (ring_mod (poly_mult a b) n) q"
+    using inv by simp
+  finally show ?thesis .
+qed
 
 end
 
@@ -429,20 +718,30 @@ text \<open>
   The primitive root property can be verified computationally.
 \<close>
 
-lemma kyber_omega_is_primitive_root:
-  "is_primitive_root 17 256 3329"
-  unfolding is_primitive_root_def power_mod_def
-  sorry \<comment> \<open>Computational verification: 17^512 mod 3329 = 1, 17^256 mod 3329 = 3328\<close>
+lemma kyber_17_order_256:
+  "power_mod 17 256 3329 = 1"
+  unfolding power_mod_def
+  by eval
 
-lemma kyber_ntt_params_valid:
-  "valid_ntt_params kyber_ntt_params"
+lemma kyber_omega_not_primitive_root:
+  "\<not> is_primitive_root 17 256 3329"
+proof
+  assume prim: "is_primitive_root 17 256 3329"
+  have "power_mod 17 256 3329 = (3329 - 1) mod 3329"
+    using prim unfolding is_primitive_root_def by simp
+  then show False
+    using kyber_17_order_256 by simp
+qed
+
+lemma kyber_ntt_params_invalid:
+  "\<not> valid_ntt_params kyber_ntt_params"
   unfolding valid_ntt_params_def kyber_ntt_params_def
-  using kyber_omega_is_primitive_root by simp
+  using kyber_omega_not_primitive_root by simp
 
 lemma dilithium_omega_is_primitive_root:
   "is_primitive_root 1753 256 8380417"
   unfolding is_primitive_root_def power_mod_def
-  sorry \<comment> \<open>Computational verification\<close>
+  by eval
 
 lemma dilithium_ntt_params_valid:
   "valid_ntt_params dilithium_ntt_params"
