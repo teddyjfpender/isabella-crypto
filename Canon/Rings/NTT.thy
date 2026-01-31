@@ -181,10 +181,8 @@ proof -
   interpret residues q "residue_ring q"
     by (unfold_locales; simp add: q_gt1)
 
-  have q_nat: "q = int (nat q)"
-    using q_gt1 by simp
   have q_prime_nat: "prime (nat q)"
-    using q_prime unfolding q_nat by (simp add: prime_int_nat_transfer)
+    using q_prime q_gt1 prime_nat_iff_prime by auto
 
   have euler: "[a ^ totient (nat q) = 1] (mod q)"
     using cop by (rule euler_theorem)
@@ -205,17 +203,18 @@ proof -
   have nat_suc: "Suc (nat (q - 2)) = nat (q - 1)"
     using q_gt1 by simp
 
+  have nat_eq: "nat (q - 1) = nat q - 1"
+    using q_gt1 by auto
+
   have "(a * mod_inverse a q) mod q
         = (a * ((a ^ nat (q - 2)) mod q)) mod q"
     using q_gt1 by (simp add: mod_inverse_def)
   also have "... = (a * (a ^ nat (q - 2))) mod q"
     by (simp add: mod_mult_right_eq)
-  also have "... = ((a ^ nat (q - 2)) * a) mod q"
-    by (simp add: algebra_simps)
   also have "... = (a ^ Suc (nat (q - 2))) mod q"
     by (simp add: power_Suc)
-  also have "... = (a ^ nat (q - 1)) mod q"
-    using nat_suc by simp
+  also have "... = (a ^ (nat q - 1)) mod q"
+    using nat_suc nat_eq by simp
   also have "... = 1"
     using fermat by simp
   finally show ?thesis .
@@ -329,11 +328,35 @@ proof -
   have dvd_prod: "q dvd (?r - 1) * ?S"
     using geom_mod q_pos by (simp add: dvd_eq_mod_eq_0)
 
+  have r_range: "0 \<le> ?r \<and> ?r < q"
+    unfolding twiddle_def power_mod_def using q_pos by simp
+
   have q_not_dvd_r1: "\<not> q dvd (?r - 1)"
-    using r_ne1 q_pos by (simp add: dvd_eq_mod_eq_0)
+  proof -
+    have "(?r - 1) mod q \<noteq> 0"
+    proof (cases "?r = 0")
+      case True
+      then have "(?r - 1) mod q = (-1) mod q" by simp
+      also have "... = q - 1" using q_gt1 minus_one_mod by simp
+      finally show ?thesis using q_gt1 by simp
+    next
+      case False
+      then have "?r \<ge> 1" using r_range by simp
+      then have "?r - 1 \<ge> 0" by simp
+      moreover have "?r - 1 < q" using r_range by simp
+      moreover have "?r - 1 \<noteq> 0" using r_ne1 by simp
+      ultimately have "(?r - 1) mod q = ?r - 1" using q_pos by simp
+      then show ?thesis using r_ne1 by simp
+    qed
+    then show ?thesis using q_pos by (simp add: dvd_eq_mod_eq_0)
+  qed
 
   have dvd_S: "q dvd ?S"
-    using prime_dvd_mult_int[OF q_prime dvd_prod] q_not_dvd_r1 by blast
+  proof -
+    from dvd_prod have "q dvd (?r - 1) \<or> q dvd ?S"
+      using q_prime by (simp add: prime_dvd_mult_int)
+    with q_not_dvd_r1 show ?thesis by blast
+  qed
 
   have S_mod0: "?S mod q = 0"
     using dvd_S q_pos by (simp add: dvd_eq_mod_eq_0)
@@ -342,9 +365,9 @@ proof -
     "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
      (twiddle omega m q * (\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q)) mod q"
   proof -
-    have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
+    have inner_eq: "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) =
           (\<Sum>k = 0 ..< n.
-             (twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q) mod q"
+             (twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q)"
     proof (rule sum.cong)
       show "{0..<n} = {0..<n}" by simp
       fix k assume "k \<in> {0..<n}"
@@ -357,6 +380,10 @@ proof -
                     (twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q"
         by simp
     qed
+    have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
+          (\<Sum>k = 0 ..< n.
+             (twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q) mod q"
+      using inner_eq by simp
     also have "... = (\<Sum>k = 0 ..< n.
             twiddle omega m q * twiddle omega ((2 * m) * k) q) mod q"
       by (simp add: mod_sum_eq)
@@ -371,7 +398,7 @@ proof -
   proof -
     have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q) mod q =
           (\<Sum>k = 0 ..< n. power_mod ?r k q) mod q"
-      by (simp add: twiddle_mult)
+      using q_pos by (simp add: twiddle_mult)
     also have "... = (\<Sum>k = 0 ..< n. ?r ^ k) mod q"
       by (simp add: power_mod_def mod_sum_eq)
     finally show ?thesis by simp
@@ -379,9 +406,28 @@ proof -
 
   have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
         (twiddle omega m q * ?S) mod q"
-    using sum_odd sum_even by simp
+  proof -
+    have "(\<Sum>k = 0 ..< n. twiddle omega ((2 * k + 1) * m) q) mod q =
+          (twiddle omega m q * (\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q)) mod q"
+      using sum_odd by simp
+    also have "... = ((twiddle omega m q mod q) * ((\<Sum>k = 0 ..< n. twiddle omega ((2 * m) * k) q) mod q)) mod q"
+      by (simp add: mod_mult_eq)
+    also have "... = ((twiddle omega m q mod q) * (?S mod q)) mod q"
+      using sum_even by simp
+    also have "... = (twiddle omega m q * ?S) mod q"
+      by (simp add: mod_mult_eq)
+    finally show ?thesis .
+  qed
   also have "... = 0"
-    using S_mod0 by simp
+  proof -
+    have "(twiddle omega m q * ?S) mod q = ((twiddle omega m q) * (?S mod q)) mod q"
+      by (simp add: mod_mult_right_eq)
+    also have "... = ((twiddle omega m q) * 0) mod q"
+      using S_mod0 by simp
+    also have "... = 0"
+      by simp
+    finally show ?thesis .
+  qed
   finally show ?thesis .
 qed
 
@@ -391,11 +437,19 @@ lemma roots_orthogonality_zero:
 proof -
   have q_gt1: "q > 1"
     using assms unfolding is_primitive_root_def by linarith
+  have tw0: "twiddle omega 0 q = 1"
+    using q_gt1 twiddle_0 by blast
   have sum_eq: "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) = int n"
   proof -
     have "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) =
           (\<Sum>k = 0 ..< n. (1::int))"
-      using q_gt1 by simp
+    proof (rule sum.cong)
+      show "{0..<n} = {0..<n}" by simp
+    next
+      fix k assume "k \<in> {0..<n}"
+      show "twiddle omega (k * 0) q = (1::int)"
+        using tw0 by simp
+    qed
     also have "... = int n"
     proof (induct n)
       case 0
@@ -407,7 +461,7 @@ proof -
     finally show ?thesis .
   qed
   show ?thesis
-    using sum_eq by simp
+    by (simp only: sum_eq)
 qed
 
 theorem ntt_inverse_correct:
