@@ -1,0 +1,93 @@
+name: Build Isabelle Heaps
+
+# This workflow builds and caches the HOL session heaps that take ~30 minutes.
+# Run this manually when setting up the repo or after Isabelle version updates.
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a release with the heap artifacts'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build-heaps:
+    name: Build HOL Heaps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Isabelle installation
+        uses: actions/cache@v4
+        id: cache-isabelle
+        with:
+          path: ~/Isabelle2025
+          key: isabelle-2025-install-${{ runner.os }}
+
+      - name: Install Isabelle
+        if: steps.cache-isabelle.outputs.cache-hit != 'true'
+        run: |
+          curl -L -o isabelle.tar.gz https://isabelle.in.tum.de/website-Isabelle2025/dist/Isabelle2025_linux.tar.gz
+          tar -xzf isabelle.tar.gz -C ~
+          rm isabelle.tar.gz
+
+      - name: Add Isabelle to PATH
+        run: echo "$HOME/Isabelle2025/bin" >> $GITHUB_PATH
+
+      - name: Build HOL sessions
+        run: |
+          echo "Building HOL sessions..."
+          isabelle build -v -b HOL-Library HOL-Number_Theory HOL-Algebra HOL-Computational_Algebra HOL-Combinatorics
+        timeout-minutes: 60
+
+      - name: Build Canon sessions
+        run: |
+          cd Canon
+          isabelle build -v -D .
+
+      - name: Package heaps
+        run: |
+          cd ~/.isabelle/Isabelle2025/heaps
+          tar -czf ~/heaps-linux.tar.gz .
+          ls -lh ~/heaps-linux.tar.gz
+
+      - name: Upload heaps artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: isabelle-heaps-linux
+          path: ~/heaps-linux.tar.gz
+          retention-days: 90
+
+      # Create/update release with heaps
+      - name: Create release with heaps
+        if: inputs.create_release
+        run: |
+          # Delete existing release if it exists
+          gh release delete isabelle-heaps --yes 2>/dev/null || true
+
+          # Create new release
+          gh release create isabelle-heaps \
+            ~/heaps-linux.tar.gz \
+            --title "Isabelle 2025 Pre-built Heaps" \
+            --notes "Pre-built Isabelle heap images for CI acceleration.
+
+          Contains:
+          - HOL-Library
+          - HOL-Number_Theory
+          - HOL-Algebra
+          - HOL-Computational_Algebra
+          - HOL-Combinatorics
+          - Canon sessions
+
+          Download and extract to ~/.isabelle/Isabelle2025/heaps/ to skip building these sessions."
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Update heaps cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.isabelle
+          key: isabelle-2025-heaps-${{ runner.os }}-${{ hashFiles('Canon/ROOT', 'Canon/**/*.thy') }}
