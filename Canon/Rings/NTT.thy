@@ -280,6 +280,9 @@ proof -
   have q_pos: "q > 0"
     using prim unfolding is_primitive_root_def by linarith
 
+  have q_gt1: "q > 1"
+    using q_prime prime_gt_1_int by blast
+
   let ?r = "twiddle omega (2 * m) q"
   let ?S = "(\<Sum>k=0..<n. ?r ^ k)"
 
@@ -299,10 +302,10 @@ proof -
       by (simp add: algebra_simps mult.commute mult.left_commute mult.assoc)
     also have "... = ((omega ^ (2 * n)) ^ m) mod q"
       by (simp add: power_mult)
-    also have "... = ((omega ^ (2 * n)) mod q ^ m) mod q"
-      by (simp add: power_mod [symmetric])
+    also have "... = ((omega ^ (2 * n)) mod q) ^ m mod q"
+      by (simp add: power_mod)
     also have "... = 1"
-      using omega2n by simp
+      using omega2n q_gt1 unfolding power_mod_def by auto
     finally show ?thesis .
   qed
 
@@ -311,7 +314,15 @@ proof -
     have "((?r - 1) * ?S) mod q = ((?r ^ n - 1)) mod q"
       using geom_sum_mul by simp
     also have "... = 0"
-      using r_pow_n by simp
+    proof -
+      have "(?r ^ n - 1) mod q = ((?r ^ n) mod q - 1) mod q"
+        by (simp add: mod_diff_left_eq)
+      also have "... = (1 - 1) mod q"
+        using r_pow_n by simp
+      also have "... = 0"
+        by simp
+      finally show ?thesis .
+    qed
     finally show ?thesis .
   qed
 
