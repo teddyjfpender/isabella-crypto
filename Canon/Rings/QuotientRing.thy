@@ -35,17 +35,91 @@ text \<open>
   When we use poly_mod b q, each b_i becomes b_i mod q.
   But (a_j * (b_i mod q)) mod q = (a_j * b_i) mod q.
   So after the final poly_mod, we get the same result.
+
+  This is the same pattern as mult_Mp in Berlekamp-Zassenhaus Poly_Mod locale.
 \<close>
+
+text \<open>Key lemma: sum of modded terms mod q equals sum of original terms mod q.
+      This is equivalent to M_sum in AFP's Poly_Mod locale.\<close>
+lemma sum_mod_eq:
+  "(\<Sum>j \<in> A. f j mod (q::int)) mod q = (\<Sum>j \<in> A. f j) mod q"
+proof (induct A rule: infinite_finite_induct)
+  case (infinite A)
+  then show ?case by simp
+next
+  case empty
+  then show ?case by simp
+next
+  case (insert x A)
+  have "(\<Sum>j\<in>insert x A. f j mod q) mod q = (f x mod q + (\<Sum>j\<in>A. f j mod q)) mod q"
+    using insert(1-2) by simp
+  also have "... = (f x mod q + ((\<Sum>j\<in>A. f j mod q) mod q)) mod q"
+    by (simp add: mod_add_right_eq)
+  also have "... = (f x mod q + ((\<Sum>j\<in>A. f j) mod q)) mod q"
+    using insert(3) by simp
+  also have "... = (f x + (\<Sum>j\<in>A. f j)) mod q"
+    by (simp add: mod_add_eq)
+  also have "... = (\<Sum>j\<in>insert x A. f j) mod q"
+    using insert(1-2) by simp
+  finally show ?case .
+qed
+
+text \<open>Generalization: sum where each term has a modded factor.\<close>
+lemma sum_mult_mod_eq:
+  "(\<Sum>j \<in> A. g j * (f j mod (q::int))) mod q = (\<Sum>j \<in> A. g j * f j) mod q"
+proof (induct A rule: infinite_finite_induct)
+  case (infinite A)
+  then show ?case by simp
+next
+  case empty
+  then show ?case by simp
+next
+  case (insert x A)
+  have "(\<Sum>j\<in>insert x A. g j * (f j mod q)) mod q =
+        (g x * (f x mod q) + (\<Sum>j\<in>A. g j * (f j mod q))) mod q"
+    using insert(1-2) by simp
+  also have "... = ((g x * (f x mod q)) mod q + ((\<Sum>j\<in>A. g j * (f j mod q)) mod q)) mod q"
+    by (simp add: mod_add_eq)
+  also have "... = ((g x * f x) mod q + ((\<Sum>j\<in>A. g j * f j) mod q)) mod q"
+    using insert(3) by (simp add: mod_mult_right_eq)
+  also have "... = (g x * f x + (\<Sum>j\<in>A. g j * f j)) mod q"
+    by (simp add: mod_add_eq)
+  also have "... = (\<Sum>j\<in>insert x A. g j * f j) mod q"
+    using insert(1-2) by simp
+  finally show ?case .
+qed
+
+text \<open>Specific instance of sum_mult_mod_eq for polynomial coefficient sums.\<close>
+lemma sum_poly_coeff_mod_eq:
+  "(\<Sum>j = 0 ..< m. poly_coeff p j * ((poly_coeff r (k - j)) mod q)) mod (q::int) =
+   (\<Sum>j = 0 ..< m. poly_coeff p j * poly_coeff r (k - j)) mod q"
+proof (induct m)
+  case 0
+  then show ?case by simp
+next
+  case (Suc m)
+  have "(\<Sum>j = 0..<Suc m. poly_coeff p j * (poly_coeff r (k - j) mod q)) mod q =
+        ((\<Sum>j = 0..<m. poly_coeff p j * (poly_coeff r (k - j) mod q)) +
+         poly_coeff p m * (poly_coeff r (k - m) mod q)) mod q"
+    by simp
+  also have "... = (((\<Sum>j = 0..<m. poly_coeff p j * (poly_coeff r (k - j) mod q)) mod q) +
+                    (poly_coeff p m * (poly_coeff r (k - m) mod q)) mod q) mod q"
+    by (simp add: mod_add_eq)
+  also have "... = (((\<Sum>j = 0..<m. poly_coeff p j * poly_coeff r (k - j)) mod q) +
+                    (poly_coeff p m * poly_coeff r (k - m)) mod q) mod q"
+    using Suc by (simp add: mod_mult_right_eq)
+  also have "... = ((\<Sum>j = 0..<m. poly_coeff p j * poly_coeff r (k - j)) +
+                    poly_coeff p m * poly_coeff r (k - m)) mod q"
+    by (simp add: mod_add_eq)
+  also have "... = (\<Sum>j = 0..<Suc m. poly_coeff p j * poly_coeff r (k - j)) mod q"
+    by simp
+  finally show ?case .
+qed
 
 lemma poly_mult_coeff_poly_mod_eq:
   assumes qpos: "q > 0"
   shows "poly_mult_coeff a (poly_mod b q) k mod q = poly_mult_coeff a b k mod q"
 proof -
-  \<comment> \<open>Each term: (a_j * (b_{k-j} mod q)) mod q = (a_j * b_{k-j}) mod q\<close>
-  have term_eq: "\<And>j. (poly_coeff a j * ((poly_coeff b (k - j)) mod q)) mod q =
-                      (poly_coeff a j * poly_coeff b (k - j)) mod q"
-    by (simp add: mod_mult_right_eq)
-
   \<comment> \<open>LHS uses poly_coeff_poly_mod\<close>
   have "poly_mult_coeff a (poly_mod b q) k =
         (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff (poly_mod b q) (k - j))"
@@ -55,13 +129,10 @@ proof -
   finally have lhs: "poly_mult_coeff a (poly_mod b q) k =
                      (\<Sum>j = 0 ..< Suc k. poly_coeff a j * ((poly_coeff b (k - j)) mod q))" .
 
-  \<comment> \<open>The sums are congruent mod q via term_eq and finite sum mod properties\<close>
-  have "(\<Sum>j = 0 ..< Suc k. poly_coeff a j * ((poly_coeff b (k - j)) mod q)) mod q =
-        (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff b (k - j)) mod q"
-    \<comment> \<open>This follows by induction on Suc k, applying term_eq at each step\<close>
-    sorry
-
-  thus ?thesis using lhs unfolding poly_mult_coeff_def by simp
+  have eq: "(\<Sum>j = 0..<Suc k. poly_coeff a j * (poly_coeff b (k - j) mod q)) mod q =
+            (\<Sum>j = 0..<Suc k. poly_coeff a j * poly_coeff b (k - j)) mod q"
+    using sum_poly_coeff_mod_eq[where m="Suc k" and p=a and r=b and k=k and q=q] by simp
+  show ?thesis using lhs eq unfolding poly_mult_coeff_def by simp
 qed
 
 lemma poly_mod_poly_mult_poly_mod:
@@ -117,38 +188,161 @@ text \<open>
   argument equals ring_mult with the original argument.
 \<close>
 
+text \<open>Helper: poly_mult indexing gives poly_mult_coeff.\<close>
+lemma poly_mult_nth:
+  assumes "p \<noteq> []" "q \<noteq> []" "i < length (poly_mult p q)"
+  shows "(poly_mult p q) ! i = poly_mult_coeff p q i"
+  using assms unfolding poly_mult_def by simp
+
+text \<open>Helper: poly_coeff of poly_mult matches poly_mult_coeff.\<close>
+lemma poly_coeff_poly_mult:
+  "poly_coeff (poly_mult p q) i = (if p = [] \<or> q = [] then 0 else
+     if i < length p + length q - 1 then poly_mult_coeff p q i else 0)"
+proof (cases "p = [] \<or> q = []")
+  case True
+  then show ?thesis by (auto simp: poly_coeff_def)
+next
+  case False
+  hence pne: "p \<noteq> []" and qne: "q \<noteq> []" by auto
+  show ?thesis
+  proof (cases "i < length p + length q - 1")
+    case True
+    hence ilt: "i < length (poly_mult p q)"
+      using pne qne by (simp add: poly_mult_length)
+    show ?thesis using True pne qne ilt poly_mult_nth[OF pne qne ilt]
+      by (simp add: poly_coeff_nth)
+  next
+    case False
+    hence "i \<ge> length (poly_mult p q)"
+      using pne qne by (simp add: poly_mult_length)
+    then show ?thesis using False pne qne by (simp add: poly_coeff_beyond)
+  qed
+qed
+
+text \<open>Negation preserves mod equivalence.\<close>
+lemma neg_mod_cong:
+  assumes "a mod q = b mod (q::int)"
+  shows "(-a) mod q = (-b) mod q"
+proof -
+  have "(-a) mod q = (-(a mod q)) mod q" by (simp add: mod_minus_eq)
+  also have "... = (-(b mod q)) mod q" using assms by simp
+  also have "... = (-b) mod q" by (simp add: mod_minus_eq)
+  finally show ?thesis .
+qed
+
+text \<open>Sum of terms with alternating signs preserves mod equivalence.\<close>
+lemma sum_list_signed_mod_eq:
+  assumes "\<And>k. k \<in> set ks \<Longrightarrow> f k mod q = g k mod (q::int)"
+  shows "sum_list (map (\<lambda>k. (if even k then 1 else -1) * f k) ks) mod q =
+         sum_list (map (\<lambda>k. (if even k then 1 else -1) * g k) ks) mod q"
+using assms
+proof (induct ks)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons k ks)
+  have IH: "sum_list (map (\<lambda>k. (if even k then 1 else -1) * f k) ks) mod q =
+            sum_list (map (\<lambda>k. (if even k then 1 else -1) * g k) ks) mod q"
+    using Cons(2) by (intro Cons(1)) auto
+  have fk_eq: "f k mod q = g k mod q"
+    using Cons(2)[of k] by simp
+  have term_eq: "((if even k then 1 else -1) * f k) mod q =
+                 ((if even k then 1 else -1) * g k) mod q"
+  proof (cases "even k")
+    case True then show ?thesis using fk_eq by simp
+  next
+    case False then show ?thesis using neg_mod_cong[OF fk_eq] by simp
+  qed
+  have "sum_list (map (\<lambda>k. (if even k then 1 else -1) * f k) (k # ks)) mod q =
+        ((if even k then 1 else -1) * f k +
+         sum_list (map (\<lambda>k. (if even k then 1 else -1) * f k) ks)) mod q"
+    by simp
+  also have "... = (((if even k then 1 else -1) * f k) mod q +
+                    sum_list (map (\<lambda>k. (if even k then 1 else -1) * f k) ks) mod q) mod q"
+    by (simp add: mod_add_eq)
+  also have "... = (((if even k then 1 else -1) * g k) mod q +
+                    sum_list (map (\<lambda>k. (if even k then 1 else -1) * g k) ks) mod q) mod q"
+    using term_eq IH by simp
+  also have "... = sum_list (map (\<lambda>k. (if even k then 1 else -1) * g k) (k # ks)) mod q"
+    by (simp add: mod_add_eq)
+  finally show ?case .
+qed
+
+text \<open>ring_mod_coeff preserves mod equivalence when poly_coeff values are equivalent.
+      This is a key structural lemma: ring_mod_coeff is a linear combination of
+      poly_coeff values with signs ±1, so coefficient-wise mod equivalence propagates.\<close>
+lemma ring_mod_coeff_mod_cong:
+  assumes "\<And>j. poly_coeff p1 j mod q = poly_coeff p2 j mod (q::int)"
+  shows "ring_mod_coeff p1 n i mod q = ring_mod_coeff p2 n i mod q"
+proof -
+  \<comment> \<open>Key insight: for any k, poly_coeff p1 (k*n+i) mod q = poly_coeff p2 (k*n+i) mod q\<close>
+  have coeff_eq: "\<And>k. poly_coeff p1 (k * n + i) mod q = poly_coeff p2 (k * n + i) mod q"
+    using assms by simp
+
+  \<comment> \<open>ring_mod_coeff is sum of ±poly_coeff(k*n+i) terms.
+      When coefficients agree mod q, the signed sums also agree mod q.
+      Full proof requires showing sum extension to common bound preserves result
+      (since poly_coeff returns 0 beyond length). Deferred to AFP integration.\<close>
+  show ?thesis using coeff_eq
+    unfolding ring_mod_coeff_def Let_def
+    sorry
+qed
+
+text \<open>Helper: poly_mod of empty list is empty.\<close>
+lemma poly_mod_empty [simp]: "poly_mod [] q = []"
+  unfolding poly_mod_def by simp
+
 lemma ring_mult_poly_mod_right:
   assumes npos: "n > 0" and qpos: "q > 0"
   shows "ring_mult a (poly_mod b q) n q = ring_mult a b n q"
 proof -
-  \<comment> \<open>Key insight: if two polynomials have coefficients that are \<equiv> mod q,
-      then their ring_mod_coeff values are also \<equiv> mod q (ring_mod_coeff is linear).
-      Since the outermost poly_mod normalizes mod q, the results are equal.\<close>
-
   have "ring_mult a (poly_mod b q) n q = poly_mod (ring_mod (poly_mult a (poly_mod b q)) n) q"
     unfolding ring_mult_def ..
-
-  \<comment> \<open>The difference between poly_mult a (poly_mod b q) and poly_mult a b
-      is that each coefficient differs by a multiple of q.
-      Since ring_mod_coeff is a linear combination of coefficients, and
-      poly_mod normalizes mod q at the end, we get the same result.\<close>
 
   also have "... = poly_mod (ring_mod (poly_mult a b) n) q"
   proof -
     \<comment> \<open>Coefficients of poly_mult a (poly_mod b q) \<equiv> coefficients of poly_mult a b (mod q)\<close>
-    have coeff_equiv: "\<And>i. (poly_mult a (poly_mod b q)) ! i mod q = (poly_mult a b) ! i mod q"
-      using poly_mult_coeff_poly_mod_eq[OF qpos]
-      \<comment> \<open>Follows from poly_mult_coeff_poly_mod_eq and list indexing\<close>
-      sorry
+    have coeff_equiv: "\<And>i. poly_coeff (poly_mult a (poly_mod b q)) i mod q =
+                           poly_coeff (poly_mult a b) i mod q"
+    proof -
+      fix i
+      show "poly_coeff (poly_mult a (poly_mod b q)) i mod q = poly_coeff (poly_mult a b) i mod q"
+      proof (cases "a = []")
+        case True
+        then show ?thesis by simp
+      next
+        case False
+        hence ane: "a \<noteq> []" by auto
+        show ?thesis
+        proof (cases "b = []")
+          case True
+          then show ?thesis by simp
+        next
+          case False
+          hence bne: "b \<noteq> []" by auto
+          hence pmne: "poly_mod b q \<noteq> []" using poly_mod_ne_if_ne by auto
+          have pm_len: "length (poly_mod b q) = length b" by simp
+          show ?thesis
+          proof (cases "i < length a + length b - 1")
+            case True
+            hence ilt_pm: "i < length a + length (poly_mod b q) - 1" by simp
+            show ?thesis using True ilt_pm ane bne pmne poly_mult_coeff_poly_mod_eq[OF qpos]
+              by (simp add: poly_coeff_poly_mult)
+          next
+            case False
+            hence "\<not> i < length a + length (poly_mod b q) - 1" by simp
+            then show ?thesis using False ane bne pmne
+              by (simp add: poly_coeff_poly_mult)
+          qed
+        qed
+      qed
+    qed
 
-    \<comment> \<open>ring_mod_coeff is a linear combination with signs, so equivalence propagates\<close>
+    \<comment> \<open>ring_mod_coeff preserves equivalence by linearity\<close>
     have rm_equiv: "\<And>j. ring_mod_coeff (poly_mult a (poly_mod b q)) n j mod q =
                          ring_mod_coeff (poly_mult a b) n j mod q"
-      using coeff_equiv
-      \<comment> \<open>Follows from linearity of ring_mod_coeff\<close>
-      sorry
+      using coeff_equiv by (intro ring_mod_coeff_mod_cong) simp
 
-    \<comment> \<open>After poly_mod, the vectors are equal\<close>
     show ?thesis
     proof (intro nth_equalityI)
       show "length (poly_mod (ring_mod (poly_mult a (poly_mod b q)) n) q) =
