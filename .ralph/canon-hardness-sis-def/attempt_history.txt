@@ -1,8 +1,0 @@
-
-Attempt 1: Build failed - *** Failed to finish proof (line 69 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.OUitoCpoWw/test/SIS_Def.thy"):
-Attempt 2: Review failed - 
-Attempt 3: Build failed - *** Failed to finish proof (line 69 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.OUitoCpoWw/test/SIS_Def.thy"):
-Attempt 4: Review failed - 
-Attempt 5: Build failed - *** Failed to finish proof (line 69 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.OUitoCpoWw/test/SIS_Def.thy"):
-Attempt 6: Review failed - 
-Attempt 7: Build failed - *** Failed to finish proof (line 69 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.OUitoCpoWw/test/SIS_Def.thy"):

@@ -1,5 +1,0 @@
-(executable
- (name isabella_js)
- (libraries isabella_lattice zarith_stubs_js js_of_ocaml)
- (preprocess (pps js_of_ocaml-ppx))
- (modes js))

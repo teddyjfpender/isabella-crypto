@@ -154,10 +154,7 @@ isabella-crypto/
 ├── Makefile                   # Build orchestration
 ├── generate.sh                # Code generation script
 │
-├── eval/                      # Evaluation harness
-├── ralph/                     # Iterative proof orchestrator
-├── bench/                     # Cross-language benchmarks
-└── old/                       # Legacy code (archived)
+└── bench/                     # Cross-language benchmarks
 ```
 
 ## Available Modules
@@ -369,27 +366,10 @@ export_code
    make test
    ```
 
-### Ralph Loop (Automated Theory Generation)
+### Theory Development
 
-The Ralph Loop iteratively generates Isabelle theories with complete proofs:
-
-```bash
-ralph/isabella-loop.sh \
-    --prompt canon-zq \
-    --skill isabelle-basics \
-    --skill isabelle-proofs \
-    --iterations 5
-```
-
-### Step Loop (Incremental Development)
-
-For incremental theory development:
-
-```bash
-ralph/step-loop.sh --prompt canon-linear-listvec \
-    --output-dir Canon --theory-name ListVec --theory-path Linear \
-    --session Canon_Base
-```
+Canon theories are authored directly under `Canon/<Subdir>/<Theory>.thy` and
+verified incrementally with Isabelle builds.
 
 ## End-to-End Algorithm Development
 
@@ -401,8 +381,8 @@ The pipeline consists of six stages:
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  1. Prompt  │───▶│  2. Ralph   │───▶│ 3. Isabelle │
-│   Design    │    │    Loop     │    │    Proof    │
+│  1. Spec    │───▶│  2. Theory  │───▶│ 3. Isabelle │
+│   Design    │    │  Authoring  │    │    Proof    │
 └─────────────┘    └─────────────┘    └─────────────┘
                                             │
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -413,11 +393,7 @@ The pipeline consists of six stages:
 
 ### Stage 1: Prompt Design
 
-Create a structured prompt in `ralph/prompts/` defining the algorithm specification:
-
-```bash
-# Example: ralph/prompts/canon-crypto-dilithium.md
-```
+Create a structured algorithm specification in your PR notes or project docs.
 
 The prompt should include:
 - **Theory name and session**: Where it fits in the Canon hierarchy
@@ -428,23 +404,15 @@ The prompt should include:
 - **Correctness properties**: Lemmas to prove
 - **Export specification**: What to export for code generation
 
-### Stage 2: Ralph Loop Orchestration
+### Stage 2: Theory Authoring
 
-Run the step loop with Claude Code (Opus 4.5) to iteratively generate the theory:
+Implement the theory directly in `Canon/<Subdir>/<Theory>.thy` and iterate in
+small, semantics-preserving proof steps.
 
-```bash
-ralph/step-loop.sh \
-    --prompt canon-crypto-dilithium \
-    --output-dir Canon \
-    --theory-name Dilithium \
-    --theory-path Crypto \
-    --session Canon_Crypto
-```
-
-The loop will:
-1. Generate each step's Isabelle code
-2. Attempt to build and verify proofs
-3. If proofs fail, iterate with fixes (up to N attempts per step)
+Typical loop:
+1. Add definitions and lemmas for one logical step
+2. Build the target session
+3. Resolve proof obligations
 4. Continue to the next step on success
 
 **Handling failures**: If a step fails repeatedly, manual intervention may be needed:
@@ -554,8 +522,8 @@ cd tests && npm test
 
 The CRYSTALS-Dilithium implementation followed this exact workflow:
 
-1. **Prompt**: `ralph/prompts/canon-crypto-dilithium.md` - 12-step specification
-2. **Ralph Loop**: Generated `Canon/Crypto/Dilithium.thy` with proofs
+1. **Specification**: 12-step design for `Canon/Crypto/Dilithium.thy`
+2. **Theory Authoring**: Implemented proofs directly in `Canon/Crypto/Dilithium.thy`
 3. **Verification**: Built with `isabelle build -d Canon Canon_Crypto`
 4. **Integration**:
    - `isabella.ml/src/canon/dilithium.ml` - OCaml wrapper
@@ -570,8 +538,8 @@ The CRYSTALS-Dilithium implementation followed this exact workflow:
 
 | Stage | Command | Output |
 |-------|---------|--------|
-| Prompt | Edit `ralph/prompts/canon-*.md` | Specification file |
-| Ralph | `ralph/step-loop.sh --prompt ...` | `Canon/<Path>/<Theory>.thy` |
+| Spec | Write algorithm spec in notes/docs | Specification file |
+| Author | Edit `Canon/<Path>/<Theory>.thy` | Proven theory |
 | Verify | `isabelle build -D Canon` | Proof checking |
 | Integrate | Manual module creation | `isabella.{hs,ml}/` modules |
 | Export | `./generate.sh` | Compiled libraries |
