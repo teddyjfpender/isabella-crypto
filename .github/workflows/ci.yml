@@ -12,6 +12,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  formalization-check:
+    name: Formalization Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for unfinished proof placeholders
+        run: ./scripts/check_formalization.sh
+
   # Check if Canon files changed
   changes:
     name: Detect Changes
@@ -277,22 +287,20 @@ jobs:
           eval $(opam env)
           dune build
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: tests/package-lock.json
+          bun-version: latest
 
       - name: Install test dependencies
         working-directory: tests
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run cross-validation tests
         working-directory: tests
         run: |
           eval $(opam env)
-          npm test
+          bun test
         env:
           CI: true
 
@@ -308,11 +316,16 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [changes, isabelle, haskell, ocaml, typescript, test-validation]
+    needs: [formalization-check, changes, isabelle, haskell, ocaml, typescript, test-validation]
     if: always()
     steps:
       - name: Check status
         run: |
+          if [[ "${{ needs.formalization-check.result }}" == "failure" ]]; then
+            echo "Formalization check failed"
+            exit 1
+          fi
+
           # Isabelle is allowed to be skipped if no Canon changes
           if [[ "${{ needs.isabelle.result }}" == "failure" ]]; then
             echo "Isabelle build failed"

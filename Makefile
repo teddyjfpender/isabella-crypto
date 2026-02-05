@@ -2,7 +2,7 @@
 # Makefile for building and testing libraries
 
 .PHONY: all canon haskell ocaml typescript clean test examples help \
-        test-validation test-vectors
+        test-validation test-vectors check-formalization
 
 # Default target
 all: canon haskell ocaml typescript
@@ -12,6 +12,10 @@ canon:
 	@echo "Building Canon Isabelle theories..."
 	@cd Canon && isabelle build -D .
 	@echo "Canon built successfully"
+
+# Check formal proof hygiene (no sorry/oops/admit in Canon theories)
+check-formalization:
+	@./scripts/check_formalization.sh
 
 # Build Haskell library
 haskell:
@@ -37,7 +41,7 @@ typescript: ocaml
 	@echo "TypeScript library built successfully"
 
 # Run all tests
-test: test-haskell test-ocaml test-typescript test-validation
+test: check-formalization test-haskell test-ocaml test-typescript test-validation
 
 test-haskell:
 	@echo "Running Haskell tests..."
@@ -54,12 +58,12 @@ test-typescript:
 # Cross-validation tests against noble-post-quantum
 test-validation:
 	@echo "Running cross-validation tests..."
-	@cd tests && npm test
+	@cd tests && bun test
 
 # Generate test vectors from noble-post-quantum
 test-vectors:
 	@echo "Generating test vectors..."
-	@cd tests && npm run generate-vectors
+	@cd tests && bun run generate-vectors
 
 # Run examples
 examples: examples-haskell examples-ocaml examples-typescript
@@ -106,6 +110,7 @@ help:
 	@echo "Targets:"
 	@echo "  all                 Build Canon + all libraries (default)"
 	@echo "  canon               Build Canon Isabelle theories"
+	@echo "  check-formalization Check Canon has no sorry/oops/admit"
 	@echo "  haskell             Build Haskell library"
 	@echo "  ocaml               Build OCaml library"
 	@echo "  typescript          Build TypeScript library (via js_of_ocaml)"

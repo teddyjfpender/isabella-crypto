@@ -515,7 +515,7 @@ export function dilPower2Round(r: number, d: number): Power2RoundResult {
 
 Run the full test suite:
 ```bash
-cd tests && npm test
+cd tests && bun test
 ```
 
 ### Example: Dilithium (ML-DSA)
@@ -543,7 +543,7 @@ The CRYSTALS-Dilithium implementation followed this exact workflow:
 | Verify | `isabelle build -D Canon` | Proof checking |
 | Integrate | Manual module creation | `isabella.{hs,ml}/` modules |
 | Export | `./generate.sh` | Compiled libraries |
-| Test | `cd tests && npm test` | Test results |
+| Test | `cd tests && bun test` | Test results |
 
 ### Benchmarks
 
@@ -574,7 +574,7 @@ The `tests/` directory contains a comprehensive test suite that validates the Is
 - FIPS 203 (ML-KEM) and FIPS 204 (ML-DSA) compliance checks
 
 ```bash
-cd tests && npm install && npm test
+cd tests && bun install && bun test
 ```
 
 See `tests/README.md` for detailed test documentation.

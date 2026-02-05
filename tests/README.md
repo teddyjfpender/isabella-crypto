@@ -12,35 +12,37 @@ This test harness validates our Isabelle-generated ML-KEM (Kyber) and ML-DSA (Di
 
 ## Prerequisites
 
-- Node.js 16+ and npm
+- Bun 1.3+
 - OCaml with opam (for CLI integration tests)
 - Isabella OCaml library built (`cd isabella.ml && dune build`)
+- Optional: LaZer Python bindings built locally (for `test:lazer`)
 
 ## Setup
 
 ```bash
 cd tests
-npm install
+bun install
 ```
 
 Or from the project root:
 
 ```bash
-make test-validation  # Runs npm install if needed
+make test-validation  # Runs Bun-based cross-validation tests
 ```
 
 ## Running Tests
 
 ```bash
 # Run all tests
-npm test
+bun test
 
 # Run specific test suites
-npm run test:ntt    # NTT operation tests
-npm run test:kyber  # ML-KEM tests
+bun run test:ntt    # NTT operation tests
+bun run test:kyber  # ML-KEM tests
+bun run test:lazer  # Optional LaZer cross-comparison
 
 # Watch mode for development
-npm run test:watch
+bun run test:watch
 ```
 
 ## Test Suites
@@ -69,6 +71,21 @@ Tests that call our Isabelle-generated OCaml CLI and compare results:
 - NTT operations (nttFast, inttFast, ntt roundtrip)
 - Polynomial operations (polyMult, ringMult)
 - Kyber operations (kyberNtt, kyberIntt, kyberPolyMult, encode/decode)
+
+### LaZer Comparison Tests (`lazer-comparison.test.ts`)
+
+Optional deterministic cross-checks against [lazer-crypto/lazer](https://github.com/lazer-crypto/lazer):
+- Ring multiplication in `R_q = Z_q[X]/(X^n + 1)` on deterministic fixture input
+- Matrix-vector multiplication over `R_q` on deterministic fixture input
+- Centered modular reduction semantics alignment
+
+The suite is **skip-safe**:
+- If Isabella CLI is not built, the suite is skipped.
+- If LaZer Python bindings are not importable, the suite is skipped.
+
+Enable it by setting one of:
+- `LAZER_ROOT=/absolute/path/to/lazer` (expects bindings in `$LAZER_ROOT/python`)
+- `LAZER_PYTHON=/absolute/path/to/lazer/python`
 
 ### FIPS 203 Tests (`fips203.test.ts`)
 
@@ -111,7 +128,7 @@ Tests that call our Isabelle-generated OCaml CLI for Dilithium operations:
 Generate test vectors from noble-post-quantum for offline validation:
 
 ```bash
-npm run generate-vectors
+bun run generate-vectors
 ```
 
 This creates JSON files in `vectors/`:
@@ -168,8 +185,8 @@ tests/
 │   └── dilithium-integration.test.ts # ML-DSA CLI integration tests
 ├── vectors/                         # Generated test vectors
 ├── package.json
+├── bun.lock
 ├── tsconfig.json
-├── jest.config.js
 └── README.md
 ```
 

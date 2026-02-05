@@ -1,7 +1,8 @@
 # Codex configuration for Isabella project
 #
 # Keep this file aligned with currently supported Codex feature flags.
-# Legacy flags like `web_search_request` are not supported.
+# Legacy flags like `web_search_request`, `web_search`, and `websearch`
+# are intentionally omitted because they are not supported.
 
 [features]
 unified_exec = true
