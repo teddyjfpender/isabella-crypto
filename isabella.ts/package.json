@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "build": "npm run build:runtime && npm run build:ts && npm run copy:runtime",
-    "build:runtime": "cd ../isabella.ml && eval $(opam env) && dune build src/js/isabella_js.bc.js && cp _build/default/src/js/isabella_js.bc.js ../isabella.ts/dist/isabella.js",
+    "build:runtime": "mkdir -p dist && cd ../isabella.ml && eval $(opam env) && dune build src/js/isabella_js.bc.js && cp _build/default/src/js/isabella_js.bc.js ../isabella.ts/dist/isabella.js",
     "build:ts": "tsc",
     "copy:runtime": "cp src/runtime.cjs dist/runtime.cjs",
     "clean": "rm -rf dist/*.js dist/*.d.ts dist/*.map dist/*.cjs",

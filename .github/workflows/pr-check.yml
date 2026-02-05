@@ -157,7 +157,7 @@ jobs:
 
       - name: Install OCaml dependencies
         run: |
-          opam install -y dune zarith
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
 
       - name: Build OCaml CLI
         working-directory: isabella.ml
