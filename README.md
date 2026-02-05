@@ -13,7 +13,7 @@
 
 *Isab*elle + *Latt*ice = **Isabella**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/anthropics/isabella-crypto/ci.yml?branch=main&label=CI&logo=github)](https://github.com/anthropics/isabella-crypto/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/teddyjfpender/isabella-crypto/ci.yml?branch=main&label=CI&logo=github)](https://github.com/teddyjfpender/isabella-crypto/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Isabelle](https://img.shields.io/badge/Isabelle-2025-blue.svg)](https://isabelle.in.tum.de/)
 [![Tests](https://img.shields.io/badge/Tests-156%20passing-brightgreen.svg)](#tests)

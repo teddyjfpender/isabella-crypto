@@ -4,7 +4,7 @@
 
 (generate_opam_files true)
 
-(source (github anthropics/isabella-crypto))
+(source (github teddyjfpender/isabella-crypto))
 (license MIT)
 (authors "Isabella Project")
 (maintainers "isabella@example.com")
