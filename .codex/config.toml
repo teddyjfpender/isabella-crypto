@@ -1,5 +1,9 @@
 # Codex configuration for Isabella project
+#
+# Keep this file aligned with currently supported Codex feature flags.
+# Legacy flags like `web_search_request` are not supported.
 
 [features]
-# Enable web search so the model can fetch documentation URLs
-web_search_request = true
+unified_exec = true
+shell_snapshot = true
+steer = true
