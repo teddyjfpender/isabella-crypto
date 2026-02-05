@@ -85,6 +85,10 @@ The suite is **skip-safe**:
 - If Isabella CLI is not built, the suite is skipped.
 - If LaZer Python bindings are not importable, the suite is skipped.
 
+LaZer upstream build constraints:
+- Linux `x86_64` with AVX512-capable toolchain
+- `make`, `cmake`, `gcc`, Python 3 + `cffi`
+
 Enable it by setting one of:
 - `LAZER_ROOT=/absolute/path/to/lazer` (expects bindings in `$LAZER_ROOT/python`)
 - `LAZER_PYTHON=/absolute/path/to/lazer/python`

@@ -316,12 +316,24 @@ jobs:
   test-lazer-optional:
     name: LaZer Equivalence (Optional)
     if: github.event_name == 'workflow_dispatch'
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
     needs: ocaml
     timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Preflight runner requirements
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          if [[ "$arch" != "x86_64" ]]; then
+            echo "LaZer optional job requires x86_64; got $arch"
+            exit 1
+          fi
+          command -v make >/dev/null 2>&1 || { echo "make is required"; exit 1; }
+          command -v cmake >/dev/null 2>&1 || { echo "cmake is required"; exit 1; }
+          command -v gcc >/dev/null 2>&1 || { echo "gcc is required"; exit 1; }
 
       - name: Setup OCaml
         uses: ocaml/setup-ocaml@v3
@@ -365,6 +377,28 @@ jobs:
 
       - name: Build LaZer Python bindings
         run: make -C /tmp/lazer/python
+
+      - name: Verify LaZer adapter availability
+        working-directory: tests
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          env = dict(os.environ)
+          env["LAZER_ROOT"] = "/tmp/lazer"
+          out = subprocess.check_output(
+              ["python3", "scripts/lazer_adapter.py"],
+              text=True,
+              env=env,
+          )
+          data = json.loads(out)
+          if not data.get("available"):
+            raise SystemExit(f"LaZer adapter unavailable: {data.get('error', 'unknown error')}")
+          print("LaZer adapter available")
+          PY
 
       - name: Run LaZer comparison tests
         working-directory: tests
