@@ -75,8 +75,8 @@ jobs:
       - name: Check Canon syntax
         run: |
           cd Canon
-          # Check all sessions exist and have valid syntax
-          isabelle build -n -D . || exit 1
+          # Fast syntax-oriented build that works on clean runners
+          isabelle build -o quick_and_dirty -D . || exit 1
 
   # Verify TypeScript/test types
   typescript-check:
