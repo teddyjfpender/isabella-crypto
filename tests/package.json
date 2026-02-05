@@ -21,6 +21,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@noble/post-quantum": "^0.2.0"
+    "@noble/post-quantum": "^0.5.4"
   }
 }
