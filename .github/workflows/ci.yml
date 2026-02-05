@@ -42,7 +42,7 @@ jobs:
 
       # Cache Isabelle installation separately (rarely changes)
       - name: Cache Isabelle installation
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache-isabelle
         with:
           path: ~/Isabelle2025
@@ -50,7 +50,7 @@ jobs:
 
       # Cache heap images including HOL sessions (the slow part)
       - name: Cache Isabelle heaps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache-heaps
         with:
           path: ~/.isabelle
@@ -127,7 +127,7 @@ jobs:
           cabal-version: '3.10'
 
       - name: Cache Cabal
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cabal/packages
@@ -168,7 +168,7 @@ jobs:
           ocaml-compiler: '5.2'
 
       - name: Cache opam
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.opam
@@ -216,7 +216,7 @@ jobs:
           ocaml-compiler: '5.2'
 
       - name: Cache opam
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.opam
