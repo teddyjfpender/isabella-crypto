@@ -72,15 +72,17 @@ make typescript   # Build TypeScript library
 
 ### Code Generation
 
-To regenerate the Haskell and OCaml libraries from Isabelle:
+`generate.sh` is fail-fast and export-only: it validates Isabelle exports and
+library surfaces, then builds targets. It does not create handwritten fallback
+stubs.
 
 ```bash
-./generate.sh                 # Full pipeline: build Canon + generate + compile
-./generate.sh --build-only    # Skip Isabelle, just compile existing code
-./generate.sh --run-examples  # Generate + build + run examples
+./generate.sh                 # Full pipeline: build Canon + verify exports + compile
+./generate.sh --build-only    # Skip Isabelle, verify existing artifacts + compile
+./generate.sh --run-examples  # Verify + build + run examples
 ./generate.sh --lang haskell  # Only Haskell
 ./generate.sh --lang ocaml    # Only OCaml
-./generate.sh --clean         # Clean generated artifacts
+./generate.sh --clean         # Clean build artifacts
 ```
 
 ## Project Structure
