@@ -996,26 +996,9 @@ next
 qed
 
 text \<open>
-  The main distributivity lemma for ring multiplication.
-  In R_q = Z_q[X]/(X^n+1), multiplication distributes over addition.
+  Distributivity of ring multiplication over ring addition is proven in
+  QuotientRing.thy for reduced (length n) representatives.
 \<close>
-
-lemma ring_mult_add_right:
-  assumes npos: "n > 0" and qpos: "q > 0"
-  shows "ring_mult a (ring_add b c n q) n q =
-         ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
-  \<comment> \<open>Distributivity in quotient ring R_q. Requires showing that multiplying
-      by the reduced representative (ring_add b c) gives the same result as
-      the sum of products. Uses poly_mult_add_right, ring_mod_add, poly_mod properties.
-      Full proof requires careful handling of the quotient ring structure.\<close>
-  sorry
-
-lemma ring_mult_add_left:
-  assumes npos: "n > 0" and qpos: "q > 0"
-  shows "ring_mult (ring_add a b n q) c n q =
-         ring_add (ring_mult a c n q) (ring_mult b c n q) n q"
-  \<comment> \<open>Symmetric to ring_mult_add_right\<close>
-  sorry
 
 text \<open>
   Ring addition commutativity and associativity in R_q.

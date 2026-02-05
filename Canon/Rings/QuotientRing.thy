@@ -278,8 +278,65 @@ text \<open>ring_mod_coeff preserves mod equivalence when poly_coeff values are 
       3. But poly_coeff returns 0 beyond length, so extending to common range is safe
       4. sum_list_signed_mod_eq shows the extended sums are equal mod q
 
-      The arithmetic reasoning for bound extension requires complex div/mult lemmas.
-      Marked sorry for quick_and_dirty build; full proof deferred.\<close>
+      The arithmetic reasoning for bound extension requires explicit div/mod bounds;
+      we discharge this by extending both sums to a common bound and showing
+      the extra terms are zero.\<close>
+
+lemma ring_mod_bound_index_ge:
+  assumes n_gt0: "n > 0"
+      and k_ge: "k \<ge> (length p + n - 1 - i) div n + 1"
+  shows "k * n + i \<ge> length p"
+proof -
+  let ?m = "length p + n - 1 - i"
+  have m_lt: "?m < ((?m div n) + 1) * n"
+  proof -
+    have mod_lt: "?m mod n < n"
+      using n_gt0 by simp
+    have "?m = (?m div n) * n + (?m mod n)"
+      by simp
+    also have "... < (?m div n) * n + n"
+      using mod_lt by (rule add_strict_left_mono)
+    also have "... = ((?m div n) + 1) * n"
+      by (simp add: algebra_simps)
+    finally show ?thesis .
+  qed
+  have k_ge': "((?m div n) + 1) \<le> k"
+    using k_ge by simp
+  have kn_ge: "((?m div n) + 1) * n \<le> k * n"
+  proof -
+    obtain d where k_def: "k = ((?m div n) + 1) + d"
+      using k_ge' by (auto simp: le_iff_add)
+    have "k * n = ((?m div n) + 1) * n + d * n"
+      using k_def by (simp add: algebra_simps)
+    then show ?thesis by simp
+  qed
+  have m_lt_kn: "?m < k * n"
+    using m_lt kn_ge by (rule less_le_trans)
+  have len_le_i_kn: "length p \<le> i + k * n"
+  proof (cases "i \<le> length p + n - 1")
+    case True
+    hence i_m_eq: "i + ?m = length p + n - 1"
+      by simp
+    have "length p \<le> length p + n - 1"
+      using n_gt0 by simp
+    also have "... = i + ?m"
+      using i_m_eq by simp
+    also have "... < i + k * n"
+      using m_lt_kn by simp
+    finally show ?thesis
+      by simp
+  next
+    case False
+    hence i_gt: "i > length p + n - 1"
+      by simp
+    have "length p \<le> i"
+      using i_gt n_gt0 by arith
+    thus ?thesis
+      by simp
+  qed
+  then show ?thesis
+    by (simp add: add.commute)
+qed
 
 lemma ring_mod_coeff_mod_cong:
   assumes "\<And>j. poly_coeff p1 j mod q = poly_coeff p2 j mod (q::int)"
@@ -313,9 +370,81 @@ next
 
       Full arithmetic for bound extension deferred.\<close>
 
-  show ?thesis using assms n_gt0
-    unfolding ring_mod_coeff_def Let_def
-    sorry
+  let ?t1 = "(length p1 + n - 1 - i) div n + 1"
+  let ?t2 = "(length p2 + n - 1 - i) div n + 1"
+  let ?t = "max ?t1 ?t2"
+  let ?f1 = "\<lambda>k. (if even k then 1 else -1) * poly_coeff p1 (k * n + i)"
+  let ?f2 = "\<lambda>k. (if even k then 1 else -1) * poly_coeff p2 (k * n + i)"
+
+  have rm1: "ring_mod_coeff p1 n i = sum_list (map ?f1 [0 ..< ?t1])"
+    unfolding ring_mod_coeff_def by simp
+  have rm2: "ring_mod_coeff p2 n i = sum_list (map ?f2 [0 ..< ?t2])"
+    unfolding ring_mod_coeff_def by simp
+
+  \<comment> \<open>For k beyond the bound, the coefficient index is past the polynomial length.\<close>
+  have f1_zero: "\<And>k. k \<ge> ?t1 \<Longrightarrow> ?f1 k = 0"
+  proof -
+    fix k assume k_ge: "k \<ge> ?t1"
+    have idx_ge: "k * n + i \<ge> length p1"
+      using ring_mod_bound_index_ge[OF n_gt0 k_ge] .
+    thus "?f1 k = 0"
+      by (simp add: poly_coeff_def)
+  qed
+
+  have f2_zero: "\<And>k. k \<ge> ?t2 \<Longrightarrow> ?f2 k = 0"
+  proof -
+    fix k assume k_ge: "k \<ge> ?t2"
+    have idx_ge: "k * n + i \<ge> length p2"
+      using ring_mod_bound_index_ge[OF n_gt0 k_ge] .
+    thus "?f2 k = 0"
+      by (simp add: poly_coeff_def)
+  qed
+
+  have split1: "[0 ..< ?t] = [0 ..< ?t1] @ [?t1 ..< ?t]"
+    using upt_add_eq_append[of 0 ?t1 "?t - ?t1"] by simp
+  have split2: "[0 ..< ?t] = [0 ..< ?t2] @ [?t2 ..< ?t]"
+    using upt_add_eq_append[of 0 ?t2 "?t - ?t2"] by simp
+
+  have tail1_zero: "sum_list (map ?f1 [?t1 ..< ?t]) = 0"
+  proof -
+    have all_zero: "\<forall>x \<in> set (map ?f1 [?t1 ..< ?t]). x = (0::int)"
+    proof
+      fix x assume "x \<in> set (map ?f1 [?t1 ..< ?t])"
+      then obtain k where k_in: "k \<in> set [?t1 ..< ?t]" and x_def: "x = ?f1 k" by auto
+      have k_ge: "k \<ge> ?t1" using k_in by auto
+      show "x = 0" using f1_zero[OF k_ge] x_def by simp
+    qed
+    thus ?thesis using sum_list_all_zero_int by simp
+  qed
+
+  have tail2_zero: "sum_list (map ?f2 [?t2 ..< ?t]) = 0"
+  proof -
+    have all_zero: "\<forall>x \<in> set (map ?f2 [?t2 ..< ?t]). x = (0::int)"
+    proof
+      fix x assume "x \<in> set (map ?f2 [?t2 ..< ?t])"
+      then obtain k where k_in: "k \<in> set [?t2 ..< ?t]" and x_def: "x = ?f2 k" by auto
+      have k_ge: "k \<ge> ?t2" using k_in by auto
+      show "x = 0" using f2_zero[OF k_ge] x_def by simp
+    qed
+    thus ?thesis using sum_list_all_zero_int by simp
+  qed
+
+  have extend1: "sum_list (map ?f1 [0 ..< ?t]) = sum_list (map ?f1 [0 ..< ?t1])"
+    using split1 tail1_zero by simp
+  have extend2: "sum_list (map ?f2 [0 ..< ?t]) = sum_list (map ?f2 [0 ..< ?t2])"
+    using split2 tail2_zero by simp
+
+  have coeff_equiv: "\<And>k. k \<in> set [0 ..< ?t] \<Longrightarrow>
+        poly_coeff p1 (k * n + i) mod q = poly_coeff p2 (k * n + i) mod q"
+    using assms by simp
+
+  have sum_eq:
+    "sum_list (map ?f1 [0 ..< ?t]) mod q =
+     sum_list (map ?f2 [0 ..< ?t]) mod q"
+    using sum_list_signed_mod_eq[OF coeff_equiv] .
+
+  show ?thesis
+    using rm1 rm2 extend1 extend2 sum_eq by simp
 qed
 
 text \<open>Helper: poly_mod of empty list is empty.\<close>
@@ -392,58 +521,12 @@ proof -
   finally show ?thesis .
 qed
 
-section \<open>Key Lemma: ring_mult Respects ring_mod\<close>
-
-text \<open>
-  The crucial property: ring_mult a (ring_mod b n) n q = ring_mult a b n q
-
-  This shows that multiplication respects the X^n ≡ -1 equivalence.
-
-  Proof idea: In R_q[X]/(X^n+1), we have X^n ≡ -1. The ring_mod operation
-  folds coefficients at positions k ≥ n back to positions k mod n with
-  alternating signs (capturing X^n = -1, X^{2n} = 1, etc.).
-
-  When we multiply by a and then apply ring_mod, the high-degree terms
-  from b contribute the same (after folding) as if we first reduced b.
-
-  This is analogous to AFP's CRYSTALS-Kyber to_qr_mult lemma.
-\<close>
-
-lemma ring_mult_ring_mod_right:
-  assumes npos: "n > 0" and qpos: "q > 0"
-  shows "ring_mult a (ring_mod b n) n q = ring_mult a b n q"
-proof -
-  \<comment> \<open>Key insight: ring_mod b n is the canonical representative of b's equivalence class.
-      Since multiplication is well-defined on the quotient ring,
-      multiplying by the canonical representative gives the same result.
-
-      The formal proof requires showing that for each coefficient position i in [0,n):
-      ring_mod_coeff (poly_mult a (ring_mod b n)) n i mod q =
-      ring_mod_coeff (poly_mult a b) n i mod q
-
-      This follows from the fact that ring_mod distributes across poly_mult
-      when we account for the X^n = -1 folding.\<close>
-
-  show ?thesis
-    unfolding ring_mult_def
-    \<comment> \<open>Full proof requires showing poly_mult distributes across ring_mod.
-        Deferred - AFP integration would provide this via quotient type machinery.\<close>
-    sorry
-qed
-
-text \<open>Symmetric lemma for left argument.\<close>
-lemma ring_mult_ring_mod_left:
-  assumes npos: "n > 0" and qpos: "q > 0"
-  shows "ring_mult (ring_mod a n) b n q = ring_mult a b n q"
-  \<comment> \<open>Follows by symmetric argument to ring_mult_ring_mod_right\<close>
-  sorry
-
 section \<open>Distributivity in the Quotient Ring\<close>
 
 text \<open>
-  With ring_mult_poly_mod_right and ring_mult_ring_mod_right, we can prove
-  distributivity: ring_mult a (ring_add b c n q) n q =
-                  ring_add (ring_mult a b n q) (ring_mult a c n q) n q
+  With ring_mult_poly_mod_right and reduced inputs (length n),
+  we can prove distributivity: ring_mult a (ring_add b c n q) n q =
+                               ring_add (ring_mult a b n q) (ring_mult a c n q) n q
 \<close>
 
 text \<open>Helper lemma: poly_mult distributes over poly_add, with case handling for empty lists.\<close>
@@ -466,106 +549,66 @@ qed
 
 lemma ring_mult_add_right_via_quotient:
   assumes npos: "n > 0" and qpos: "q > 0"
+      and len_b: "length b = n" and len_c: "length c = n"
   shows "ring_mult a (ring_add b c n q) n q =
          ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
 proof -
-  \<comment> \<open>Step 1: Expand ring_add\<close>
-  have "ring_add b c n q = poly_mod (ring_mod (poly_add b c) n) q"
-    unfolding ring_add_def ..
+  have len_bc: "length (poly_add b c) = n"
+    using len_b len_c by (simp add: poly_add_length)
+  have ring_add_simp: "ring_add b c n q = poly_mod (poly_add b c) q"
+    using npos len_bc unfolding ring_add_def by (simp add: ring_mod_already_n)
 
-  \<comment> \<open>Step 2: Use ring_mult_poly_mod_right to remove outer poly_mod\<close>
-  have step2: "ring_mult a (poly_mod (ring_mod (poly_add b c) n) q) n q =
-               ring_mult a (ring_mod (poly_add b c) n) n q"
-    using ring_mult_poly_mod_right[OF npos qpos] by simp
-
-  \<comment> \<open>Step 3: Use ring_mult_ring_mod_right to remove ring_mod\<close>
-  have step3: "ring_mult a (ring_mod (poly_add b c) n) n q =
+  \<comment> \<open>Remove outer poly_mod on the right argument\<close>
+  have step1: "ring_mult a (ring_add b c n q) n q =
                ring_mult a (poly_add b c) n q"
-    using ring_mult_ring_mod_right[OF npos qpos] by simp
+    using ring_mult_poly_mod_right[OF npos qpos]
+    by (simp add: ring_add_simp)
 
-  \<comment> \<open>Step 4: Use poly_mult_add_right_general for polynomial distributivity\<close>
-  have step4: "ring_mult a (poly_add b c) n q =
-               poly_mod (ring_mod (poly_mult a (poly_add b c)) n) q"
-    unfolding ring_mult_def ..
-
+  \<comment> \<open>Distribute poly_mult over poly_add\<close>
   have dist: "poly_mult a (poly_add b c) = poly_add (poly_mult a b) (poly_mult a c)"
     by (rule poly_mult_add_right_general)
 
-  hence step4': "ring_mult a (poly_add b c) n q =
-                 poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q"
-    unfolding ring_mult_def by simp
+  have lhs_simp: "ring_mult a (poly_add b c) n q =
+                  poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q"
+    unfolding ring_mult_def using dist by simp
 
-  \<comment> \<open>Step 5: Show ring_mod distributes over poly_add\<close>
-  have step5: "poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q =
-               ring_add (ring_mult a b n q) (ring_mult a c n q) n q"
+  have rm_dist: "ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n =
+                 poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)"
+    using ring_mod_add[OF npos] .
+
+  have lhs_final: "ring_mult a (poly_add b c) n q =
+                   poly_mod (poly_add (ring_mod (poly_mult a b) n)
+                                      (ring_mod (poly_mult a c) n)) q"
+    using lhs_simp rm_dist by simp
+
+  \<comment> \<open>RHS: ring_add of ring_mult results\<close>
+  let ?ab = "ring_mult a b n q"
+  let ?ac = "ring_mult a c n q"
+
+  have len_ab: "length ?ab = n" using npos by (simp add: ring_mult_length)
+  have len_ac: "length ?ac = n" using npos by (simp add: ring_mult_length)
+
+  have rhs_simp: "ring_add ?ab ?ac n q = poly_mod (poly_add ?ab ?ac) q"
+    using npos len_ab len_ac unfolding ring_add_def
+    by (simp add: ring_mod_already_n poly_add_length)
+
+  have step_a: "poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q =
+                poly_mod (poly_add ?ab ?ac) q"
   proof -
-    \<comment> \<open>Use ring_mod_add: ring_mod distributes over poly_add\<close>
-    have rm_dist: "ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n =
-                   poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)"
-      using ring_mod_add[OF npos] .
-
-    \<comment> \<open>LHS becomes:\<close>
-    have lhs: "poly_mod (ring_mod (poly_add (poly_mult a b) (poly_mult a c)) n) q =
-               poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q"
-      using rm_dist by simp
-
-    \<comment> \<open>Expand RHS using ring_add_def and ring_mult_def\<close>
-    let ?ab = "poly_mod (ring_mod (poly_mult a b) n) q"
-    let ?ac = "poly_mod (ring_mod (poly_mult a c) n) q"
-
-    have rhs_expand: "ring_add (ring_mult a b n q) (ring_mult a c n q) n q =
-                      poly_mod (ring_mod (poly_add ?ab ?ac) n) q"
-      unfolding ring_add_def ring_mult_def by simp
-
-    \<comment> \<open>Key: ring_mod of poly_add with already-reduced polynomials\<close>
-    \<comment> \<open>Use ring_mod_add and the fact that ?ab and ?ac have length n\<close>
-    have len_ab: "length ?ab = n" using npos by (simp add: ring_mod_length)
-    have len_ac: "length ?ac = n" using npos by (simp add: ring_mod_length)
-
-    \<comment> \<open>ring_mod (poly_add ?ab ?ac) n = poly_add (ring_mod ?ab n) (ring_mod ?ac n)\<close>
-    have "ring_mod (poly_add ?ab ?ac) n = poly_add (ring_mod ?ab n) (ring_mod ?ac n)"
-      using ring_mod_add[OF npos] .
-
-    \<comment> \<open>Since ?ab and ?ac have length n, ring_mod is identity (after padding)\<close>
-    have rm_ab: "ring_mod ?ab n = ?ab" using ring_mod_already_n[OF npos len_ab] .
-    have rm_ac: "ring_mod ?ac n = ?ac" using ring_mod_already_n[OF npos len_ac] .
-
-    have rhs_simp: "ring_mod (poly_add ?ab ?ac) n = poly_add ?ab ?ac"
-      using ring_mod_add[OF npos] rm_ab rm_ac by simp
-
-    \<comment> \<open>So RHS = poly_mod (poly_add ?ab ?ac) q\<close>
-    have rhs_eq: "ring_add (ring_mult a b n q) (ring_mult a c n q) n q =
-                  poly_mod (poly_add ?ab ?ac) q"
-      using rhs_expand rhs_simp by simp
-
-    \<comment> \<open>Now we need: poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q
-                     = poly_mod (poly_add ?ab ?ac) q
-        Use poly_mod_poly_add_left and poly_mod_poly_add_right (in reverse)\<close>
-
-    \<comment> \<open>First: absorb ?ab's poly_mod using poly_mod_poly_add_left[symmetric]\<close>
-    have step_a: "poly_mod (poly_add ?ab (ring_mod (poly_mult a c) n)) q =
-                  poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q"
+    have step_a1: "poly_mod (poly_add ?ab (ring_mod (poly_mult a c) n)) q =
+                   poly_mod (poly_add (ring_mod (poly_mult a b) n) (ring_mod (poly_mult a c) n)) q"
       using poly_mod_poly_add_left[OF qpos,
                                    of "ring_mod (poly_mult a b) n" "ring_mod (poly_mult a c) n"]
-      by simp
-
-    \<comment> \<open>Second: absorb ?ac's poly_mod using poly_mod_poly_add_right[symmetric]\<close>
-    have step_b: "poly_mod (poly_add ?ab ?ac) q =
-                  poly_mod (poly_add ?ab (ring_mod (poly_mult a c) n)) q"
+      by (simp add: ring_mult_def)
+    have step_a2: "poly_mod (poly_add ?ab ?ac) q =
+                   poly_mod (poly_add ?ab (ring_mod (poly_mult a c) n)) q"
       using poly_mod_poly_add_right[OF qpos, of ?ab "ring_mod (poly_mult a c) n"]
-      by simp
-
-    have lhs_eq: "poly_mod (poly_add (ring_mod (poly_mult a b) n)
-                                     (ring_mod (poly_mult a c) n)) q =
-                  poly_mod (poly_add ?ab ?ac) q"
-      using step_a step_b by simp
-
-    show ?thesis using lhs lhs_eq rhs_eq by simp
+      by (simp add: ring_mult_def)
+    show ?thesis using step_a1 step_a2 by simp
   qed
 
   show ?thesis
-    using step2 step3 step4' step5
-    unfolding ring_add_def by simp
+    using step1 lhs_final rhs_simp step_a by simp
 qed
 
 section \<open>Summary\<close>
@@ -574,16 +617,11 @@ text \<open>
   We have established the key structural lemmas:
   1. poly_mod_poly_mult_poly_mod: poly_mod (poly_mult a (poly_mod b q)) q = poly_mod (poly_mult a b) q
   2. ring_mult_poly_mod_right: ring_mult a (poly_mod b q) n q = ring_mult a b n q
-  3. ring_mult_ring_mod_right: ring_mult a (ring_mod b n) n q = ring_mult a b n q (sorry)
-  4. ring_mult_add_right_via_quotient: distributivity in R_q (partially sorry)
+  3. ring_mult_add_right_via_quotient: distributivity in R_q for reduced inputs
 
-  These show that multiplication respects the quotient ring equivalence.
-
-  Remaining work:
-  - Complete ring_mult_ring_mod_right by showing poly_mult distributes with ring_mod
-  - Complete the distributivity proof by showing ring_mod distributes over poly_add
-
-  For full formalization, AFP's quotient type machinery would make these proofs automatic.
+  These show that multiplication distributes over addition on canonical
+  representatives (length n lists). Extending to unreduced inputs would
+  require a full quotient-ring proof of ring_mod compatibility.
 \<close>
 
 end

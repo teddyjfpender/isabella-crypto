@@ -311,6 +311,8 @@ lemma mod_add_cons:
 lemma mod_inner_prod_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_vu: "length v = length u" and len_uw: "length u = length w"
+      and valid_u: "valid_mod_elem u (length u) n q"
+      and valid_w: "valid_mod_elem w (length w) n q"
   shows "mod_inner_prod v (mod_add u w n q) n q =
          ring_add (mod_inner_prod v u n q) (mod_inner_prod v w n q) n q"
   using assms
@@ -358,9 +360,14 @@ next
   have len_us_ws: "length us = length ws"
     using Cons.prems u_def w_def by simp
 
+  have valid_us: "valid_mod_elem us (length us) n q"
+    using Cons.prems u_def unfolding valid_mod_elem_def by simp
+  have valid_ws: "valid_mod_elem ws (length ws) n q"
+    using Cons.prems w_def unfolding valid_mod_elem_def by simp
+
   have IH: "mod_inner_prod ps (mod_add us ws n q) n q =
             ring_add (mod_inner_prod ps us n q) (mod_inner_prod ps ws n q) n q"
-    using Cons.hyps[OF npos qpos len_ps_us len_us_ws] .
+    using Cons.hyps[OF npos qpos len_ps_us len_us_ws valid_us valid_ws] .
 
   have mod_add_cons: "mod_add u w n q = ring_add u0 w0 n q # mod_add us ws n q"
     using u_def w_def unfolding mod_add_def by simp
@@ -382,9 +389,15 @@ next
     using u_def w_def by simp
 
   \<comment> \<open>Apply ring_mult_add_right_via_quotient: p * (u0 + w0) = p*u0 + p*w0\<close>
+  have u0_valid: "valid_ring_elem u0 n q"
+    using Cons.prems u_def unfolding valid_mod_elem_def by simp
+  have w0_valid: "valid_ring_elem w0 n q"
+    using Cons.prems w_def unfolding valid_mod_elem_def by simp
+  have len_u0: "length u0 = n" using u0_valid unfolding valid_ring_elem_def by simp
+  have len_w0: "length w0 = n" using w0_valid unfolding valid_ring_elem_def by simp
   have mult_distrib: "ring_mult p (ring_add u0 w0 n q) n q =
                       ring_add (ring_mult p u0 n q) (ring_mult p w0 n q) n q"
-    using ring_mult_add_right_via_quotient[OF npos qpos] .
+    using ring_mult_add_right_via_quotient[OF npos qpos len_u0 len_w0] .
 
   \<comment> \<open>The final rearrangement:
       ring_add (ring_add (p*u0) (p*w0)) (ring_add (inner ps us) (inner ps ws))
@@ -458,6 +471,13 @@ lemma mod_add_valid:
   using assms unfolding valid_mod_elem_def mod_add_def
   by (auto simp: ring_add_valid)
 
+lemma mod_elem_scale_valid:
+  assumes "n > 0" and "q > 0"
+      and "valid_mod_elem v k n q"
+  shows "valid_mod_elem (map (\<lambda>vi. ring_mult c vi n q) v) k n q"
+  using assms unfolding valid_mod_elem_def
+  by (auto simp: ring_mult_valid)
+
 definition mod_sub :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
   "mod_sub v w n q = map2 (\<lambda>p r. ring_sub p r n q) v w"
 
@@ -477,6 +497,8 @@ lemma mod_mat_vec_mult_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_uw: "length u = length w"
       and rows_ok: "\<forall>row \<in> set A. length row = length u"
+      and valid_u: "valid_mod_elem u (length u) n q"
+      and valid_w: "valid_mod_elem w (length w) n q"
   shows "mod_mat_vec_mult A (mod_add u w n q) n q =
          mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q"
 proof -
@@ -493,7 +515,7 @@ proof -
       using rows_ok row_in by simp
     show "mod_inner_prod row (mod_add u w n q) n q =
           ring_add (mod_inner_prod row u n q) (mod_inner_prod row w n q) n q"
-      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw] .
+      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw valid_u valid_w] .
   qed
 
   have len_eq: "length (mod_mat_vec_mult A (mod_add u w n q) n q) =
@@ -540,14 +562,115 @@ text \<open>
   where c \<cdot> v means [c*v_0, c*v_1, ...] with ring multiplication.
 \<close>
 
+lemma ring_mult_zero_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_mult p (replicate n 0) n q = replicate n 0"
+proof (cases "p = []")
+  case True
+  have rm_zero: "ring_mod [] n = replicate n 0"
+    using ring_mod_below_n[OF npos, of "[]"] by simp
+  have "ring_mult p (replicate n 0) n q = poly_mod (replicate n 0) q"
+    using True rm_zero unfolding ring_mult_def by simp
+  also have "... = replicate n 0"
+    unfolding poly_mod_def using qpos by simp
+  finally show ?thesis .
+next
+  case False
+  have coeff_zero: "\<And>k. poly_mult_coeff p (replicate n 0) k = 0"
+    unfolding poly_mult_coeff_def by (simp add: poly_coeff_replicate_zero)
+  have pm_shape: "poly_mult p (replicate n 0) =
+                  map (\<lambda>k. poly_mult_coeff p (replicate n 0) k) [0 ..< length p + n - 1]"
+    using False npos unfolding poly_mult_def by simp
+  have pm_zero: "poly_mult p (replicate n 0) = replicate (length p + n - 1) 0"
+  proof -
+    have "poly_mult p (replicate n 0) = map (\<lambda>k. 0) [0 ..< length p + n - 1]"
+      using pm_shape coeff_zero by simp
+    also have "... = replicate (length p + n - 1) 0"
+    proof (intro nth_equalityI)
+      show "length (map (\<lambda>k. 0) [0 ..< length p + n - 1]) =
+            length (replicate (length p + n - 1) 0)"
+        by simp
+    next
+      fix i
+      assume "i < length (map (\<lambda>k. 0) [0 ..< length p + n - 1])"
+      then show "(map (\<lambda>k. 0) [0 ..< length p + n - 1]) ! i =
+                 (replicate (length p + n - 1) 0) ! i"
+        by simp
+    qed
+    finally show ?thesis .
+  qed
+  have rm_zero: "ring_mod (poly_mult p (replicate n 0)) n = replicate n 0"
+  proof (intro nth_equalityI)
+    show "length (ring_mod (poly_mult p (replicate n 0)) n) = length (replicate n 0)"
+      using npos by (simp add: ring_mod_length)
+  next
+    fix i assume i_lt: "i < length (ring_mod (poly_mult p (replicate n 0)) n)"
+    hence i_lt_n: "i < n" using npos by (simp add: ring_mod_length)
+    show "(ring_mod (poly_mult p (replicate n 0)) n) ! i = (replicate n 0) ! i"
+      unfolding ring_mod_def using i_lt_n npos
+      by (simp add: ring_mod_coeff_def pm_zero poly_coeff_replicate_zero)
+  qed
+  show ?thesis
+    unfolding ring_mult_def using rm_zero npos qpos by (simp add: poly_mod_def)
+qed
+
+lemma mod_inner_prod_scale_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+      and mult_comm: "\<And>x y. ring_mult x y n q = ring_mult y x n q"
+      and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y n q) z n q =
+                             ring_mult x (ring_mult y z n q) n q"
+  shows "mod_inner_prod row (map (\<lambda>vi. ring_mult c vi n q) v) n q =
+         ring_mult c (mod_inner_prod row v n q) n q"
+  using assms
+proof (induct row arbitrary: v)
+  case Nil
+  have n_gt0: "n > 0" using Nil.prems(1) .
+  have q_gt0: "q > 0" using Nil.prems(2) .
+  show ?case
+    by (simp add: ring_mult_zero_right[OF n_gt0 q_gt0])
+next
+  case (Cons p ps)
+  show ?case
+  proof (cases v)
+    case Nil
+    then show ?thesis
+      using ring_mult_zero_right[OF Cons.prems(1-2), of c] by simp
+  next
+    case (Cons r rs)
+    have IH: "mod_inner_prod ps (map (\<lambda>vi. ring_mult c vi n q) rs) n q =
+              ring_mult c (mod_inner_prod ps rs n q) n q"
+      using Cons.hyps[OF Cons.prems] .
+
+    have len_pr: "length (ring_mult p r n q) = n"
+      using Cons.prems(1) by (simp add: ring_mult_length)
+    have len_inner: "length (mod_inner_prod ps rs n q) = n"
+      using Cons.prems(1) by (simp add: mod_inner_prod_length)
+
+    have distrib: "ring_mult c (ring_add (ring_mult p r n q) (mod_inner_prod ps rs n q) n q) n q =
+                   ring_add (ring_mult c (ring_mult p r n q) n q)
+                            (ring_mult c (mod_inner_prod ps rs n q) n q) n q"
+      using ring_mult_add_right_via_quotient[OF Cons.prems(1) Cons.prems(2) len_pr len_inner] .
+
+    have commute_assoc:
+      "ring_mult p (ring_mult c r n q) n q = ring_mult c (ring_mult p r n q) n q"
+      by (metis mult_comm mult_assoc)
+
+    show ?thesis
+      using Cons IH distrib commute_assoc
+      by (simp add: Cons)
+  qed
+qed
+
 lemma mod_mat_vec_mult_scale:
-  assumes "n > 0" and "q > 0"
+  assumes npos: "n > 0" and qpos: "q > 0"
+      and mult_comm: "\<And>x y. ring_mult x y n q = ring_mult y x n q"
+      and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y n q) z n q =
+                             ring_mult x (ring_mult y z n q) n q"
   shows "mod_mat_vec_mult A (map (\<lambda>vi. ring_mult c vi n q) v) n q =
          map (\<lambda>ri. ring_mult c ri n q) (mod_mat_vec_mult A v n q)"
   unfolding mod_mat_vec_mult_def
-  \<comment> \<open>Proof: Each row gives inner_prod(row, c*v) = c * inner_prod(row, v).
-      This requires ring_mult to commute with ring_add sums (ring commutativity).\<close>
-  sorry
+  using mod_inner_prod_scale_right[OF npos qpos mult_comm mult_assoc]
+  by (simp add: map_map o_def)
 
 (* === Step 5: Module-LWE Parameters === *)
 text \<open>
