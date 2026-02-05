@@ -77,6 +77,8 @@ Tests that call our Isabelle-generated OCaml CLI and compare results:
 Optional deterministic cross-checks against [lazer-crypto/lazer](https://github.com/lazer-crypto/lazer):
 - Ring multiplication in `R_q = Z_q[X]/(X^n + 1)` on deterministic fixture input
 - Matrix-vector multiplication over `R_q` on deterministic fixture input
+- Sparse ternary challenge constraints (`{-1,0,1}` with fixed Hamming weight)
+- Module scaling identity checks: `A*(x*c)` and `(A*x)*c`
 - Centered modular reduction semantics alignment
 
 The suite is **skip-safe**:

@@ -15,6 +15,7 @@
 #   ./generate.sh --lang haskell     # Only Haskell
 #   ./generate.sh --lang ocaml       # Only OCaml
 #   ./generate.sh --clean            # Clean generated code
+#   ./generate.sh --allow-stubs      # Allow legacy stub fallback generation
 
 set -e
 
@@ -36,6 +37,7 @@ RUN_EXAMPLES=false
 LANG="all"
 CLEAN=false
 VERBOSE=false
+ALLOW_STUBS=false
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -46,6 +48,7 @@ usage() {
     echo "  --lang LANG       Build specific language (haskell, ocaml, all)"
     echo "  --clean           Clean generated code and build artifacts"
     echo "  --verbose         Show detailed output"
+    echo "  --allow-stubs     Allow legacy handwritten stub fallback generation"
     echo "  -h, --help        Show this help"
 }
 
@@ -87,6 +90,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --verbose)
             VERBOSE=true
+            shift
+            ;;
+        --allow-stubs)
+            ALLOW_STUBS=true
             shift
             ;;
         -h|--help)
@@ -217,8 +224,12 @@ MLEOF
 
     # Fallback: Create stub modules if generation failed
     if [[ ! -f "$GEN_DIR/Canon.hs" ]]; then
-        warn "Direct generation not available, creating from export_code output..."
-        create_haskell_stubs
+        if $ALLOW_STUBS; then
+            warn "Direct generation unavailable; using legacy stub fallback (--allow-stubs)"
+            create_haskell_stubs
+        else
+            error "Haskell export missing (expected $GEN_DIR/Canon.hs). Refusing to generate stubs without --allow-stubs."
+        fi
     fi
 
     rm -f "$SCRIPT_DIR/.generate_hs.thy"
@@ -431,6 +442,10 @@ EOF
 
 generate_ocaml() {
     local GEN_DIR="$ML_DIR/src/canon"
+
+    if ! $ALLOW_STUBS; then
+        error "OCaml generation path currently relies on legacy handwritten stubs. Refusing without --allow-stubs."
+    fi
 
     # Create OCaml modules
     cat > "$GEN_DIR/zq.ml" << 'EOF'

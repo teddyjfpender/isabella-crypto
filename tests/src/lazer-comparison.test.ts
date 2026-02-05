@@ -27,6 +27,14 @@ interface RingCase {
   ab: number[];
 }
 
+interface ChallengeCase {
+  tau: number;
+  challenge: number[];
+  scaled_vector: number[][];
+  mat_vec_scaled_right: number[][];
+  mat_vec_scaled_left: number[][];
+}
+
 interface CenteredSamples {
   inputs: number[];
   outputs: number[];
@@ -41,6 +49,7 @@ interface LazerFixture {
   vector: number[][];
   mat_vec_result: number[][];
   ring_case: RingCase;
+  challenge_case: ChallengeCase;
   centered_samples: CenteredSamples;
 }
 
@@ -74,6 +83,18 @@ function addPolysCentered(a: number[], b: number[], q: number): number[] {
     out[i] = centeredMod(a[i] + b[i], q);
   }
   return out;
+}
+
+function scaleVecByPoly(vec: number[][], scalar: number[], n: number, q: number): number[][] {
+  return vec.map(poly => {
+    const lhs = normalizePoly(poly, q, n);
+    const rhs = normalizePoly(scalar, q, n);
+    return normalizePoly(ringMult(lhs, rhs, n, q).result, q, n);
+  });
+}
+
+function challengeWeight(challenge: number[]): number {
+  return challenge.filter(c => c !== 0).length;
 }
 
 function matVecMulWithIsabella(matrix: number[][][], vector: number[][], n: number, q: number): number[][] {
@@ -171,6 +192,7 @@ describeIfLazer('LaZer Comparison', () => {
     expect(fixture.matrix.length).toBe(fixture.dims.rows);
     expect(fixture.vector.length).toBe(fixture.dims.cols);
     expect(fixture.mat_vec_result.length).toBe(fixture.dims.rows);
+    expect(fixture.challenge_case.challenge.length).toBe(fixture.ring.n);
   });
 
   it('matches centered reduction semantics used by LaZer', () => {
@@ -202,6 +224,38 @@ describeIfLazer('LaZer Comparison', () => {
     const actual = matVecMulWithIsabella(fixture.matrix, fixture.vector, n, q);
     const expected = fixture.mat_vec_result.map(poly => normalizePoly(poly, q, n));
     expect(actual).toEqual(expected);
+  });
+
+  it('uses sparse ternary challenge data with expected weight', () => {
+    const fixture = requireFixture();
+    const { n } = fixture.ring;
+    const { challenge, tau } = fixture.challenge_case;
+
+    expect(challenge.length).toBe(n);
+    expect(challenge.every(c => c === -1 || c === 0 || c === 1)).toBe(true);
+    expect(challengeWeight(challenge)).toBe(tau);
+  });
+
+  it('matches module scaling identity fixtures: A*(x*c) and (A*x)*c', () => {
+    const fixture = requireFixture();
+    const { q, n } = fixture.ring;
+    const challenge = normalizePoly(fixture.challenge_case.challenge, q, n);
+
+    const scaledVectorActual = scaleVecByPoly(fixture.vector, challenge, n, q);
+    const scaledVectorExpected = fixture.challenge_case.scaled_vector.map(poly => normalizePoly(poly, q, n));
+    expect(scaledVectorActual).toEqual(scaledVectorExpected);
+
+    const rightActual = matVecMulWithIsabella(fixture.matrix, scaledVectorActual, n, q);
+    const rightExpected = fixture.challenge_case.mat_vec_scaled_right.map(poly => normalizePoly(poly, q, n));
+    expect(rightActual).toEqual(rightExpected);
+
+    const baseActual = fixture.mat_vec_result.map(poly => normalizePoly(poly, q, n));
+    const leftActual = scaleVecByPoly(baseActual, challenge, n, q);
+    const leftExpected = fixture.challenge_case.mat_vec_scaled_left.map(poly => normalizePoly(poly, q, n));
+    expect(leftActual).toEqual(leftExpected);
+
+    // Algebraic consistency check in Isabella path.
+    expect(leftActual).toEqual(rightActual);
   });
 });
 

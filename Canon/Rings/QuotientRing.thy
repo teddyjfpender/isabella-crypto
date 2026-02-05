@@ -135,6 +135,40 @@ proof -
   show ?thesis using lhs eq unfolding poly_mult_coeff_def by simp
 qed
 
+lemma poly_mult_coeff_poly_mod_left_eq:
+  assumes qpos: "q > 0"
+  shows "poly_mult_coeff (poly_mod a q) b k mod q = poly_mult_coeff a b k mod q"
+proof -
+  have "poly_mult_coeff (poly_mod a q) b k =
+        (\<Sum>j = 0 ..< Suc k. poly_coeff (poly_mod a q) j * poly_coeff b (k - j))"
+    unfolding poly_mult_coeff_def by simp
+  also have "... = (\<Sum>j = 0 ..< Suc k. (poly_coeff a j mod q) * poly_coeff b (k - j))"
+    by (simp add: poly_coeff_poly_mod)
+  finally have lhs:
+    "poly_mult_coeff (poly_mod a q) b k =
+     (\<Sum>j = 0 ..< Suc k. (poly_coeff a j mod q) * poly_coeff b (k - j))" .
+
+  have eq:
+    "(\<Sum>j = 0 ..< Suc k. (poly_coeff a j mod q) * poly_coeff b (k - j)) mod q =
+     (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff b (k - j)) mod q"
+  proof -
+    have "(\<Sum>j = 0 ..< Suc k. (poly_coeff a j mod q) * poly_coeff b (k - j)) mod q =
+          (\<Sum>j = 0 ..< Suc k. poly_coeff b (k - j) * (poly_coeff a j mod q)) mod q"
+      by (intro arg_cong[where f="(\<lambda>x. x mod q)"]) (simp add: mult.commute)
+    also have "... = (\<Sum>j = 0 ..< Suc k. poly_coeff b (k - j) * poly_coeff a j) mod q"
+    proof -
+      have "(\<Sum>j\<in>{0..<Suc k}. poly_coeff b (k - j) * (poly_coeff a j mod q)) mod q =
+            (\<Sum>j\<in>{0..<Suc k}. poly_coeff b (k - j) * poly_coeff a j) mod q"
+        by (rule sum_mult_mod_eq)
+      then show ?thesis by simp
+    qed
+    also have "... = (\<Sum>j = 0 ..< Suc k. poly_coeff a j * poly_coeff b (k - j)) mod q"
+      by (intro arg_cong[where f="(\<lambda>x. x mod q)"]) (simp add: mult.commute)
+    finally show ?thesis .
+  qed
+  show ?thesis using lhs eq unfolding poly_mult_coeff_def by simp
+qed
+
 lemma poly_mod_poly_mult_poly_mod:
   assumes qpos: "q > 0"
   shows "poly_mod (poly_mult a (poly_mod b q)) q = poly_mod (poly_mult a b) q"
@@ -177,6 +211,52 @@ next
     show "(poly_mod (poly_mult a (poly_mod b q)) q) ! i =
           (poly_mod (poly_mult a b) q) ! i"
       using lhs rhs mult_pm mult_ab poly_mult_coeff_poly_mod_eq[OF qpos, of a b i]
+      by simp
+  qed
+qed
+
+lemma poly_mod_poly_mult_poly_mod_left:
+  assumes qpos: "q > 0"
+  shows "poly_mod (poly_mult (poly_mod a q) b) q = poly_mod (poly_mult a b) q"
+proof (cases "a = [] \<or> b = []")
+  case True
+  then show ?thesis
+    by (cases "b = []") (auto simp: poly_mult_def poly_mod_def)
+next
+  case False
+  hence a_ne: "a \<noteq> []" and b_ne: "b \<noteq> []" by auto
+
+  have pm_len: "length (poly_mod a q) = length a" by simp
+  have pm_ne: "poly_mod a q \<noteq> []" using a_ne poly_mod_ne_if_ne by auto
+  have len_eq: "length (poly_mult (poly_mod a q) b) = length (poly_mult a b)"
+    using a_ne b_ne pm_ne pm_len by (simp add: poly_mult_length)
+
+  show ?thesis
+  proof (intro nth_equalityI)
+    show "length (poly_mod (poly_mult (poly_mod a q) b) q) =
+          length (poly_mod (poly_mult a b) q)"
+      using len_eq by simp
+  next
+    fix i assume i_lt: "i < length (poly_mod (poly_mult (poly_mod a q) b) q)"
+    hence i_lt': "i < length (poly_mult (poly_mod a q) b)" by simp
+    hence i_lt_ab: "i < length (poly_mult a b)" using len_eq by simp
+
+    have lhs: "(poly_mod (poly_mult (poly_mod a q) b) q) ! i =
+               (poly_mult (poly_mod a q) b) ! i mod q"
+      using i_lt' by (simp add: poly_mod_def)
+
+    have rhs: "(poly_mod (poly_mult a b) q) ! i = (poly_mult a b) ! i mod q"
+      using i_lt_ab by (simp add: poly_mod_def)
+
+    have mult_pm: "(poly_mult (poly_mod a q) b) ! i = poly_mult_coeff (poly_mod a q) b i"
+      using pm_ne b_ne i_lt' by (simp add: poly_mult_def)
+
+    have mult_ab: "(poly_mult a b) ! i = poly_mult_coeff a b i"
+      using a_ne b_ne i_lt_ab by (simp add: poly_mult_def)
+
+    show "(poly_mod (poly_mult (poly_mod a q) b) q) ! i =
+          (poly_mod (poly_mult a b) q) ! i"
+      using lhs rhs mult_pm mult_ab poly_mult_coeff_poly_mod_left_eq[OF qpos, of a b i]
       by simp
   qed
 qed
@@ -516,6 +596,57 @@ proof -
         by (simp add: poly_mod_def ring_mod_length ring_mod_def)
     qed
   qed
+  also have "... = ring_mult a b n q"
+    unfolding ring_mult_def ..
+  finally show ?thesis .
+qed
+
+lemma ring_mult_poly_mod_left:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_mult (poly_mod a q) b n q = ring_mult a b n q"
+proof -
+  have "ring_mult (poly_mod a q) b n q = poly_mod (ring_mod (poly_mult (poly_mod a q) b) n) q"
+    unfolding ring_mult_def ..
+
+  also have "... = poly_mod (ring_mod (poly_mult a b) n) q"
+  proof -
+    have eq_poly: "poly_mod (poly_mult (poly_mod a q) b) q = poly_mod (poly_mult a b) q"
+      using poly_mod_poly_mult_poly_mod_left[OF qpos] .
+
+    have coeff_equiv: "\<And>i. poly_coeff (poly_mult (poly_mod a q) b) i mod q =
+                           poly_coeff (poly_mult a b) i mod q"
+    proof -
+      fix i
+      have lhs: "poly_coeff (poly_mult (poly_mod a q) b) i mod q =
+                 poly_coeff (poly_mod (poly_mult (poly_mod a q) b) q) i"
+        by (simp add: poly_coeff_poly_mod)
+      have rhs: "poly_coeff (poly_mult a b) i mod q =
+                 poly_coeff (poly_mod (poly_mult a b) q) i"
+        by (simp add: poly_coeff_poly_mod)
+      show "poly_coeff (poly_mult (poly_mod a q) b) i mod q =
+            poly_coeff (poly_mult a b) i mod q"
+        using eq_poly lhs rhs by simp
+    qed
+
+    have rm_equiv: "\<And>j. ring_mod_coeff (poly_mult (poly_mod a q) b) n j mod q =
+                         ring_mod_coeff (poly_mult a b) n j mod q"
+      using coeff_equiv by (intro ring_mod_coeff_mod_cong) simp
+
+    show ?thesis
+    proof (intro nth_equalityI)
+      show "length (poly_mod (ring_mod (poly_mult (poly_mod a q) b) n) q) =
+            length (poly_mod (ring_mod (poly_mult a b) n) q)"
+        using npos by (simp add: ring_mod_length)
+    next
+      fix i assume "i < length (poly_mod (ring_mod (poly_mult (poly_mod a q) b) n) q)"
+      hence i_lt: "i < n" using npos by (simp add: ring_mod_length)
+      show "(poly_mod (ring_mod (poly_mult (poly_mod a q) b) n) q) ! i =
+            (poly_mod (ring_mod (poly_mult a b) n) q) ! i"
+        using i_lt npos rm_equiv[of i]
+        by (simp add: poly_mod_def ring_mod_length ring_mod_def)
+    qed
+  qed
+
   also have "... = ring_mult a b n q"
     unfolding ring_mult_def ..
   finally show ?thesis .

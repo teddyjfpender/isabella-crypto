@@ -62,6 +62,32 @@ def _polyvec_centered_list(vec: Any) -> List[List[int]]:
     return out
 
 
+def _sparse_ternary(n: int, tau: int, label: str) -> List[int]:
+    if tau < 0 or tau > n:
+        raise ValueError(f"invalid tau={tau} for n={n}")
+
+    coeffs = [0] * n
+    stream = hashlib.shake_128(label.encode("utf-8")).digest(8192)
+    i = 0
+    placed = 0
+
+    while placed < tau:
+        if i + 3 > len(stream):
+            stream += hashlib.shake_128(f"{label}:{i}".encode("utf-8")).digest(1024)
+
+        pos = int.from_bytes(stream[i:i + 2], "little") % n
+        i += 2
+        if coeffs[pos] != 0:
+            continue
+
+        sign = 1 if (stream[i] & 1) == 0 else -1
+        i += 1
+        coeffs[pos] = sign
+        placed += 1
+
+    return coeffs
+
+
 def _polymat_centered_list(mat: Any) -> List[List[List[int]]]:
     out: List[List[List[int]]] = []
     for r in range(mat.rows):
@@ -73,12 +99,13 @@ def _polymat_centered_list(mat: Any) -> List[List[List[int]]]:
 
 
 def _build_fixture() -> Dict[str, Any]:
-    from lazer import _redc, polymat_t, polyring_t, polyvec_t  # type: ignore
+    from lazer import _redc, poly_t, polymat_t, polyring_t, polyvec_t  # type: ignore
 
     q = 3329
     n = 64
     rows = 2
     cols = 3
+    tau = 16
 
     seed_a = _shake_seed("isabella-lazer-fixture-A")
     seed_x = _shake_seed("isabella-lazer-fixture-X")
@@ -94,6 +121,19 @@ def _build_fixture() -> Dict[str, Any]:
     x0 = vec.get_elem(0)
     prod = a0 * x0
     prod.redc()
+
+    # Deterministic sparse ternary challenge for module scaling checks.
+    challenge_coeffs = _sparse_ternary(n, tau, "isabella-lazer-fixture-challenge")
+    challenge = poly_t(ring, challenge_coeffs)
+    challenge.redc()
+
+    scaled_vec = vec * challenge
+    scaled_vec.redc()
+    mat_vec_scaled_right = mat * scaled_vec
+    mat_vec_scaled_right.redc()
+
+    mat_vec_scaled_left = mat_vec * challenge
+    mat_vec_scaled_left.redc()
 
     centered_inputs = [-5000, -3329, -1665, -1, 0, 1, 1664, 1665, 3328, 3329, 5000]
     centered_outputs = [_redc(v, q) for v in centered_inputs]
@@ -114,6 +154,13 @@ def _build_fixture() -> Dict[str, Any]:
             "a": _poly_centered_list(a0),
             "b": _poly_centered_list(x0),
             "ab": _poly_centered_list(prod),
+        },
+        "challenge_case": {
+            "tau": tau,
+            "challenge": _poly_centered_list(challenge),
+            "scaled_vector": _polyvec_centered_list(scaled_vec),
+            "mat_vec_scaled_right": _polyvec_centered_list(mat_vec_scaled_right),
+            "mat_vec_scaled_left": _polyvec_centered_list(mat_vec_scaled_left),
         },
         "centered_samples": {
             "inputs": centered_inputs,

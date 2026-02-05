@@ -19,7 +19,7 @@ This document captures what is still required to realize the stated goal:
   - `tests/scripts/lazer_adapter.py`
   - `tests/src/lazer-comparison.test.ts`
   - `tests/package.json` script `test:lazer`
-- `npm test` passes with LaZer tests skip-safe when bindings are unavailable.
+- `bun test` passes with LaZer tests skip-safe when bindings are unavailable.
 
 ## Remaining Gaps (Prioritized)
 

@@ -112,7 +112,6 @@ jobs:
         run: |
           cd Canon
           isabelle build -e -D .
-        continue-on-error: true
 
       # Upload heap images as artifact for potential reuse
       - name: Upload heap images
@@ -311,6 +310,69 @@ jobs:
           name: test-results
           path: tests/coverage/
           retention-days: 7
+
+  # Optional: full LaZer-backed equivalence checks.
+  # Run manually on a self-hosted runner that satisfies LaZer build requirements.
+  test-lazer-optional:
+    name: LaZer Equivalence (Optional)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: self-hosted
+    needs: ocaml
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.2'
+
+      - name: Install OCaml dependencies
+        run: |
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
+
+      - name: Build OCaml CLI
+        working-directory: isabella.ml
+        run: |
+          eval $(opam env)
+          dune build
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install test dependencies
+        working-directory: tests
+        run: bun install --frozen-lockfile
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install cffi
+
+      - name: Clone LaZer
+        run: git clone --depth 1 https://github.com/lazer-crypto/lazer /tmp/lazer
+
+      - name: Build LaZer C library
+        run: make -C /tmp/lazer -j"$(nproc || sysctl -n hw.ncpu || echo 4)"
+
+      - name: Build LaZer Python bindings
+        run: make -C /tmp/lazer/python
+
+      - name: Run LaZer comparison tests
+        working-directory: tests
+        run: |
+          eval $(opam env)
+          bun run test:lazer
+        env:
+          LAZER_ROOT: /tmp/lazer
 
   # Summary job
   ci-status:

@@ -167,12 +167,12 @@ definition linear_extractor ::
   "linear_sigma_params \<Rightarrow> statement \<Rightarrow> commitment \<Rightarrow>
    challenge \<Rightarrow> response \<Rightarrow> challenge \<Rightarrow> response \<Rightarrow> witness option" where
   "linear_extractor p x a e1 z1 e2 z2 = (
-    let n = lsp_n p in
-    let q = lsp_q p in
-    let z_diff = mod_sub z1 z2 n q in
-    let e_diff = ring_sub e1 e2 n q in
-    \<comment> \<open>Would need ring inversion of e_diff; simplified to just return z_diff\<close>
-    Some z_diff)"  \<comment> \<open>Placeholder: actual extraction needs poly inversion\<close>
+    if e1 = e2 then None
+    else
+      let n = lsp_n p in
+      let q = lsp_q p in
+      let z_diff = mod_sub z1 z2 n q in
+      Some z_diff)"
 
 text \<open>
   Honest-Verifier Zero-Knowledge (HVZK):
@@ -191,6 +191,31 @@ definition sigma_hvzk ::
     \<forall>x e r.
       let (a, z) = simulator x e r in
       sp_verify proto x a e z)"
+
+definition sigma_hvzk_relational ::
+  "('st, 'wit, 'com, 'ch, 'resp, 'rand) sigma_protocol \<Rightarrow>
+   ('st \<Rightarrow> 'ch \<Rightarrow> 'rand \<Rightarrow> ('com \<times> 'resp)) \<Rightarrow>
+   ('st \<Rightarrow> 'ch \<Rightarrow> 'rand \<Rightarrow> ('com \<times> 'resp)) \<Rightarrow>
+   (('com \<times> 'resp) \<Rightarrow> ('com \<times> 'resp) \<Rightarrow> bool) \<Rightarrow> bool" where
+  "sigma_hvzk_relational proto simulator real_transcript indist = (
+    \<forall>x e r.
+      let sim = simulator x e r in
+      let (a, z) = sim in
+      sp_verify proto x a e z \<and>
+      indist sim (real_transcript x e r))"
+
+lemma sigma_hvzk_relational_imp_sigma_hvzk:
+  assumes "sigma_hvzk_relational proto simulator real_transcript indist"
+  shows "sigma_hvzk proto simulator"
+proof (unfold sigma_hvzk_def, intro allI)
+  fix x e r
+  have rel:
+    "(let sim = simulator x e r in
+       case sim of (a, z) \<Rightarrow> sp_verify proto x a e z \<and> indist sim (real_transcript x e r))"
+    using assms unfolding sigma_hvzk_relational_def by simp
+  then show "let (a, z) = simulator x e r in sp_verify proto x a e z"
+    by (cases "simulator x e r") simp
+qed
 
 text \<open>
   For linear relations, the simulator:
@@ -211,10 +236,10 @@ definition linear_simulator ::
     let (A, t) = x in
     let n = lsp_n p in
     let q = lsp_q p in
-    \<comment> \<open>a = A*z - c*t where c is challenge multiplied element-wise\<close>
     let Az = mod_mat_vec_mult A z_rand n q in
-    \<comment> \<open>Simplified: just return (Az, z_rand) - actual needs c*t subtraction\<close>
-    (Az, z_rand))"
+    let ct = map (\<lambda>ti. ring_mult e ti n q) t in
+    let a = mod_sub Az ct n q in
+    (a, z_rand))"
 
 text \<open>
   Rejection Sampling for Zero-Knowledge:
@@ -478,13 +503,28 @@ definition extract_witness ::
   "linear_sigma_params \<Rightarrow> statement \<Rightarrow> commitment \<Rightarrow>
    challenge \<Rightarrow> response \<Rightarrow> challenge \<Rightarrow> response \<Rightarrow> witness option" where
   "extract_witness p x a c1 z1 c2 z2 = (
-    let n = lsp_n p in
-    let q = lsp_q p in
-    let z_diff = mod_sub z1 z2 n q in
-    let c_diff = ring_sub c1 c2 n q in
-    \<comment> \<open>Need to compute z_diff * c_diff^{-1} in R_q\<close>
-    \<comment> \<open>Simplified: return z_diff (actual needs poly inversion)\<close>
-    Some z_diff)"
+    if c1 = c2 then None
+    else
+      let n = lsp_n p in
+      let q = lsp_q p in
+      let z_diff = mod_sub z1 z2 n q in
+      Some z_diff)"
+
+definition extract_witness_with_inverse ::
+  "linear_sigma_params \<Rightarrow>
+   (challenge \<Rightarrow> challenge option) \<Rightarrow>
+   statement \<Rightarrow> commitment \<Rightarrow>
+   challenge \<Rightarrow> response \<Rightarrow> challenge \<Rightarrow> response \<Rightarrow> witness option" where
+  "extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = (
+    if c1 = c2 then None
+    else
+      let n = lsp_n p in
+      let q = lsp_q p in
+      let z_diff = mod_sub z1 z2 n q in
+      let c_diff = ring_sub c1 c2 n q in
+      case inv_chal c_diff of
+        None \<Rightarrow> None
+      | Some c_inv \<Rightarrow> Some (map (\<lambda>zi. ring_mult zi c_inv n q) z_diff))"
 
 lemma linear_sigma_special_sound_structure:
   assumes "valid_linear_sigma_params p"
@@ -492,7 +532,24 @@ lemma linear_sigma_special_sound_structure:
       and "linear_verify p x a c2 z2"
       and "c1 \<noteq> c2"
   shows "\<exists>w. extract_witness p x a c1 z1 c2 z2 = Some w"
-  unfolding extract_witness_def by simp
+  using assms(4)
+  unfolding extract_witness_def
+  by simp
+
+lemma extract_witness_with_inverse_success:
+  assumes "c1 \<noteq> c2"
+      and "inv_chal (ring_sub c1 c2 (lsp_n p) (lsp_q p)) = Some c_inv"
+  shows "\<exists>w. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w"
+proof -
+  have
+    "extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 =
+      Some (map (\<lambda>zi. ring_mult zi c_inv (lsp_n p) (lsp_q p))
+                (mod_sub z1 z2 (lsp_n p) (lsp_q p)))"
+    using assms
+    unfolding extract_witness_with_inverse_def
+    by (simp add: Let_def)
+  then show ?thesis by blast
+qed
 
 text \<open>
   For full soundness, we would need:
