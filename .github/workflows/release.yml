@@ -54,7 +54,7 @@ jobs:
 
       - name: Build OCaml
         run: |
-          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx str
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
           eval $(opam env)
           cd isabella.ml && dune build
 

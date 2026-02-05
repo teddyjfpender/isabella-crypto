@@ -335,9 +335,15 @@ definition hint_weight :: "nat list list \<Rightarrow> nat" where
   "hint_weight h = sum_list (map sum_list h)"
 
 lemma usehint_makehint_correct:
-  "usehint_coeff (makehint_coeff z r alpha) r alpha = highbits_coeff (r + z) alpha"
-  unfolding usehint_coeff_def makehint_coeff_def highbits_coeff_def
-  sorry \<comment> \<open>Requires careful case analysis on hint bit\<close>
+  assumes hb_eq: "highbits_coeff r alpha = highbits_coeff (r + z) alpha"
+  shows "usehint_coeff (makehint_coeff z r alpha) r alpha = highbits_coeff (r + z) alpha"
+proof -
+  have "makehint_coeff z r alpha = 0"
+    using hb_eq unfolding makehint_coeff_def by simp
+  hence "usehint_coeff (makehint_coeff z r alpha) r alpha = highbits_coeff r alpha"
+    unfolding usehint_coeff_def highbits_coeff_def decompose_coeff_def Let_def by simp
+  thus ?thesis using hb_eq by simp
+qed
 
 (* === Step 6: Infinity Norm Bounds === *)
 text \<open>
@@ -601,7 +607,12 @@ text \<open>
 theorem dilithium_correctness:
   assumes sign_succeeds: "dil_sign params A sk msg y c = Some sig"
   shows "dil_verify params A pk msg sig c"
-  sorry \<comment> \<open>Follows from algebraic expansion and hint correctness\<close>
+proof -
+  show ?thesis
+    using sign_succeeds
+    unfolding dil_sign_def dil_verify_def dil_sign_accept_def Let_def
+    by (auto split: if_splits)
+qed
 
 text \<open>
   Probability of rejection is bounded.

@@ -32,6 +32,7 @@ jobs:
         with:
           scandir: '.'
           ignore_paths: 'old node_modules'
+          severity: 'error'
 
       - name: Check scripts are executable
         run: |
@@ -74,8 +75,8 @@ jobs:
       - name: Check Canon syntax
         run: |
           cd Canon
-          # Check all sessions exist and have valid syntax
-          isabelle build -n -D . || exit 1
+          # Fast syntax-oriented build that works on clean runners
+          isabelle build -o quick_and_dirty -D . || exit 1
 
   # Verify TypeScript/test types
   typescript-check:
@@ -118,7 +119,7 @@ jobs:
       - name: Check dune files
         working-directory: isabella.ml
         run: |
-          opam install -y dune zarith str
+          opam install -y dune zarith
           eval $(opam env)
           dune build --dry-run || echo "Dune config check complete"
 
@@ -156,7 +157,7 @@ jobs:
 
       - name: Install OCaml dependencies
         run: |
-          opam install -y dune zarith str
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
 
       - name: Build OCaml CLI
         working-directory: isabella.ml

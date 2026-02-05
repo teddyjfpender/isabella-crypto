@@ -377,6 +377,13 @@ theorem linear_sigma_complete:
   assumes params_ok: "valid_linear_sigma_params p"
       and relation_holds: "linear_relation x w (lsp_n p) (lsp_q p)"
       and masking_ok: "masking_in_range p y"
+      and valid_A: "valid_mod_matrix (fst x) (lsp_m p) (lsp_k p) (lsp_n p) (lsp_q p)"
+      and valid_w: "valid_mod_elem w (lsp_k p) (lsp_n p) (lsp_q p)"
+      and valid_y: "valid_mod_elem y (lsp_k p) (lsp_n p) (lsp_q p)"
+      and mult_comm: "\<And>x y. ring_mult x y (lsp_n p) (lsp_q p) =
+                            ring_mult y x (lsp_n p) (lsp_q p)"
+      and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y (lsp_n p) (lsp_q p)) z (lsp_n p) (lsp_q p) =
+                             ring_mult x (ring_mult y z (lsp_n p) (lsp_q p)) (lsp_n p) (lsp_q p)"
       and no_abort: "linear_respond p x w (linear_commit p x w y) c y = Some z"
   shows "linear_verify p x (linear_commit p x w y) c z"
 proof -
@@ -401,15 +408,52 @@ proof -
   \<comment> \<open>Key algebraic identity: A*z = A*(y + c*s) = A*y + c*(A*s) = a + c*t\<close>
   \<comment> \<open>This follows from mod_mat_vec_mult_add_right and ring distributivity\<close>
 
-  \<comment> \<open>The full proof uses:
-      1. mod_mat_vec_mult_add_right: A*(y + c*s) = A*y + A*(c*s)
-      2. mod_mat_vec_mult_scale: A*(c*s) = c*(A*s) = c*t
-      3. Ring associativity to conclude: A*y + c*t = a + c*t
-      These lemmas are defined in ModuleLWE.thy (with sorry for the deeper algebraic steps).\<close>
+  have npos: "?n > 0" and qpos: "?q > 0"
+    using params_ok unfolding valid_linear_sigma_params_def by auto
 
+  have rows_ok: "\<forall>row \<in> set A. length row = lsp_k p"
+    using valid_A x_def unfolding valid_mod_matrix_def valid_mod_elem_def by auto
+
+  have len_y: "length y = lsp_k p"
+    using valid_y unfolding valid_mod_elem_def by simp
+  have len_w: "length w = lsp_k p"
+    using valid_w unfolding valid_mod_elem_def by simp
+
+  have valid_cs: "valid_mod_elem ?cs (lsp_k p) ?n ?q"
+    using mod_elem_scale_valid[OF npos qpos valid_w] by simp
+  have len_cs: "length ?cs = lsp_k p"
+    using len_w by simp
+  have len_uw: "length y = length ?cs"
+    using len_y len_w by simp
+  have rows_ok_y: "\<forall>row \<in> set A. length row = length y"
+    using rows_ok len_y by simp
+  have valid_y_len: "valid_mod_elem y (length y) ?n ?q"
+    using valid_y len_y by simp
+  have valid_cs_len: "valid_mod_elem ?cs (length ?cs) ?n ?q"
+    using valid_cs len_cs by simp
+
+  have z_def: "z = mod_add y ?cs ?n ?q"
+    using no_abort unfolding linear_respond_def Let_def by (auto split: if_splits)
+
+  have Az_def: "mod_mat_vec_mult A z ?n ?q =
+                mod_add (mod_mat_vec_mult A y ?n ?q)
+                        (mod_mat_vec_mult A ?cs ?n ?q) ?n ?q"
+    using mod_mat_vec_mult_add_right[OF npos qpos len_uw rows_ok_y valid_y_len valid_cs_len]
+    by (simp add: z_def)
+
+  have scale: "mod_mat_vec_mult A ?cs ?n ?q =
+               map (\<lambda>ri. ring_mult c ri ?n ?q) (mod_mat_vec_mult A w ?n ?q)"
+    using mod_mat_vec_mult_scale[OF npos qpos mult_comm mult_assoc] by simp
+
+  have Az_eq: "mod_mat_vec_mult A z ?n ?q =
+               mod_add (mod_mat_vec_mult A y ?n ?q)
+                       (map (\<lambda>ti. ring_mult c ti ?n ?q) t) ?n ?q"
+    using Az_def scale As_eq_t by simp
+
+  have verify_expanded: "linear_verify p (A, t) (mod_mat_vec_mult A y ?n ?q) c z"
+    using z_ok Az_eq unfolding linear_verify_def by simp
   have "linear_verify p x ?a c z"
-    using z_ok unfolding linear_verify_def x_def a_def
-    sorry
+    using verify_expanded x_def a_def by simp
 
   thus ?thesis .
 qed

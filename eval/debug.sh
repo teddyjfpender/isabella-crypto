@@ -389,9 +389,9 @@ if [[ "$LIST_FAILED" == "true" ]]; then
             while IFS= read -r failed_dir; do
                 if [[ -n "$failed_dir" ]]; then
                     found_any=true
-                    local verify_json="${failed_dir}/verify.json"
-                    local timestamp=$(jq -r '.timestamp' "$verify_json" 2>/dev/null || echo "unknown")
-                    local session=$(jq -r '.session_name' "$verify_json" 2>/dev/null || echo "unknown")
+                    verify_json="${failed_dir}/verify.json"
+                    timestamp=$(jq -r '.timestamp' "$verify_json" 2>/dev/null || echo "unknown")
+                    session=$(jq -r '.session_name' "$verify_json" 2>/dev/null || echo "unknown")
                     echo "  - $(basename "$failed_dir") (${session}, ${timestamp})"
                 fi
             done < <(find_failed_runs "$dir")

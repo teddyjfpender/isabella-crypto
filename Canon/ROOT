@@ -48,8 +48,12 @@ session Canon_Gadgets in "Gadgets" = Canon_Base +
 (* Session 5: Polynomial ring arithmetic *)
 session Canon_Rings in "Rings" = Canon_Hardness +
   options [document = false, quick_and_dirty = true]
+  sessions
+    "HOL-Computational_Algebra"
   theories
     PolyMod
+    QuotientRing
+    Rq_AFP_Bridge
     ModuleLWE
     NTT
 

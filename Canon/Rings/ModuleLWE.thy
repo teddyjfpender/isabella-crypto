@@ -1,5 +1,5 @@
 theory ModuleLWE
-  imports Canon_Base.Prelude Canon_Base.ListVec Canon_Base.Zq Canon_Base.Norms Canon_Hardness.LWE_Def Canon_Hardness.SIS_Def Canon_Rings.PolyMod
+  imports Canon_Base.Prelude Canon_Base.ListVec Canon_Base.Zq Canon_Base.Norms Canon_Hardness.LWE_Def Canon_Hardness.SIS_Def Canon_Rings.PolyMod Canon_Rings.QuotientRing
 begin
 
 (* === Step 1: Module Element Types === *)
@@ -101,10 +101,10 @@ text \<open>
 
   Proof sketch by induction on v:
   - Base case: [] gives replicate n 0 on both sides
-  - Inductive case: Uses ring_mult_add_right and ring_add_assoc to rearrange terms
+  - Inductive case: Uses ring_mult_add_right_via_quotient and ring_add_assoc to rearrange terms
 
   The proof requires:
-  1. ring_mult_add_right: a * (b + c) = a*b + a*c (from PolyMod.thy)
+  1. ring_mult_add_right_via_quotient: a * (b + c) = a*b + a*c (from QuotientRing.thy)
   2. ring_add_assoc: (a + b) + c = a + (b + c) (from PolyMod.thy)
   3. ring_add_comm: a + b = b + a (from PolyMod.thy)
 \<close>
@@ -133,10 +133,144 @@ qed
 lemma ring_mod_coeff_add_zeros:
   assumes npos: "n > 0"
   shows "ring_mod_coeff (poly_add p (replicate m 0)) n i = ring_mod_coeff p n i"
-  \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.
-      The sums have different bounds but the extra terms are zero.
-      Full proof requires careful handling of sum bounds with range_beyond_length_nat.\<close>
-  sorry
+proof -
+  \<comment> \<open>Key insight: poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k for all k.\<close>
+  have coeff_eq: "\<And>k. poly_coeff (poly_add p (replicate m 0)) k = poly_coeff p k"
+    using poly_add_replicate_zero_coeff by simp
+
+  \<comment> \<open>The ring_mod_coeff sums terms with alternating signs.
+      Since all coefficients are equal, the sums differ only in their bounds.
+      But poly_coeff returns 0 beyond the polynomial length, so extra terms are 0.\<close>
+
+  let ?p' = "poly_add p (replicate m 0)"
+
+  \<comment> \<open>Define a common function for the summand\<close>
+  let ?f = "\<lambda>k. (if even k then 1 else -1) * poly_coeff p (k * n + i)"
+
+  \<comment> \<open>ring_mod_coeff sums ?f over [0 ..< bound] where bound depends on length\<close>
+  \<comment> \<open>For both p' and p, using coeff_eq, the summand is the same function ?f\<close>
+
+  have lhs_eq: "ring_mod_coeff ?p' n i =
+                sum_list (map ?f [0 ..< (length ?p' + n - 1 - i) div n + 1])"
+    unfolding ring_mod_coeff_def using coeff_eq by simp
+
+  have rhs_eq: "ring_mod_coeff p n i =
+                sum_list (map ?f [0 ..< (length p + n - 1 - i) div n + 1])"
+    unfolding ring_mod_coeff_def by simp
+
+  \<comment> \<open>Key: ?f k = 0 when k * n + i >= length p (poly_coeff returns 0 beyond length)\<close>
+  have f_zero: "\<And>k. k * n + i \<ge> length p \<Longrightarrow> ?f k = 0"
+    unfolding poly_coeff_def by simp
+
+  \<comment> \<open>The effective bound is where k * n + i < length p, i.e., k < (length p - i) / n + something\<close>
+  \<comment> \<open>Beyond that, all terms are 0, so different upper bounds give same sum\<close>
+
+  \<comment> \<open>Let t_eff be the smallest k where k * n + i >= length p\<close>
+  let ?t_eff = "(length p + n - 1 - i) div n + 1"
+
+  \<comment> \<open>For k >= ?t_eff, we have k * n + i >= length p, so ?f k = 0\<close>
+  have eff_bound: "\<And>k. k \<ge> ?t_eff \<Longrightarrow> ?f k = 0"
+  proof -
+    fix k assume k_ge: "k \<ge> ?t_eff"
+    have "k * n + i \<ge> length p"
+    proof -
+      \<comment> \<open>k >= (length p + n - 1 - i) div n + 1\<close>
+      \<comment> \<open>So k * n >= ((length p + n - 1 - i) div n + 1) * n\<close>
+      \<comment> \<open>           = ((length p + n - 1 - i) div n) * n + n\<close>
+      \<comment> \<open>           >= (length p + n - 1 - i) - mod + n\<close>
+      \<comment> \<open>           >= length p - i (since mod < n)\<close>
+
+      have k_ge_bound: "k \<ge> (length p + n - 1 - i) div n + 1"
+        using k_ge by simp
+      hence "k * n \<ge> ((length p + n - 1 - i) div n + 1) * n"
+        using mult_le_mono1 by blast
+      hence kn_ge: "k * n \<ge> ((length p + n - 1 - i) div n) * n + n"
+        by (simp add: algebra_simps)
+
+      \<comment> \<open>div-mod identity: x = (x div n) * n + x mod n\<close>
+      have div_mod: "(length p + n - 1 - i) = ((length p + n - 1 - i) div n) * n + (length p + n - 1 - i) mod n"
+        by simp
+
+      have mod_lt: "(length p + n - 1 - i) mod n < n"
+        using npos by simp
+
+      \<comment> \<open>So ((length p + n - 1 - i) div n) * n = (length p + n - 1 - i) - mod\<close>
+      \<comment> \<open>And ((length p + n - 1 - i) div n) * n + n >= (length p + n - 1 - i) - mod + n\<close>
+      \<comment> \<open>                                          >= (length p + n - 1 - i) - (n-1) + n\<close>
+      \<comment> \<open>                                          = length p - i + 1\<close>
+      \<comment> \<open>                                          >= length p - i\<close>
+
+      have "((length p + n - 1 - i) div n) * n + n \<ge> (length p + n - 1 - i) - (n - 1) + n"
+      proof -
+        have eq1: "((length p + n - 1 - i) div n) * n + (length p + n - 1 - i) mod n = (length p + n - 1 - i)"
+          by simp
+        hence "((length p + n - 1 - i) div n) * n = (length p + n - 1 - i) - (length p + n - 1 - i) mod n"
+          by arith
+        moreover have "(length p + n - 1 - i) mod n \<le> n - 1"
+          using mod_lt npos by linarith
+        ultimately have "((length p + n - 1 - i) div n) * n \<ge> (length p + n - 1 - i) - (n - 1)"
+          by linarith
+        thus ?thesis by linarith
+      qed
+      hence "((length p + n - 1 - i) div n) * n + n \<ge> length p - i + 1"
+        using npos by linarith
+      hence "k * n \<ge> length p - i + 1"
+        using kn_ge by linarith
+      hence "k * n \<ge> length p - i"
+        by linarith
+      thus ?thesis by linarith
+    qed
+    thus "?f k = 0" using f_zero by simp
+  qed
+
+  \<comment> \<open>Both bounds include at least ?t_eff, and ?f k = 0 for k >= ?t_eff\<close>
+  \<comment> \<open>So both sums equal sum over [0 ..< ?t_eff]\<close>
+
+  have lhs_bound: "(length ?p' + n - 1 - i) div n + 1 \<ge> ?t_eff"
+  proof -
+    have len_eq: "length ?p' = max (length p) m" by (simp add: poly_add_length)
+    have "length p \<le> max (length p) m" by simp
+    hence "length p + n - 1 - i \<le> max (length p) m + n - 1 - i" by linarith
+    hence "(length p + n - 1 - i) div n \<le> (max (length p) m + n - 1 - i) div n"
+      using div_le_mono by blast
+    hence "(length p + n - 1 - i) div n \<le> (length ?p' + n - 1 - i) div n"
+      using len_eq by simp
+    thus ?thesis by simp
+  qed
+
+  have "sum_list (map ?f [0 ..< (length ?p' + n - 1 - i) div n + 1]) =
+        sum_list (map ?f [0 ..< ?t_eff])"
+  proof -
+    let ?b' = "(length ?p' + n - 1 - i) div n + 1"
+    have split: "[0 ..< ?b'] = [0 ..< ?t_eff] @ [?t_eff ..< ?b']"
+      using lhs_bound upt_add_eq_append[of 0 ?t_eff "?b' - ?t_eff"] by auto
+    have "sum_list (map ?f [0 ..< ?b']) =
+          sum_list (map ?f [0 ..< ?t_eff]) + sum_list (map ?f [?t_eff ..< ?b'])"
+      using split by simp
+    moreover have "sum_list (map ?f [?t_eff ..< ?b']) = 0"
+    proof -
+      have all_zero: "\<forall>x \<in> set (map ?f [?t_eff ..< ?b']). x = (0::int)"
+      proof
+        fix x assume "x \<in> set (map ?f [?t_eff ..< ?b'])"
+        then obtain k where "k \<in> set [?t_eff ..< ?b']" and "x = ?f k" by auto
+        hence "k \<ge> ?t_eff" by auto
+        thus "x = 0" using eff_bound \<open>x = ?f k\<close> by simp
+      qed
+      thus ?thesis using sum_list_all_zero_int by simp
+    qed
+    ultimately show ?thesis by simp
+  qed
+  hence lhs_sum: "ring_mod_coeff ?p' n i = sum_list (map ?f [0 ..< ?t_eff])"
+    using lhs_eq by simp
+
+  have "sum_list (map ?f [0 ..< (length p + n - 1 - i) div n + 1]) =
+        sum_list (map ?f [0 ..< ?t_eff])"
+    by simp
+  hence rhs_sum: "ring_mod_coeff p n i = sum_list (map ?f [0 ..< ?t_eff])"
+    using rhs_eq by simp
+
+  show ?thesis using lhs_sum rhs_sum by simp
+qed
 
 lemma ring_add_zero_right:
   assumes "n > 0" and "q > 0"
@@ -177,6 +311,8 @@ lemma mod_add_cons:
 lemma mod_inner_prod_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_vu: "length v = length u" and len_uw: "length u = length w"
+      and valid_u: "valid_mod_elem u (length u) n q"
+      and valid_w: "valid_mod_elem w (length w) n q"
   shows "mod_inner_prod v (mod_add u w n q) n q =
          ring_add (mod_inner_prod v u n q) (mod_inner_prod v w n q) n q"
   using assms
@@ -224,9 +360,14 @@ next
   have len_us_ws: "length us = length ws"
     using Cons.prems u_def w_def by simp
 
+  have valid_us: "valid_mod_elem us (length us) n q"
+    using Cons.prems u_def unfolding valid_mod_elem_def by simp
+  have valid_ws: "valid_mod_elem ws (length ws) n q"
+    using Cons.prems w_def unfolding valid_mod_elem_def by simp
+
   have IH: "mod_inner_prod ps (mod_add us ws n q) n q =
             ring_add (mod_inner_prod ps us n q) (mod_inner_prod ps ws n q) n q"
-    using Cons.hyps[OF npos qpos len_ps_us len_us_ws] .
+    using Cons.hyps[OF npos qpos len_ps_us len_us_ws valid_us valid_ws] .
 
   have mod_add_cons: "mod_add u w n q = ring_add u0 w0 n q # mod_add us ws n q"
     using u_def w_def unfolding mod_add_def by simp
@@ -247,10 +388,16 @@ next
                       (ring_add (ring_mult p w0 n q) (mod_inner_prod ps ws n q) n q) n q"
     using u_def w_def by simp
 
-  \<comment> \<open>Apply ring_mult_add_right: p * (u0 + w0) = p*u0 + p*w0\<close>
+  \<comment> \<open>Apply ring_mult_add_right_via_quotient: p * (u0 + w0) = p*u0 + p*w0\<close>
+  have u0_valid: "valid_ring_elem u0 n q"
+    using Cons.prems u_def unfolding valid_mod_elem_def by simp
+  have w0_valid: "valid_ring_elem w0 n q"
+    using Cons.prems w_def unfolding valid_mod_elem_def by simp
+  have len_u0: "length u0 = n" using u0_valid unfolding valid_ring_elem_def by simp
+  have len_w0: "length w0 = n" using w0_valid unfolding valid_ring_elem_def by simp
   have mult_distrib: "ring_mult p (ring_add u0 w0 n q) n q =
                       ring_add (ring_mult p u0 n q) (ring_mult p w0 n q) n q"
-    using ring_mult_add_right[OF npos qpos] .
+    using ring_mult_add_right_via_quotient[OF npos qpos len_u0 len_w0] .
 
   \<comment> \<open>The final rearrangement:
       ring_add (ring_add (p*u0) (p*w0)) (ring_add (inner ps us) (inner ps ws))
@@ -324,6 +471,13 @@ lemma mod_add_valid:
   using assms unfolding valid_mod_elem_def mod_add_def
   by (auto simp: ring_add_valid)
 
+lemma mod_elem_scale_valid:
+  assumes "n > 0" and "q > 0"
+      and "valid_mod_elem v k n q"
+  shows "valid_mod_elem (map (\<lambda>vi. ring_mult c vi n q) v) k n q"
+  using assms unfolding valid_mod_elem_def
+  by (auto simp: ring_mult_valid)
+
 definition mod_sub :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
   "mod_sub v w n q = map2 (\<lambda>p r. ring_sub p r n q) v w"
 
@@ -343,6 +497,8 @@ lemma mod_mat_vec_mult_add_right:
   assumes npos: "n > 0" and qpos: "q > 0"
       and len_uw: "length u = length w"
       and rows_ok: "\<forall>row \<in> set A. length row = length u"
+      and valid_u: "valid_mod_elem u (length u) n q"
+      and valid_w: "valid_mod_elem w (length w) n q"
   shows "mod_mat_vec_mult A (mod_add u w n q) n q =
          mod_add (mod_mat_vec_mult A u n q) (mod_mat_vec_mult A w n q) n q"
 proof -
@@ -359,7 +515,7 @@ proof -
       using rows_ok row_in by simp
     show "mod_inner_prod row (mod_add u w n q) n q =
           ring_add (mod_inner_prod row u n q) (mod_inner_prod row w n q) n q"
-      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw] .
+      using mod_inner_prod_add_right[OF npos qpos len_row_u len_uw valid_u valid_w] .
   qed
 
   have len_eq: "length (mod_mat_vec_mult A (mod_add u w n q) n q) =
@@ -406,14 +562,115 @@ text \<open>
   where c \<cdot> v means [c*v_0, c*v_1, ...] with ring multiplication.
 \<close>
 
+lemma ring_mult_zero_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+  shows "ring_mult p (replicate n 0) n q = replicate n 0"
+proof (cases "p = []")
+  case True
+  have rm_zero: "ring_mod [] n = replicate n 0"
+    using ring_mod_below_n[OF npos, of "[]"] by simp
+  have "ring_mult p (replicate n 0) n q = poly_mod (replicate n 0) q"
+    using True rm_zero unfolding ring_mult_def by simp
+  also have "... = replicate n 0"
+    unfolding poly_mod_def using qpos by simp
+  finally show ?thesis .
+next
+  case False
+  have coeff_zero: "\<And>k. poly_mult_coeff p (replicate n 0) k = 0"
+    unfolding poly_mult_coeff_def by (simp add: poly_coeff_replicate_zero)
+  have pm_shape: "poly_mult p (replicate n 0) =
+                  map (\<lambda>k. poly_mult_coeff p (replicate n 0) k) [0 ..< length p + n - 1]"
+    using False npos unfolding poly_mult_def by simp
+  have pm_zero: "poly_mult p (replicate n 0) = replicate (length p + n - 1) 0"
+  proof -
+    have "poly_mult p (replicate n 0) = map (\<lambda>k. 0) [0 ..< length p + n - 1]"
+      using pm_shape coeff_zero by simp
+    also have "... = replicate (length p + n - 1) 0"
+    proof (intro nth_equalityI)
+      show "length (map (\<lambda>k. 0) [0 ..< length p + n - 1]) =
+            length (replicate (length p + n - 1) 0)"
+        by simp
+    next
+      fix i
+      assume "i < length (map (\<lambda>k. 0) [0 ..< length p + n - 1])"
+      then show "(map (\<lambda>k. 0) [0 ..< length p + n - 1]) ! i =
+                 (replicate (length p + n - 1) 0) ! i"
+        by simp
+    qed
+    finally show ?thesis .
+  qed
+  have rm_zero: "ring_mod (poly_mult p (replicate n 0)) n = replicate n 0"
+  proof (intro nth_equalityI)
+    show "length (ring_mod (poly_mult p (replicate n 0)) n) = length (replicate n 0)"
+      using npos by (simp add: ring_mod_length)
+  next
+    fix i assume i_lt: "i < length (ring_mod (poly_mult p (replicate n 0)) n)"
+    hence i_lt_n: "i < n" using npos by (simp add: ring_mod_length)
+    show "(ring_mod (poly_mult p (replicate n 0)) n) ! i = (replicate n 0) ! i"
+      unfolding ring_mod_def using i_lt_n npos
+      by (simp add: ring_mod_coeff_def pm_zero poly_coeff_replicate_zero)
+  qed
+  show ?thesis
+    unfolding ring_mult_def using rm_zero npos qpos by (simp add: poly_mod_def)
+qed
+
+lemma mod_inner_prod_scale_right:
+  assumes npos: "n > 0" and qpos: "q > 0"
+      and mult_comm: "\<And>x y. ring_mult x y n q = ring_mult y x n q"
+      and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y n q) z n q =
+                             ring_mult x (ring_mult y z n q) n q"
+  shows "mod_inner_prod row (map (\<lambda>vi. ring_mult c vi n q) v) n q =
+         ring_mult c (mod_inner_prod row v n q) n q"
+  using assms
+proof (induct row arbitrary: v)
+  case Nil
+  have n_gt0: "n > 0" using Nil.prems(1) .
+  have q_gt0: "q > 0" using Nil.prems(2) .
+  show ?case
+    by (simp add: ring_mult_zero_right[OF n_gt0 q_gt0])
+next
+  case (Cons p ps)
+  show ?case
+  proof (cases v)
+    case Nil
+    then show ?thesis
+      using ring_mult_zero_right[OF Cons.prems(1-2), of c] by simp
+  next
+    case (Cons r rs)
+    have IH: "mod_inner_prod ps (map (\<lambda>vi. ring_mult c vi n q) rs) n q =
+              ring_mult c (mod_inner_prod ps rs n q) n q"
+      using Cons.hyps[OF Cons.prems] .
+
+    have len_pr: "length (ring_mult p r n q) = n"
+      using Cons.prems(1) by (simp add: ring_mult_length)
+    have len_inner: "length (mod_inner_prod ps rs n q) = n"
+      using Cons.prems(1) by (simp add: mod_inner_prod_length)
+
+    have distrib: "ring_mult c (ring_add (ring_mult p r n q) (mod_inner_prod ps rs n q) n q) n q =
+                   ring_add (ring_mult c (ring_mult p r n q) n q)
+                            (ring_mult c (mod_inner_prod ps rs n q) n q) n q"
+      using ring_mult_add_right_via_quotient[OF Cons.prems(1) Cons.prems(2) len_pr len_inner] .
+
+    have commute_assoc:
+      "ring_mult p (ring_mult c r n q) n q = ring_mult c (ring_mult p r n q) n q"
+      by (metis mult_comm mult_assoc)
+
+    show ?thesis
+      using Cons IH distrib commute_assoc
+      by (simp add: Cons)
+  qed
+qed
+
 lemma mod_mat_vec_mult_scale:
-  assumes "n > 0" and "q > 0"
+  assumes npos: "n > 0" and qpos: "q > 0"
+      and mult_comm: "\<And>x y. ring_mult x y n q = ring_mult y x n q"
+      and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y n q) z n q =
+                             ring_mult x (ring_mult y z n q) n q"
   shows "mod_mat_vec_mult A (map (\<lambda>vi. ring_mult c vi n q) v) n q =
          map (\<lambda>ri. ring_mult c ri n q) (mod_mat_vec_mult A v n q)"
   unfolding mod_mat_vec_mult_def
-  \<comment> \<open>Proof: Each row gives inner_prod(row, c*v) = c * inner_prod(row, v).
-      This requires ring_mult to commute with ring_add sums (ring commutativity).\<close>
-  sorry
+  using mod_inner_prod_scale_right[OF npos qpos mult_comm mult_assoc]
+  by (simp add: map_map o_def)
 
 (* === Step 5: Module-LWE Parameters === *)
 text \<open>
