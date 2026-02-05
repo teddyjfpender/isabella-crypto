@@ -41,7 +41,7 @@ jobs:
 
       - name: Install OCaml dependencies
         run: |
-          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx str
+          opam install -y dune zarith zarith_stubs_js js_of_ocaml js_of_ocaml-ppx
 
       - name: Build Haskell
         working-directory: isabella.hs
