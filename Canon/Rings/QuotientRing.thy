@@ -652,6 +652,62 @@ proof -
   finally show ?thesis .
 qed
 
+section \<open>Canonical Representative Refinement\<close>
+
+text \<open>
+  In the implementation, ring elements are represented as length-\<open>n\<close> lists.
+  This section makes the refinement boundary explicit:
+  once an operand is canonical (length \<open>n\<close>), applying \<open>ring_mod\<close> again
+  is semantics-preserving and multiplication is stable under that re-reduction.
+\<close>
+
+definition canonical_ring_elem :: "poly \<Rightarrow> nat \<Rightarrow> bool" where
+  "canonical_ring_elem p n \<longleftrightarrow> length p = n"
+
+lemma ring_mod_idempotent:
+  assumes npos: "n > 0"
+  shows "ring_mod (ring_mod p n) n = ring_mod p n"
+  using assms by (simp add: ring_mod_already_n ring_mod_length)
+
+lemma ring_mod_canonical [simp]:
+  assumes npos: "n > 0"
+      and canon: "canonical_ring_elem p n"
+  shows "ring_mod p n = p"
+  using assms unfolding canonical_ring_elem_def
+  by (simp add: ring_mod_already_n)
+
+lemma ring_mult_ring_mod_right_canonical:
+  assumes npos: "n > 0"
+      and qpos: "q > 0"
+      and canon_b: "canonical_ring_elem b n"
+  shows "ring_mult a (ring_mod b n) n q = ring_mult a b n q"
+  using assms
+  unfolding canonical_ring_elem_def
+  by (simp add: ring_mod_already_n)
+
+lemma ring_mult_ring_mod_left_canonical:
+  assumes npos: "n > 0"
+      and qpos: "q > 0"
+      and canon_a: "canonical_ring_elem a n"
+  shows "ring_mult (ring_mod a n) b n q = ring_mult a b n q"
+  using assms
+  unfolding canonical_ring_elem_def
+  by (simp add: ring_mod_already_n)
+
+lemma ring_mult_ring_mod_right_normalized:
+  assumes npos: "n > 0"
+      and qpos: "q > 0"
+  shows "ring_mult a (ring_mod b n) n q =
+         ring_mult a (ring_mod (ring_mod b n) n) n q"
+  using assms by (simp add: ring_mod_idempotent)
+
+lemma ring_mult_ring_mod_left_normalized:
+  assumes npos: "n > 0"
+      and qpos: "q > 0"
+  shows "ring_mult (ring_mod a n) b n q =
+         ring_mult (ring_mod (ring_mod a n) n) b n q"
+  using assms by (simp add: ring_mod_idempotent)
+
 section \<open>Distributivity in the Quotient Ring\<close>
 
 text \<open>
