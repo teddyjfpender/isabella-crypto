@@ -55,7 +55,7 @@ jobs:
           ls -lh ~/heaps-linux.tar.gz
 
       - name: Upload heaps artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: isabelle-heaps-linux
           path: ~/heaps-linux.tar.gz

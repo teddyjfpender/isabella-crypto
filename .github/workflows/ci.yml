@@ -106,7 +106,7 @@ jobs:
 
       # Upload heap images as artifact for potential reuse
       - name: Upload heap images
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: isabelle-heaps
           path: ~/.isabelle/Isabelle2025/heaps/
