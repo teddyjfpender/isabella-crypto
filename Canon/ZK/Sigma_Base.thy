@@ -217,6 +217,39 @@ proof (unfold sigma_hvzk_def, intro allI)
     by (cases "simulator x e r") simp
 qed
 
+lemma sigma_hvzk_relational_verify:
+  assumes rel: "sigma_hvzk_relational proto simulator real_transcript indist"
+  shows "let (a, z) = simulator x e r in sp_verify proto x a e z"
+proof -
+  obtain a z where sim_def: "simulator x e r = (a, z)"
+    by (cases "simulator x e r") auto
+  have rel_inst:
+    "(let sim = simulator x e r in
+      let (a', z') = sim in
+      sp_verify proto x a' e z' \<and> indist sim (real_transcript x e r))"
+    using rel unfolding sigma_hvzk_relational_def by simp
+  from rel_inst have "sp_verify proto x a e z \<and> indist (simulator x e r) (real_transcript x e r)"
+    using sim_def by simp
+  then have "sp_verify proto x a e z" by simp
+  then show ?thesis
+    using sim_def by simp
+qed
+
+lemma sigma_hvzk_relational_indist:
+  assumes rel: "sigma_hvzk_relational proto simulator real_transcript indist"
+  shows "indist (simulator x e r) (real_transcript x e r)"
+proof -
+  obtain a z where sim_def: "simulator x e r = (a, z)"
+    by (cases "simulator x e r") auto
+  have rel_inst:
+    "(let sim = simulator x e r in
+      let (a', z') = sim in
+      sp_verify proto x a' e z' \<and> indist sim (real_transcript x e r))"
+    using rel unfolding sigma_hvzk_relational_def by simp
+  from rel_inst show ?thesis
+    using sim_def by simp
+qed
+
 text \<open>
   For linear relations, the simulator:
   1. Sample random z with appropriate distribution
@@ -526,6 +559,13 @@ definition extract_witness_with_inverse ::
         None \<Rightarrow> None
       | Some c_inv \<Rightarrow> Some (map (\<lambda>zi. ring_mult zi c_inv n q) z_diff))"
 
+definition challenge_diff_invertible ::
+  "linear_sigma_params \<Rightarrow> (challenge \<Rightarrow> challenge option) \<Rightarrow>
+   challenge \<Rightarrow> challenge \<Rightarrow> bool" where
+  "challenge_diff_invertible p inv_chal c1 c2 \<longleftrightarrow>
+    c1 \<noteq> c2 \<and>
+    (\<exists>c_inv. inv_chal (ring_sub c1 c2 (lsp_n p) (lsp_q p)) = Some c_inv)"
+
 lemma linear_sigma_special_sound_structure:
   assumes "valid_linear_sigma_params p"
       and "linear_verify p x a c1 z1"
@@ -535,6 +575,14 @@ lemma linear_sigma_special_sound_structure:
   using assms(4)
   unfolding extract_witness_def
   by simp
+
+lemma extract_witness_with_inverse_none_if_not_invertible:
+  assumes "c1 \<noteq> c2"
+      and "inv_chal (ring_sub c1 c2 (lsp_n p) (lsp_q p)) = None"
+  shows "extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = None"
+  using assms
+  unfolding extract_witness_with_inverse_def
+  by (simp add: Let_def)
 
 lemma extract_witness_with_inverse_success:
   assumes "c1 \<noteq> c2"
@@ -549,6 +597,22 @@ proof -
     unfolding extract_witness_with_inverse_def
     by (simp add: Let_def)
   then show ?thesis by blast
+qed
+
+lemma linear_sigma_special_sound_with_inverse:
+  assumes "linear_verify p x a c1 z1"
+      and "linear_verify p x a c2 z2"
+      and "challenge_diff_invertible p inv_chal c1 c2"
+  shows "\<exists>w. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w"
+proof -
+  from assms(3) obtain c_inv where
+    c_inv_def: "inv_chal (ring_sub c1 c2 (lsp_n p) (lsp_q p)) = Some c_inv"
+    unfolding challenge_diff_invertible_def by auto
+  from assms(3) have c_ne: "c1 \<noteq> c2"
+    unfolding challenge_diff_invertible_def by auto
+  show ?thesis
+    using c_ne c_inv_def
+    by (rule extract_witness_with_inverse_success)
 qed
 
 text \<open>
