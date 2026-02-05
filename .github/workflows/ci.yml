@@ -20,7 +20,7 @@ jobs:
       canon: ${{ steps.filter.outputs.canon }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check for Canon changes
         uses: dorny/paths-filter@v3
@@ -38,7 +38,7 @@ jobs:
     if: needs.changes.outputs.canon == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Cache Isabelle installation separately (rarely changes)
       - name: Cache Isabelle installation
@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
@@ -160,7 +160,7 @@ jobs:
       cli-available: ${{ steps.build.outputs.cli-available }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup OCaml
         uses: ocaml/setup-ocaml@v3
@@ -208,7 +208,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup OCaml
         uses: ocaml/setup-ocaml@v3
@@ -260,7 +260,7 @@ jobs:
     needs: ocaml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup OCaml
         uses: ocaml/setup-ocaml@v3
