@@ -9,7 +9,8 @@ on:
       - 'isabella.ml/**'
       - 'isabella.ts/**'
       - 'tests/**'
-      - 'ralph/**'
+      - 'scripts/**'
+      - 'bench/**'
       - 'generate.sh'
       - 'Makefile'
       - '.github/workflows/**'
@@ -31,12 +32,12 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: '.'
-          ignore_paths: 'old node_modules'
+          ignore_paths: 'node_modules'
           severity: 'error'
 
       - name: Check scripts are executable
         run: |
-          for script in generate.sh ralph/*.sh bench/*.sh; do
+          for script in generate.sh scripts/*.sh bench/*.sh; do
             if [[ -f "$script" ]]; then
               if [[ ! -x "$script" ]]; then
                 echo "Error: $script is not executable"

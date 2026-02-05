@@ -1,8 +1,0 @@
-
-Attempt 1: Pre-build validation failed - - Uses backtick fact references (use named facts instead)
-Attempt 2: Review failed - Issue 1: Code does not match the exact required code - uses named facts instead of backticks and simple references
-Attempt 3: Pre-build validation failed - - Uses backtick fact references (use named facts instead)
-Attempt 4: Pre-build validation failed - - Uses backtick fact references (use named facts instead)
-Attempt 5: Review failed - 
-Attempt 6: Pre-build validation failed - - Uses backtick fact references (use named facts instead)
-Attempt 7: Review failed - 

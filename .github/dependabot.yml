@@ -11,9 +11,9 @@ updates:
       - "dependencies"
       - "ci"
 
-  # npm (TypeScript)
+  # npm (TypeScript package)
   - package-ecosystem: "npm"
-    directory: "/typescript/isabella"
+    directory: "/isabella.ts"
     schedule:
       interval: "weekly"
     commit-message:
@@ -21,3 +21,14 @@ updates:
     labels:
       - "dependencies"
       - "typescript"
+
+  # npm (test harness)
+  - package-ecosystem: "npm"
+    directory: "/tests"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps(test)"
+    labels:
+      - "dependencies"
+      - "tests"

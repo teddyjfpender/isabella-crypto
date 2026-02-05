@@ -1,8 +1,0 @@
-(library
- (name isabella_lattice)
- (public_name isabella.lattice)
- (libraries zarith)
- (wrapped false)
- ; Suppress warnings for Isabelle-generated code
- (ocamlopt_flags (:standard -w -a))
- (ocamlc_flags (:standard -w -a)))

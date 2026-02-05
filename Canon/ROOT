@@ -32,7 +32,7 @@ session Canon_Hardness in "Hardness" = Canon_Base +
 
 (* Session 3: Cryptographic constructions *)
 session Canon_Crypto in "Crypto" = Canon_Rings +
-  options [document = false, quick_and_dirty = true]
+  options [document = false]
   theories
     Regev_PKE
     Commit_SIS
@@ -47,7 +47,7 @@ session Canon_Gadgets in "Gadgets" = Canon_Base +
 
 (* Session 5: Polynomial ring arithmetic *)
 session Canon_Rings in "Rings" = Canon_Hardness +
-  options [document = false, quick_and_dirty = true]
+  options [document = false]
   sessions
     "HOL-Computational_Algebra"
   theories
@@ -59,7 +59,7 @@ session Canon_Rings in "Rings" = Canon_Hardness +
 
 (* Session 6: Zero-Knowledge foundations *)
 session Canon_ZK in "ZK" = Canon_Rings +
-  options [document = false, quick_and_dirty = true]
+  options [document = false]
   theories
     Sigma_Base
 

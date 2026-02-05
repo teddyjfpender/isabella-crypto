@@ -93,22 +93,12 @@ isabelle build -d . Canon_Full
 
 ## Development Workflow
 
-New theories are added using the step-loop:
+New theories are added directly:
 
 ```bash
-# 1. Create prompt in eval/prompts/canon-<name>.md
-# 2. Run step-loop
-ralph/step-loop.sh --prompt canon-<name> \
-    --output-dir Canon \
-    --theory-name <Name> \
-    --theory-path <Subdir> \
-    --session Canon_Base \
-    --imports 'Canon_Base.Prelude' \
-    --parent-session Canon_Base \
-    --session-dir Canon
-
-# 3. Update ROOT to include new theory
-# 4. Verify session builds
+# 1. Create Canon/<Subdir>/<Name>.thy
+# 2. Update ROOT/session entries to include the new theory
+# 3. Verify the target session builds
 isabelle build -d . Canon_Base
 ```
 

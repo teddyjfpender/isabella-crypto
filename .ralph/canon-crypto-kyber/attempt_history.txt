@@ -1,8 +1,0 @@
-
-Attempt 1: Build failed - *** Failed to finish proof (line 177 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.P6wTaiWrbY/test/Kyber.thy"):
-Attempt 2: Review failed - 
-Attempt 3: Build failed - *** Failed to finish proof (line 177 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.P6wTaiWrbY/test/Kyber.thy"):
-Attempt 4: Review failed - 
-Attempt 5: Build failed - *** Failed to finish proof (line 177 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.P6wTaiWrbY/test/Kyber.thy"):
-Attempt 6: Review failed - Issue 1: The requirements specify "USE THIS EXACT CODE" but the generated code includes additional lemmas not present in the required code
-Attempt 7: Build failed - *** Failed to finish proof (line 177 of "/private/var/folders/5x/7hym3yzn05z0k_z3g1m17brc0000gn/T/tmp.P6wTaiWrbY/test/Kyber.thy"):

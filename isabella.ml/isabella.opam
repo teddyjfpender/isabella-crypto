@@ -9,8 +9,8 @@ Isabella provides lattice-based cryptographic primitives that have been
 maintainer: ["isabella@example.com"]
 authors: ["Isabella Project"]
 license: "MIT"
-homepage: "https://github.com/anthropics/isabella-crypto"
-bug-reports: "https://github.com/anthropics/isabella-crypto/issues"
+homepage: "https://github.com/teddyjfpender/isabella-crypto"
+bug-reports: "https://github.com/teddyjfpender/isabella-crypto/issues"
 depends: [
   "ocaml" {>= "4.14"}
   "dune" {>= "3.0" & >= "3.0"}
@@ -32,4 +32,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/anthropics/isabella-crypto.git"
+dev-repo: "git+https://github.com/teddyjfpender/isabella-crypto.git"
