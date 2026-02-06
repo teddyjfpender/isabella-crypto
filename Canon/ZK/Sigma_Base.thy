@@ -404,6 +404,16 @@ definition linear_verify ::
     \<comment> \<open>Check: A*z = a + c*t and ||z|| bounded\<close>
     Az = a_plus_ct \<and> response_in_range p z)"
 
+definition linear_sigma_proto ::
+  "linear_sigma_params \<Rightarrow>
+   (statement, witness, commitment, challenge, response, mod_elem) sigma_protocol" where
+  "linear_sigma_proto p = \<lparr>
+    sp_commit = (\<lambda>x w y. linear_commit p x w y),
+    sp_respond = (\<lambda>x w a c y.
+      case linear_respond p x w a c y of Some z \<Rightarrow> z | None \<Rightarrow> []),
+    sp_verify = (\<lambda>x a c z. linear_verify p x a c z)
+  \<rparr>"
+
 text \<open>
   Completeness Theorem:
 
@@ -438,8 +448,6 @@ theorem linear_sigma_complete:
       and valid_A: "valid_mod_matrix (fst x) (lsp_m p) (lsp_k p) (lsp_n p) (lsp_q p)"
       and valid_w: "valid_mod_elem w (lsp_k p) (lsp_n p) (lsp_q p)"
       and valid_y: "valid_mod_elem y (lsp_k p) (lsp_n p) (lsp_q p)"
-      and mult_comm: "\<And>x y. ring_mult x y (lsp_n p) (lsp_q p) =
-                            ring_mult y x (lsp_n p) (lsp_q p)"
       and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y (lsp_n p) (lsp_q p)) z (lsp_n p) (lsp_q p) =
                              ring_mult x (ring_mult y z (lsp_n p) (lsp_q p)) (lsp_n p) (lsp_q p)"
       and no_abort: "linear_respond p x w (linear_commit p x w y) c y = Some z"
@@ -501,7 +509,7 @@ proof -
 
   have scale: "mod_mat_vec_mult A ?cs ?n ?q =
                map (\<lambda>ri. ring_mult c ri ?n ?q) (mod_mat_vec_mult A w ?n ?q)"
-    using mod_mat_vec_mult_scale[OF npos qpos mult_comm mult_assoc] by simp
+    using mod_mat_vec_mult_scale[OF npos qpos mult_assoc] by simp
 
   have Az_eq: "mod_mat_vec_mult A z ?n ?q =
                mod_add (mod_mat_vec_mult A y ?n ?q)
@@ -614,6 +622,123 @@ proof -
     using c_ne c_inv_def
     by (rule extract_witness_with_inverse_success)
 qed
+
+definition linear_extractor_correct ::
+  "linear_sigma_params \<Rightarrow>
+   (challenge \<Rightarrow> challenge option) \<Rightarrow>
+   (statement \<Rightarrow> witness \<Rightarrow> bool) \<Rightarrow> bool" where
+  "linear_extractor_correct p inv_chal rel \<longleftrightarrow>
+    (\<forall>x a c1 z1 c2 z2.
+      linear_verify p x a c1 z1 \<longrightarrow>
+      linear_verify p x a c2 z2 \<longrightarrow>
+      challenge_diff_invertible p inv_chal c1 c2 \<longrightarrow>
+      (\<exists>w. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w \<and> rel x w))"
+
+definition linear_extractor_correct_bounded ::
+  "linear_sigma_params \<Rightarrow>
+   (challenge \<Rightarrow> challenge option) \<Rightarrow>
+   (statement \<Rightarrow> witness \<Rightarrow> bool) \<Rightarrow> bool" where
+  "linear_extractor_correct_bounded p inv_chal rel \<longleftrightarrow>
+    (\<forall>x a c1 z1 c2 z2.
+      linear_verify p x a c1 z1 \<longrightarrow>
+      linear_verify p x a c2 z2 \<longrightarrow>
+      challenge_diff_invertible p inv_chal c1 c2 \<longrightarrow>
+      (\<exists>w.
+        extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w \<and>
+        rel x w \<and>
+        witness_in_range p w))"
+
+theorem linear_sigma_special_sound_if_extractor_correct:
+  assumes corr: "linear_extractor_correct p inv_chal rel"
+      and distinct_invertible:
+        "\<And>c1 c2. c1 \<noteq> c2 \<Longrightarrow> challenge_diff_invertible p inv_chal c1 c2"
+  shows "sigma_special_sound
+           (linear_sigma_proto p)
+           (\<lambda>x a c1 z1 c2 z2.
+             extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2)
+           rel"
+proof (unfold sigma_special_sound_def, intro allI impI)
+  fix x :: statement
+  fix a :: commitment
+  fix c1 :: challenge
+  fix z1 :: response
+  fix c2 :: challenge
+  fix z2 :: response
+  assume c_ne: "c1 \<noteq> c2"
+  assume v1: "sp_verify (linear_sigma_proto p) x a c1 z1"
+  assume v2: "sp_verify (linear_sigma_proto p) x a c2 z2"
+  have v1_lin: "linear_verify p x a c1 z1"
+    using v1 unfolding linear_sigma_proto_def by simp
+  have v2_lin: "linear_verify p x a c2 z2"
+    using v2 unfolding linear_sigma_proto_def by simp
+  have inv: "challenge_diff_invertible p inv_chal c1 c2"
+    using distinct_invertible c_ne by blast
+  have ex:
+    "\<exists>w.
+      extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w \<and> rel x w"
+    using corr v1_lin v2_lin inv
+    unfolding linear_extractor_correct_def
+    by blast
+  from c_ne v1 v2 ex show
+    "\<exists>w.
+      (\<lambda>x a c1 z1 c2 z2. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2)
+        x a c1 z1 c2 z2 = Some w \<and> rel x w"
+    by simp
+qed
+
+theorem linear_sigma_special_sound_if_extractor_correct_bounded:
+  assumes corr: "linear_extractor_correct_bounded p inv_chal rel"
+      and distinct_invertible:
+        "\<And>c1 c2. c1 \<noteq> c2 \<Longrightarrow> challenge_diff_invertible p inv_chal c1 c2"
+  shows "sigma_special_sound
+           (linear_sigma_proto p)
+           (\<lambda>x a c1 z1 c2 z2.
+             extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2)
+           (\<lambda>x w. rel x w \<and> witness_in_range p w)"
+proof (unfold sigma_special_sound_def, intro allI impI)
+  fix x :: statement
+  fix a :: commitment
+  fix c1 :: challenge
+  fix z1 :: response
+  fix c2 :: challenge
+  fix z2 :: response
+  assume c_ne: "c1 \<noteq> c2"
+  assume v1: "sp_verify (linear_sigma_proto p) x a c1 z1"
+  assume v2: "sp_verify (linear_sigma_proto p) x a c2 z2"
+  have v1_lin: "linear_verify p x a c1 z1"
+    using v1 unfolding linear_sigma_proto_def by simp
+  have v2_lin: "linear_verify p x a c2 z2"
+    using v2 unfolding linear_sigma_proto_def by simp
+  have inv: "challenge_diff_invertible p inv_chal c1 c2"
+    using distinct_invertible c_ne by blast
+  have ex:
+    "\<exists>w.
+      extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w \<and>
+      rel x w \<and> witness_in_range p w"
+    using corr v1_lin v2_lin inv
+    unfolding linear_extractor_correct_bounded_def
+    by blast
+  from c_ne v1 v2 ex show
+    "\<exists>w.
+      (\<lambda>x a c1 z1 c2 z2. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2)
+        x a c1 z1 c2 z2 = Some w \<and> (rel x w \<and> witness_in_range p w)"
+    by auto
+qed
+
+definition hvzk_distribution_assumption ::
+  "('st \<Rightarrow> 'ch \<Rightarrow> 'rand \<Rightarrow> ('com \<times> 'resp)) \<Rightarrow>
+   ('st \<Rightarrow> 'ch \<Rightarrow> 'rand \<Rightarrow> ('com \<times> 'resp)) \<Rightarrow>
+   (('com \<times> 'resp) \<Rightarrow> ('com \<times> 'resp) \<Rightarrow> bool) \<Rightarrow> bool" where
+  "hvzk_distribution_assumption simulator real_transcript indist \<longleftrightarrow>
+    (\<forall>x e r. indist (simulator x e r) (real_transcript x e r))"
+
+theorem sigma_hvzk_relational_if_distribution_assumption:
+  assumes hvzk: "sigma_hvzk proto simulator"
+      and dist: "hvzk_distribution_assumption simulator real_transcript indist"
+  shows "sigma_hvzk_relational proto simulator real_transcript indist"
+  using hvzk dist
+  unfolding sigma_hvzk_def sigma_hvzk_relational_def hvzk_distribution_assumption_def
+  by auto
 
 text \<open>
   For full soundness, we would need:

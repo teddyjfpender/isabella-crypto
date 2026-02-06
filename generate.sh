@@ -145,6 +145,84 @@ verify_files_exist() {
     return 0
 }
 
+verify_haskell_provenance() {
+    local theory_map=(
+        "src/Canon/Algebra/Zq.hs|Canon/Algebra/Zq.thy"
+        "src/Canon/Linear/ListVec.hs|Canon/Linear/ListVec.thy"
+        "src/Canon/Analysis/Norms.hs|Canon/Analysis/Norms.thy"
+        "src/Canon/Hardness/LWE_Def.hs|Canon/Hardness/LWE_Def.thy"
+        "src/Canon/Hardness/SIS_Def.hs|Canon/Hardness/SIS_Def.thy"
+        "src/Canon/Gadgets/Decomp.hs|Canon/Gadgets/Decomp.thy"
+        "src/Canon/Rings/PolyMod.hs|Canon/Rings/PolyMod.thy"
+        "src/Canon/Rings/ModuleLWE.hs|Canon/Rings/ModuleLWE.thy"
+        "src/Canon/Rings/NTT.hs|Canon/Rings/NTT.thy"
+        "src/Canon/Crypto/Regev_PKE.hs|Canon/Crypto/Regev_PKE.thy"
+        "src/Canon/Crypto/Commit_SIS.hs|Canon/Crypto/Commit_SIS.thy"
+        "src/Canon/Crypto/Kyber.hs|Canon/Crypto/Kyber.thy"
+        "src/Canon/Crypto/Dilithium.hs|Canon/Crypto/Dilithium.thy"
+    )
+
+    local bad=0
+    for entry in "${theory_map[@]}"; do
+        local rel="${entry%%|*}"
+        local theory="${entry#*|}"
+        local file="$HS_DIR/$rel"
+        if ! (rg -Fq "Generated from $theory" "$file" || rg -Fq "Generated from @$theory@" "$file"); then
+            echo "  missing provenance marker: $file (expected $theory)"
+            bad=1
+        fi
+    done
+
+    local aggregate_file="$HS_DIR/src/Canon.hs"
+    if ! rg -Fq "All code is extracted from proven-correct Isabelle specifications." "$aggregate_file"; then
+        echo "  missing aggregate provenance marker: $aggregate_file"
+        bad=1
+    fi
+
+    if [[ $bad -ne 0 ]]; then
+        error "Haskell provenance mapping check failed."
+    fi
+}
+
+verify_ocaml_provenance() {
+    local theory_map=(
+        "src/canon/zq.ml|Canon/Algebra/Zq.thy"
+        "src/canon/listvec.ml|Canon/Linear/ListVec.thy"
+        "src/canon/norms.ml|Canon/Analysis/Norms.thy"
+        "src/canon/lwe_def.ml|Canon/Hardness/LWE_Def.thy"
+        "src/canon/sis_def.ml|Canon/Hardness/SIS_Def.thy"
+        "src/canon/decomp.ml|Canon/Gadgets/Decomp.thy"
+        "src/canon/polymod.ml|Canon/Rings/PolyMod.thy"
+        "src/canon/modulelwe.ml|Canon/Rings/ModuleLWE.thy"
+        "src/canon/ntt.ml|Canon/Rings/NTT.thy"
+        "src/canon/regev_pke.ml|Canon/Crypto/Regev_PKE.thy"
+        "src/canon/commit_sis.ml|Canon/Crypto/Commit_SIS.thy"
+        "src/canon/kyber.ml|Canon/Crypto/Kyber.thy"
+        "src/canon/dilithium.ml|Canon/Crypto/Dilithium.thy"
+    )
+
+    local bad=0
+    for entry in "${theory_map[@]}"; do
+        local rel="${entry%%|*}"
+        local theory="${entry#*|}"
+        local file="$ML_DIR/$rel"
+        if ! rg -Fq "Generated from $theory" "$file"; then
+            echo "  missing provenance marker: $file (expected $theory)"
+            bad=1
+        fi
+    done
+
+    local aggregate_file="$ML_DIR/src/canon/canon.ml"
+    if ! rg -Fq "All code is extracted from proven-correct Isabelle specifications." "$aggregate_file"; then
+        echo "  missing aggregate provenance marker: $aggregate_file"
+        bad=1
+    fi
+
+    if [[ $bad -ne 0 ]]; then
+        error "OCaml provenance mapping check failed."
+    fi
+}
+
 verify_haskell_surface() {
     log "Verifying Haskell export surface..."
     local required=(
@@ -172,6 +250,7 @@ verify_haskell_surface() {
         error "Detected legacy stub markers in Haskell sources. Refusing to continue."
     fi
 
+    verify_haskell_provenance
     success "Haskell export surface verified"
 }
 
@@ -202,6 +281,7 @@ verify_ocaml_surface() {
         error "Detected legacy stub markers in OCaml sources. Refusing to continue."
     fi
 
+    verify_ocaml_provenance
     success "OCaml export surface verified"
 }
 

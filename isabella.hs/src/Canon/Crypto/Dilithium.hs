@@ -1,5 +1,6 @@
 {-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
 
+-- Generated from Canon/Crypto/Dilithium.thy
 module
   Canon.Crypto.Dilithium(Int, Num, Nat, Set, Dil_pk_ext, Dil_sk_ext,
                           Dil_signature_ext, Dil_sign_state_ext,

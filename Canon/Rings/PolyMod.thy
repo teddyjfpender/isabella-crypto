@@ -1,5 +1,6 @@
 theory PolyMod
   imports Canon_Base.Prelude Canon_Base.ListVec Canon_Base.Zq
+          "HOL-Computational_Algebra.Polynomial"
 begin
 
 (* === Step 1: Polynomial Type and Basic Operations === *)
@@ -167,6 +168,32 @@ text \<open>
 definition poly_mult_coeff :: "poly \<Rightarrow> poly \<Rightarrow> nat \<Rightarrow> int" where
   "poly_mult_coeff p q k = (\<Sum>j = 0 ..< Suc k. poly_coeff p j * poly_coeff q (k - j))"
 
+lemma poly_mult_coeff_as_coeff:
+  "poly_mult_coeff p q k = coeff (Poly p * Poly q) k"
+proof -
+  have set_eq: "{0..<Suc k} = {0..k}"
+    by (simp add: atLeastLessThanSuc_atLeastAtMost)
+  have "poly_mult_coeff p q k =
+        (\<Sum>j\<in>{0..k}. poly_coeff p j * poly_coeff q (k - j))"
+    unfolding poly_mult_coeff_def set_eq by simp
+  also have "... = coeff (Poly p * Poly q) k"
+  proof -
+    have term_eq:
+      "\<And>j. j \<le> k \<Longrightarrow> poly_coeff p j * poly_coeff q (k - j) =
+                           coeff (Poly p) j * coeff (Poly q) (k - j)"
+      by (simp add: coeff_Poly_eq poly_coeff_def nth_default_def)
+    have "(\<Sum>j\<in>{0..k}. poly_coeff p j * poly_coeff q (k - j)) =
+          (\<Sum>j\<in>{0..k}. coeff (Poly p) j * coeff (Poly q) (k - j))"
+      by (intro sum.cong refl) (simp add: term_eq)
+    also have "... = (\<Sum>i\<le>k. coeff (Poly p) i * coeff (Poly q) (k - i))"
+      by (simp add: atMost_atLeast0)
+    also have "... = coeff (Poly p * Poly q) k"
+      by (simp add: coeff_mult)
+    finally show ?thesis .
+  qed
+  finally show ?thesis .
+qed
+
 definition poly_mult :: "poly \<Rightarrow> poly \<Rightarrow> poly" where
   "poly_mult p q = (
     if p = [] \<or> q = [] then []
@@ -237,6 +264,38 @@ next
   qed
 qed
 
+lemma poly_mult_coeff_comm:
+  "poly_mult_coeff p q k = poly_mult_coeff q p k"
+  by (simp add: poly_mult_coeff_as_coeff mult.commute)
+
+lemma poly_mult_comm:
+  "poly_mult p q = poly_mult q p"
+proof (cases "p = [] \<or> q = []")
+  case True
+  then show ?thesis by (auto simp: poly_mult_def)
+next
+  case False
+  then have pne: "p \<noteq> []" and qne: "q \<noteq> []" by auto
+  have len_eq: "length (poly_mult p q) = length (poly_mult q p)"
+    using pne qne by (simp add: poly_mult_length add.commute)
+  show ?thesis
+  proof (intro nth_equalityI)
+    show "length (poly_mult p q) = length (poly_mult q p)"
+      using len_eq .
+  next
+    fix i assume i_lt: "i < length (poly_mult p q)"
+    have i_lt_r: "i < length (poly_mult q p)"
+      using i_lt len_eq by simp
+    have "(poly_mult p q) ! i = poly_mult_coeff p q i"
+      using i_lt pne qne unfolding poly_mult_def by simp
+    also have "... = poly_mult_coeff q p i"
+      by (simp add: poly_mult_coeff_comm)
+    also have "... = (poly_mult q p) ! i"
+      using i_lt_r pne qne unfolding poly_mult_def by simp
+    finally show "(poly_mult p q) ! i = (poly_mult q p) ! i" .
+  qed
+qed
+
 (* === Step 5b: Polynomial Multiplication Distributivity === *)
 text \<open>
   Polynomial multiplication distributes over addition:
@@ -301,6 +360,130 @@ proof -
     using all_zero by (intro sum.cong) auto
   also have "... = 0" by simp
   finally show ?thesis unfolding poly_mult_coeff_def .
+qed
+
+lemma coeff_Poly_poly_mult:
+  assumes pne: "p \<noteq> []" and qne: "q \<noteq> []"
+  shows "coeff (Poly (poly_mult p q)) i = poly_mult_coeff p q i"
+proof (cases "i < length (poly_mult p q)")
+  case True
+  then show ?thesis
+    using pne qne by (simp add: poly_mult_def coeff_Poly_eq nth_default_def)
+next
+  case False
+  have i_ge: "i \<ge> length p + length q - 1"
+    using False pne qne by (simp add: poly_mult_length)
+  have lhs0: "coeff (Poly (poly_mult p q)) i = 0"
+    using False by (simp add: coeff_Poly_eq nth_default_def)
+  have rhs0: "poly_mult_coeff p q i = 0"
+    using poly_mult_coeff_zero_beyond[OF i_ge pne qne] .
+  show ?thesis using lhs0 rhs0 by simp
+qed
+
+lemma Poly_poly_mult:
+  "Poly (poly_mult p q) = Poly p * Poly q"
+proof (cases "p = [] \<or> q = []")
+  case True
+  then show ?thesis by (auto simp: poly_mult_def)
+next
+  case False
+  then have pne: "p \<noteq> []" and qne: "q \<noteq> []" by auto
+  show ?thesis
+  proof (rule poly_eqI)
+    fix i
+    have "coeff (Poly (poly_mult p q)) i = poly_mult_coeff p q i"
+      using coeff_Poly_poly_mult[OF pne qne] .
+    also have "... = coeff (Poly p * Poly q) i"
+      by (simp add: poly_mult_coeff_as_coeff)
+    finally show "coeff (Poly (poly_mult p q)) i = coeff (Poly p * Poly q) i" .
+  qed
+qed
+
+lemma poly_mult_assoc:
+  "poly_mult (poly_mult p q) r = poly_mult p (poly_mult q r)"
+proof (cases "p = [] \<or> q = [] \<or> r = []")
+  case True
+  then show ?thesis by (auto simp: poly_mult_def)
+next
+  case False
+  then have pne: "p \<noteq> []" and qne: "q \<noteq> []" and rne: "r \<noteq> []" by auto
+  have pq_ne: "poly_mult p q \<noteq> []"
+  proof
+    assume pq_nil: "poly_mult p q = []"
+    have lp: "length p > 0" using pne by (cases p) auto
+    have lq: "length q > 0" using qne by (cases q) auto
+    have len_pq: "length (poly_mult p q) = length p + length q - 1"
+      using pne qne by (simp add: poly_mult_length)
+    have "length p + length q - 1 > 0"
+      using lp lq by arith
+    hence "length (poly_mult p q) > 0"
+      using len_pq by simp
+    then show False using pq_nil by simp
+  qed
+  have qr_ne: "poly_mult q r \<noteq> []"
+  proof
+    assume qr_nil: "poly_mult q r = []"
+    have lq: "length q > 0" using qne by (cases q) auto
+    have lr: "length r > 0" using rne by (cases r) auto
+    have len_qr: "length (poly_mult q r) = length q + length r - 1"
+      using qne rne by (simp add: poly_mult_length)
+    have "length q + length r - 1 > 0"
+      using lq lr by arith
+    hence "length (poly_mult q r) > 0"
+      using len_qr by simp
+    then show False using qr_nil by simp
+  qed
+  have lp: "length p > 0" using pne by (cases p) auto
+  have lq: "length q > 0" using qne by (cases q) auto
+  have lr: "length r > 0" using rne by (cases r) auto
+  have len_pq: "length (poly_mult p q) = length p + length q - 1"
+    using pne qne by (simp add: poly_mult_length)
+  have len_qr: "length (poly_mult q r) = length q + length r - 1"
+    using qne rne by (simp add: poly_mult_length)
+  have len_eq:
+    "length (poly_mult (poly_mult p q) r) = length (poly_mult p (poly_mult q r))"
+  proof -
+    have len_lhs:
+      "length (poly_mult (poly_mult p q) r) =
+       (length p + length q - 1) + length r - 1"
+      using len_pq pq_ne rne by (simp add: poly_mult_length)
+    have len_rhs:
+      "length (poly_mult p (poly_mult q r)) =
+       length p + (length q + length r - 1) - 1"
+      using pne len_qr qr_ne by (simp add: poly_mult_length)
+    show ?thesis
+      using len_lhs len_rhs lp lq lr by arith
+  qed
+  show ?thesis
+  proof (intro nth_equalityI)
+    show "length (poly_mult (poly_mult p q) r) = length (poly_mult p (poly_mult q r))"
+      using len_eq .
+  next
+    fix i assume i_lt: "i < length (poly_mult (poly_mult p q) r)"
+    have i_lt_r: "i < length (poly_mult p (poly_mult q r))"
+      using i_lt len_eq by simp
+    have lhs_nth:
+      "(poly_mult (poly_mult p q) r) ! i = poly_mult_coeff (poly_mult p q) r i"
+      using i_lt pq_ne rne unfolding poly_mult_def by simp
+    have rhs_nth:
+      "(poly_mult p (poly_mult q r)) ! i = poly_mult_coeff p (poly_mult q r) i"
+      using i_lt_r pne qr_ne unfolding poly_mult_def by simp
+    have "poly_mult_coeff (poly_mult p q) r i =
+          coeff (Poly (poly_mult p q) * Poly r) i"
+      by (simp add: poly_mult_coeff_as_coeff)
+    also have "... = coeff ((Poly p * Poly q) * Poly r) i"
+      by (simp add: Poly_poly_mult)
+    also have "... = coeff (Poly p * (Poly q * Poly r)) i"
+      by (simp add: mult.assoc)
+    also have "... = coeff (Poly p * Poly (poly_mult q r)) i"
+      by (simp add: Poly_poly_mult)
+    also have "... = poly_mult_coeff p (poly_mult q r) i"
+      by (simp add: poly_mult_coeff_as_coeff)
+    finally have coeff_eq:
+      "poly_mult_coeff (poly_mult p q) r i = poly_mult_coeff p (poly_mult q r) i" .
+    show "(poly_mult (poly_mult p q) r) ! i = (poly_mult p (poly_mult q r)) ! i"
+      using lhs_nth rhs_nth coeff_eq by simp
+  qed
 qed
 
 lemma poly_mult_add_right:
@@ -899,6 +1082,10 @@ text \<open>
 
 definition ring_mult :: "poly \<Rightarrow> poly \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> poly" where
   "ring_mult p r n q = poly_mod (ring_mod (poly_mult p r) n) q"
+
+lemma ring_mult_comm:
+  "ring_mult p r n q = ring_mult r p n q"
+  unfolding ring_mult_def by (simp add: poly_mult_comm)
 
 lemma ring_mult_length:
   assumes "n > 0"

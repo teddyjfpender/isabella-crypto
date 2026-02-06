@@ -616,7 +616,6 @@ qed
 
 lemma mod_inner_prod_scale_right:
   assumes npos: "n > 0" and qpos: "q > 0"
-      and mult_comm: "\<And>x y. ring_mult x y n q = ring_mult y x n q"
       and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y n q) z n q =
                              ring_mult x (ring_mult y z n q) n q"
   shows "mod_inner_prod row (map (\<lambda>vi. ring_mult c vi n q) v) n q =
@@ -653,7 +652,7 @@ next
 
     have commute_assoc:
       "ring_mult p (ring_mult c r n q) n q = ring_mult c (ring_mult p r n q) n q"
-      by (metis mult_comm mult_assoc)
+      by (metis ring_mult_comm mult_assoc)
 
     show ?thesis
       using Cons IH distrib commute_assoc
@@ -663,13 +662,12 @@ qed
 
 lemma mod_mat_vec_mult_scale:
   assumes npos: "n > 0" and qpos: "q > 0"
-      and mult_comm: "\<And>x y. ring_mult x y n q = ring_mult y x n q"
       and mult_assoc: "\<And>x y z. ring_mult (ring_mult x y n q) z n q =
                              ring_mult x (ring_mult y z n q) n q"
   shows "mod_mat_vec_mult A (map (\<lambda>vi. ring_mult c vi n q) v) n q =
          map (\<lambda>ri. ring_mult c ri n q) (mod_mat_vec_mult A v n q)"
   unfolding mod_mat_vec_mult_def
-  using mod_inner_prod_scale_right[OF npos qpos mult_comm mult_assoc]
+  using mod_inner_prod_scale_right[OF npos qpos mult_assoc]
   by (simp add: map_map o_def)
 
 (* === Step 5: Module-LWE Parameters === *)
