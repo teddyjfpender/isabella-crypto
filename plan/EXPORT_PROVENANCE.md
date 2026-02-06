@@ -49,3 +49,13 @@ Aggregate module:
 - `canon.ml` must include the phrase:
   `All code is extracted from proven-correct Isabelle specifications.`
 
+## Wrapper Layers
+
+These files are not exported directly from Isabelle; they are thin adapters and
+must remain provenance-marked wrappers over exported modules only.
+
+| Wrapper file | Provenance requirement |
+|---|---|
+| `isabella.ml/src/js/isabella_js.ml` | Must include `Provenance: Wrapper over Isabelle-exported Canon modules only.` and import `open Canon` |
+| `isabella.ts/src/index.ts` | Must include `Provenance: Wrapper over js_of_ocaml output generated from Isabelle-exported OCaml Canon modules only.` and import `./runtime.cjs` |
+| `isabella.ts/src/runtime.cjs` | Must include `Provenance: Adapter over isabella.ts/src/isabella.js generated from Isabelle-exported OCaml Canon modules.` and `require('./isabella.js')` |

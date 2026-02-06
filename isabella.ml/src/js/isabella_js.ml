@@ -2,7 +2,9 @@
 
     This module exposes the verified Canon functions to JavaScript
     via js_of_ocaml. All functions maintain the same semantics as
-    their OCaml counterparts. *)
+    their OCaml counterparts.
+
+    Provenance: Wrapper over Isabelle-exported Canon modules only. *)
 
 open Js_of_ocaml
 open Canon

@@ -4,6 +4,9 @@
  * This CommonJS module loads the js_of_ocaml compiled JavaScript
  * and exports the Isabella object. In CommonJS context, js_of_ocaml
  * exports to module.exports rather than globalThis.
+ *
+ * Provenance: Adapter over `isabella.ts/src/isabella.js` generated from
+ * Isabelle-exported OCaml Canon modules.
  */
 
 // Load the js_of_ocaml output

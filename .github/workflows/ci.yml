@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      run_lazer_optional:
+        description: "Run optional LaZer equivalence job (requires self-hosted linux x64)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -315,7 +321,7 @@ jobs:
   # Run manually on a self-hosted runner that satisfies LaZer build requirements.
   test-lazer-optional:
     name: LaZer Equivalence (Optional)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_lazer_optional == 'true'
     runs-on: [self-hosted, linux, x64]
     needs: ocaml
     timeout-minutes: 120

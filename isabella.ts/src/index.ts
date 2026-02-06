@@ -6,6 +6,9 @@
  * specifications and compiled to JavaScript via js_of_ocaml.
  *
  * @packageDocumentation
+ *
+ * Provenance: Wrapper over js_of_ocaml output generated from
+ * Isabelle-exported OCaml Canon modules only.
  */
 
 // Load the js_of_ocaml runtime (sets globalThis.Isabella)

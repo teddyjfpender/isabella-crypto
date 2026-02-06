@@ -223,6 +223,44 @@ verify_ocaml_provenance() {
     fi
 }
 
+verify_wrapper_provenance() {
+    local bad=0
+
+    local ocaml_js_wrapper="$ML_DIR/src/js/isabella_js.ml"
+    if ! rg -Fq "Provenance: Wrapper over Isabelle-exported Canon modules only." "$ocaml_js_wrapper"; then
+        echo "  missing wrapper provenance marker: $ocaml_js_wrapper"
+        bad=1
+    fi
+    if ! rg -Fq "open Canon" "$ocaml_js_wrapper"; then
+        echo "  wrapper must bind exported Canon module: $ocaml_js_wrapper"
+        bad=1
+    fi
+
+    local ts_index_wrapper="$SCRIPT_DIR/isabella.ts/src/index.ts"
+    if ! rg -Fq "Provenance: Wrapper over js_of_ocaml output generated from" "$ts_index_wrapper"; then
+        echo "  missing wrapper provenance marker: $ts_index_wrapper"
+        bad=1
+    fi
+    if ! rg -Fq "import './runtime.cjs';" "$ts_index_wrapper"; then
+        echo "  wrapper must import runtime loader: $ts_index_wrapper"
+        bad=1
+    fi
+
+    local ts_runtime_wrapper="$SCRIPT_DIR/isabella.ts/src/runtime.cjs"
+    if ! rg -Fq 'Provenance: Adapter over `isabella.ts/src/isabella.js` generated from' "$ts_runtime_wrapper"; then
+        echo "  missing wrapper provenance marker: $ts_runtime_wrapper"
+        bad=1
+    fi
+    if ! rg -Fq "require('./isabella.js')" "$ts_runtime_wrapper"; then
+        echo "  runtime wrapper must load generated js_of_ocaml artifact: $ts_runtime_wrapper"
+        bad=1
+    fi
+
+    if [[ $bad -ne 0 ]]; then
+        error "Wrapper provenance check failed."
+    fi
+}
+
 verify_haskell_surface() {
     log "Verifying Haskell export surface..."
     local required=(
@@ -282,6 +320,7 @@ verify_ocaml_surface() {
     fi
 
     verify_ocaml_provenance
+    verify_wrapper_provenance
     success "OCaml export surface verified"
 }
 

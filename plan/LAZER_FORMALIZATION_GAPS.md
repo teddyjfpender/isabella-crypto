@@ -83,15 +83,17 @@ Acceptance:
 
 ### P1: CI Integration for LaZer Checks
 
-Problem:
-- LaZer suite is intentionally optional and currently skip-safe in CI.
+Status:
+- Optional CI path exists in `.github/workflows/ci.yml` as `LaZer Equivalence (Optional)`.
+- It now runs only when manually dispatched with input `run_lazer_optional=true`.
+- Operational dispatch helper exists at `scripts/dispatch_lazer_optional_ci.sh`.
 
-Required:
-- Add a dedicated optional CI job that runs when LaZer bindings are available (self-hosted or prebuilt image).
-- Keep default public CI deterministic and non-flaky.
+Remaining:
+- Keep a self-hosted runner with labels `[self-hosted, linux, x64]` online so the optional job can be scheduled.
+- Collect and pin one successful optional-run artifact as baseline evidence.
 
 Acceptance:
-- One CI path that actually executes `test:lazer` with real LaZer bindings.
+- At least one successful workflow-dispatch run where `LaZer Equivalence (Optional)` executes `bun run test:lazer` against real LaZer bindings.
 
 ## Recommended Next Sequence
 
