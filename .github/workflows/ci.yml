@@ -106,7 +106,7 @@ jobs:
 
       # Upload heap images as artifact for potential reuse
       - name: Upload heap images
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: isabelle-heaps
           path: ~/.isabelle/Isabelle2025/heaps/
@@ -196,7 +196,7 @@ jobs:
           dune exec isabella_cli -- examples
 
       - name: Upload CLI artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ocaml-cli
           path: isabella.ml/_build/
@@ -298,7 +298,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: tests/coverage/
