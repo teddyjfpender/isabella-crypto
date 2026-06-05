@@ -208,6 +208,317 @@ definition nullifier_sigma_verify ::
     nullifier p nk z =
       vec_mod (vec_add a_nullifier (scalar_mult e nf)) (cp_q p)"
 
+definition nullifier_sigma_extract ::
+  "int \<Rightarrow> commit_opening \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> commit_opening option" where
+  "nullifier_sigma_extract e1 z1 e2 z2 =
+    (if e1 = 1 \<and> e2 = 0 then Some (opening_sub z1 z2)
+     else if e1 = 0 \<and> e2 = 1 then Some (opening_sub z2 z1)
+     else None)"
+
+lemma nullifier_sigma_extract_some_if_distinct_binary:
+  assumes e1_ok: "valid_nullifier_challenge p e1"
+      and e2_ok: "valid_nullifier_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+  shows "\<exists>op. nullifier_sigma_extract e1 z1 e2 z2 = Some op"
+  using valid_nullifier_challenge_binary[OF e1_ok]
+        valid_nullifier_challenge_binary[OF e2_ok]
+        distinct
+  unfolding nullifier_sigma_extract_def
+  by auto
+
+lemma nullifier_sigma_extract_response_bound:
+  assumes z1_ok: "valid_nullifier_response p gamma e1 z1"
+      and z2_ok: "valid_nullifier_response p gamma e2 z2"
+      and ext: "nullifier_sigma_extract e1 z1 e2 z2 = Some op"
+  shows "valid_vec (open_msg op) (cp_n1 p) \<and>
+         valid_vec (open_rand op) (cp_n2 p) \<and>
+         all_bounded (open_msg op)
+           (nullifier_response_bound p gamma e1 +
+            nullifier_response_bound p gamma e2) \<and>
+         all_bounded (open_rand op)
+           (nullifier_response_bound p gamma e1 +
+            nullifier_response_bound p gamma e2)"
+proof -
+  have msg_len1: "length (open_msg z1) = cp_n1 p"
+    using z1_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have msg_len2: "length (open_msg z2) = cp_n1 p"
+    using z2_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have rand_len1: "length (open_rand z1) = cp_n2 p"
+    using z1_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have rand_len2: "length (open_rand z2) = cp_n2 p"
+    using z2_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have msg_b1: "all_bounded (open_msg z1) (nullifier_response_bound p gamma e1)"
+    using z1_ok unfolding valid_nullifier_response_def by simp
+  have msg_b2: "all_bounded (open_msg z2) (nullifier_response_bound p gamma e2)"
+    using z2_ok unfolding valid_nullifier_response_def by simp
+  have rand_b1: "all_bounded (open_rand z1) (nullifier_response_bound p gamma e1)"
+    using z1_ok unfolding valid_nullifier_response_def by simp
+  have rand_b2: "all_bounded (open_rand z2) (nullifier_response_bound p gamma e2)"
+    using z2_ok unfolding valid_nullifier_response_def by simp
+  show ?thesis
+  proof (cases "e1 = 1 \<and> e2 = 0")
+    case True
+    then have op_eq: "op = opening_sub z1 z2"
+      using ext unfolding nullifier_sigma_extract_def by simp
+    have msg_len: "length (open_msg op) = cp_n1 p"
+      using op_eq msg_len1 msg_len2
+      unfolding opening_sub_def by (simp add: vec_sub_length)
+    have rand_len: "length (open_rand op) = cp_n2 p"
+      using op_eq rand_len1 rand_len2
+      unfolding opening_sub_def by (simp add: vec_sub_length)
+    have msg_bound:
+      "all_bounded (open_msg op)
+        (nullifier_response_bound p gamma e1 +
+         nullifier_response_bound p gamma e2)"
+      using vec_sub_bounded[OF msg_b1 msg_b2] op_eq
+      unfolding opening_sub_def by simp
+    have rand_bound:
+      "all_bounded (open_rand op)
+        (nullifier_response_bound p gamma e1 +
+         nullifier_response_bound p gamma e2)"
+      using vec_sub_bounded[OF rand_b1 rand_b2] op_eq
+      unfolding opening_sub_def by simp
+    show ?thesis
+      using msg_len rand_len msg_bound rand_bound
+      unfolding valid_vec_def by simp
+  next
+    case False
+    then have alt: "e1 = 0 \<and> e2 = 1"
+      using ext unfolding nullifier_sigma_extract_def by (auto split: if_splits)
+    then have op_eq: "op = opening_sub z2 z1"
+      using ext False unfolding nullifier_sigma_extract_def by simp
+    have msg_len: "length (open_msg op) = cp_n1 p"
+      using op_eq msg_len1 msg_len2
+      unfolding opening_sub_def by (simp add: vec_sub_length)
+    have rand_len: "length (open_rand op) = cp_n2 p"
+      using op_eq rand_len1 rand_len2
+      unfolding opening_sub_def by (simp add: vec_sub_length)
+    have msg_bound:
+      "all_bounded (open_msg op)
+        (nullifier_response_bound p gamma e1 +
+         nullifier_response_bound p gamma e2)"
+    proof -
+      have raw_bound:
+        "all_bounded (open_msg op)
+          (nullifier_response_bound p gamma e2 +
+           nullifier_response_bound p gamma e1)"
+        using vec_sub_bounded[OF msg_b2 msg_b1] op_eq
+        unfolding opening_sub_def by simp
+      have sum_comm:
+        "nullifier_response_bound p gamma e2 + nullifier_response_bound p gamma e1 =
+         nullifier_response_bound p gamma e1 + nullifier_response_bound p gamma e2"
+        by simp
+      show ?thesis
+        using raw_bound sum_comm by simp
+    qed
+    have rand_bound:
+      "all_bounded (open_rand op)
+        (nullifier_response_bound p gamma e1 +
+         nullifier_response_bound p gamma e2)"
+    proof -
+      have raw_bound:
+        "all_bounded (open_rand op)
+          (nullifier_response_bound p gamma e2 +
+           nullifier_response_bound p gamma e1)"
+        using vec_sub_bounded[OF rand_b2 rand_b1] op_eq
+        unfolding opening_sub_def by simp
+      have sum_comm:
+        "nullifier_response_bound p gamma e2 + nullifier_response_bound p gamma e1 =
+         nullifier_response_bound p gamma e1 + nullifier_response_bound p gamma e2"
+        by simp
+      show ?thesis
+        using raw_bound sum_comm by simp
+    qed
+    show ?thesis
+      using msg_len rand_len msg_bound rand_bound
+      unfolding valid_vec_def by simp
+  qed
+qed
+
+lemma nullifier_sigma_extract_distinct_binary_bound:
+  assumes e1_ok: "valid_nullifier_challenge p e1"
+      and e2_ok: "valid_nullifier_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+      and z1_ok: "valid_nullifier_response p gamma e1 z1"
+      and z2_ok: "valid_nullifier_response p gamma e2 z2"
+      and ext: "nullifier_sigma_extract e1 z1 e2 z2 = Some op"
+  shows "valid_vec (open_msg op) (cp_n1 p) \<and>
+         valid_vec (open_rand op) (cp_n2 p) \<and>
+         all_bounded (open_msg op) (2 * gamma + cp_beta p) \<and>
+         all_bounded (open_rand op) (2 * gamma + cp_beta p)"
+proof -
+  have extracted:
+    "valid_vec (open_msg op) (cp_n1 p) \<and>
+     valid_vec (open_rand op) (cp_n2 p) \<and>
+     all_bounded (open_msg op)
+       (nullifier_response_bound p gamma e1 +
+        nullifier_response_bound p gamma e2) \<and>
+     all_bounded (open_rand op)
+       (nullifier_response_bound p gamma e1 +
+        nullifier_response_bound p gamma e2)"
+    using nullifier_sigma_extract_response_bound[OF z1_ok z2_ok ext] .
+  have "nullifier_response_bound p gamma e1 +
+        nullifier_response_bound p gamma e2 =
+        2 * gamma + cp_beta p"
+    using valid_nullifier_challenge_binary[OF e1_ok]
+          valid_nullifier_challenge_binary[OF e2_ok]
+          distinct
+    unfolding nullifier_response_bound_def
+    by auto
+  then show ?thesis
+    using extracted by simp
+qed
+
+lemma nullifier_extract_sub_commit:
+  assumes q_pos: "cp_q p > 0"
+      and msg_len: "length (open_msg z_hi) = length (open_msg z_lo)"
+      and rand_len: "length (open_rand z_hi) = length (open_rand z_lo)"
+      and hi_eq: "commit key z_hi (cp_q p) = vec_mod (vec_add a c) (cp_q p)"
+      and lo_eq: "commit key z_lo (cp_q p) = vec_mod a (cp_q p)"
+      and len_a_c: "length a = length c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+  shows "commit key (opening_sub z_hi z_lo) (cp_q p) = c"
+proof -
+  have "commit key (opening_sub z_hi z_lo) (cp_q p) =
+        vec_mod (vec_sub (commit key z_hi (cp_q p))
+                         (commit key z_lo (cp_q p))) (cp_q p)"
+    using commit_sub_hom[OF msg_len rand_len q_pos] .
+  also have "... =
+        vec_mod (vec_sub (vec_mod (vec_add a c) (cp_q p)) (vec_mod a (cp_q p))) (cp_q p)"
+    using hi_eq lo_eq by simp
+  also have "... = c"
+    using vec_mod_sub_add_cancel_left[OF len_a_c q_pos c_canonical] .
+  finally show ?thesis .
+qed
+
+lemma nullifier_sigma_extract_algebraic_opening:
+  assumes t1:
+        "nullifier_sigma_verify p gamma ck nk c nf a_commit a_nullifier e1 z1"
+      and t2:
+        "nullifier_sigma_verify p gamma ck nk c nf a_commit a_nullifier e2 z2"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and nf_canonical: "vec_mod nf (cp_q p) = nf"
+      and ext: "nullifier_sigma_extract e1 z1 e2 z2 = Some op"
+  shows "commit ck op (cp_q p) = c \<and> nullifier p nk op = nf"
+proof -
+  have params_ok: "valid_scalar_commit_params p"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have c_valid: "valid_commitment p c"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have nf_valid: "valid_commitment p nf"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have a_commit_valid: "valid_commitment p a_commit"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have a_nullifier_valid: "valid_commitment p a_nullifier"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have z1_ok: "valid_nullifier_response p gamma e1 z1"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have z2_ok: "valid_nullifier_response p gamma e2 z2"
+    using t2 unfolding nullifier_sigma_verify_def by simp
+  have commit_eq1:
+    "commit ck z1 (cp_q p) =
+      vec_mod (vec_add a_commit (scalar_mult e1 c)) (cp_q p)"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have commit_eq2:
+    "commit ck z2 (cp_q p) =
+      vec_mod (vec_add a_commit (scalar_mult e2 c)) (cp_q p)"
+    using t2 unfolding nullifier_sigma_verify_def by simp
+  have nf_eq1:
+    "commit nk z1 (cp_q p) =
+      vec_mod (vec_add a_nullifier (scalar_mult e1 nf)) (cp_q p)"
+    using t1 unfolding nullifier_sigma_verify_def nullifier_def by simp
+  have nf_eq2:
+    "commit nk z2 (cp_q p) =
+      vec_mod (vec_add a_nullifier (scalar_mult e2 nf)) (cp_q p)"
+    using t2 unfolding nullifier_sigma_verify_def nullifier_def by simp
+  have q_pos: "cp_q p > 0"
+    using valid_scalar_commit_params_props(5)[OF params_ok] by linarith
+  have msg_len1: "length (open_msg z1) = cp_n1 p"
+    using z1_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have msg_len2: "length (open_msg z2) = cp_n1 p"
+    using z2_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have rand_len1: "length (open_rand z1) = cp_n2 p"
+    using z1_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have rand_len2: "length (open_rand z2) = cp_n2 p"
+    using z2_ok unfolding valid_nullifier_response_def valid_vec_def by simp
+  have msg_len_eq: "length (open_msg z1) = length (open_msg z2)"
+    using msg_len1 msg_len2 by simp
+  have rand_len_eq: "length (open_rand z1) = length (open_rand z2)"
+    using rand_len1 rand_len2 by simp
+  have len_a_commit_c: "length a_commit = length c"
+    using a_commit_valid c_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_a_nf: "length a_nullifier = length nf"
+    using a_nullifier_valid nf_valid unfolding valid_commitment_def valid_vec_def by simp
+  show ?thesis
+  proof (cases "e1 = 1 \<and> e2 = 0")
+    case True
+    then have e_vals: "e1 = 1" "e2 = 0"
+      by auto
+    have op_eq: "op = opening_sub z1 z2"
+      using ext True unfolding nullifier_sigma_extract_def by simp
+    have commit_hi:
+      "commit ck z1 (cp_q p) = vec_mod (vec_add a_commit c) (cp_q p)"
+      using commit_eq1 e_vals len_a_commit_c by (simp add: scalar_mult_one)
+    have commit_lo:
+      "commit ck z2 (cp_q p) = vec_mod a_commit (cp_q p)"
+      using commit_eq2 e_vals len_a_commit_c by (simp add: vec_add_scalar_zero_right)
+    have nf_hi:
+      "commit nk z1 (cp_q p) = vec_mod (vec_add a_nullifier nf) (cp_q p)"
+      using nf_eq1 e_vals len_a_nf by (simp add: scalar_mult_one)
+    have nf_lo:
+      "commit nk z2 (cp_q p) = vec_mod a_nullifier (cp_q p)"
+      using nf_eq2 e_vals len_a_nf by (simp add: vec_add_scalar_zero_right)
+    have commit_extract:
+      "commit ck op (cp_q p) = c"
+      using nullifier_extract_sub_commit[
+        OF q_pos msg_len_eq rand_len_eq commit_hi commit_lo len_a_commit_c c_canonical]
+      by (simp add: op_eq)
+    have nf_extract:
+      "nullifier p nk op = nf"
+      unfolding nullifier_def
+      using nullifier_extract_sub_commit[
+        OF q_pos msg_len_eq rand_len_eq nf_hi nf_lo len_a_nf nf_canonical]
+      by (simp add: op_eq)
+    show ?thesis
+      using commit_extract nf_extract by simp
+  next
+    case False
+    have alt: "e1 = 0 \<and> e2 = 1"
+      using ext False unfolding nullifier_sigma_extract_def by (auto split: if_splits)
+    then have e_vals: "e1 = 0" "e2 = 1"
+      by auto
+    have op_eq: "op = opening_sub z2 z1"
+      using ext False alt unfolding nullifier_sigma_extract_def by simp
+    have commit_hi:
+      "commit ck z2 (cp_q p) = vec_mod (vec_add a_commit c) (cp_q p)"
+      using commit_eq2 e_vals len_a_commit_c by (simp add: scalar_mult_one)
+    have commit_lo:
+      "commit ck z1 (cp_q p) = vec_mod a_commit (cp_q p)"
+      using commit_eq1 e_vals len_a_commit_c by (simp add: vec_add_scalar_zero_right)
+    have nf_hi:
+      "commit nk z2 (cp_q p) = vec_mod (vec_add a_nullifier nf) (cp_q p)"
+      using nf_eq2 e_vals len_a_nf by (simp add: scalar_mult_one)
+    have nf_lo:
+      "commit nk z1 (cp_q p) = vec_mod a_nullifier (cp_q p)"
+      using nf_eq1 e_vals len_a_nf by (simp add: vec_add_scalar_zero_right)
+    have commit_extract:
+      "commit ck op (cp_q p) = c"
+      using nullifier_extract_sub_commit[
+        OF q_pos _ _ commit_hi commit_lo len_a_commit_c c_canonical]
+      using msg_len_eq rand_len_eq
+      by (simp add: op_eq)
+    have nf_extract:
+      "nullifier p nk op = nf"
+      unfolding nullifier_def
+      using nullifier_extract_sub_commit[
+        OF q_pos _ _ nf_hi nf_lo len_a_nf nf_canonical]
+      using msg_len_eq rand_len_eq
+      by (simp add: op_eq)
+    show ?thesis
+      using commit_extract nf_extract by simp
+  qed
+qed
+
 definition nullifier_fs_prove ::
   "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
    commit_opening \<Rightarrow> commit_opening list \<Rightarrow> nullifier_proof option" where
