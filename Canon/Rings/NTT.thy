@@ -280,7 +280,7 @@ proof -
     using prim unfolding is_primitive_root_def by linarith
 
   have q_gt1: "q > 1"
-    using q_prime prime_gt_1_int by blast
+    using q_prime by (simp add: prime_gt_1_int)
 
   let ?r = "twiddle omega (2 * m) q"
   let ?S = "(\<Sum>k=0..<n. ?r ^ k)"
@@ -355,7 +355,7 @@ proof -
   proof -
     from dvd_prod have "q dvd (?r - 1) \<or> q dvd ?S"
       using q_prime by (simp add: prime_dvd_mult_int)
-    with q_not_dvd_r1 show ?thesis by blast
+    with q_not_dvd_r1 show ?thesis by auto
   qed
 
   have S_mod0: "?S mod q = 0"
@@ -438,7 +438,7 @@ proof -
   have q_gt1: "q > 1"
     using assms unfolding is_primitive_root_def by linarith
   have tw0: "twiddle omega 0 q = 1"
-    using q_gt1 twiddle_0 by blast
+    using q_gt1 by (simp add: twiddle_0)
   have sum_eq: "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) = int n"
   proof -
     have "(\<Sum>k = 0 ..< n. twiddle omega (k * 0) q) =

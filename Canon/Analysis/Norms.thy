@@ -50,8 +50,27 @@ definition all_bounded :: "int list => int => bool" where
 
 lemma all_bounded_alt:
   "all_bounded v B = (\<forall>i < length v. abs (v ! i) <= B)"
-  unfolding all_bounded_def
-  by (metis in_set_conv_nth)
+proof
+  assume h: "all_bounded v B"
+  show "\<forall>i < length v. abs (v ! i) <= B"
+  proof (intro allI impI)
+    fix i assume "i < length v"
+    hence "v ! i \<in> set v" by simp
+    thus "abs (v ! i) <= B"
+      using h unfolding all_bounded_def by auto
+  qed
+next
+  assume h: "\<forall>i < length v. abs (v ! i) <= B"
+  show "all_bounded v B"
+    unfolding all_bounded_def
+  proof
+    fix x assume "x \<in> set v"
+    then obtain i where i_lt: "i < length v" and x_eq: "x = v ! i"
+      by (auto simp: in_set_conv_nth)
+    show "abs x <= B"
+      using h i_lt x_eq by simp
+  qed
+qed
 
 lemma all_bounded_nth:
   assumes "all_bounded v B" and "i < length v"

@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CANON_DIR="$SCRIPT_DIR/Canon"
 HS_DIR="$SCRIPT_DIR/isabella.hs"
 ML_DIR="$SCRIPT_DIR/isabella.ml"
+TS_DIR="$SCRIPT_DIR/isabella.ts"
 
 # Colors
 RED='\033[0;31m'
@@ -42,7 +43,7 @@ Usage: $0 [OPTIONS]
 Options:
   --build-only      Skip Isabelle build/export checks, just verify + compile libraries
   --run-examples    Run examples after building
-  --lang LANG       Build specific language (haskell, ocaml, all)
+  --lang LANG       Build specific language (haskell, ocaml, typescript, all)
   --clean           Clean build artifacts only
   --verbose         Show detailed output
   -h, --help        Show this help
@@ -86,14 +87,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$LANG" != "all" && "$LANG" != "haskell" && "$LANG" != "ocaml" ]]; then
-    error "Invalid --lang value '$LANG' (expected haskell|ocaml|all)"
+if [[ "$LANG" != "all" && "$LANG" != "haskell" && "$LANG" != "ocaml" && "$LANG" != "typescript" ]]; then
+    error "Invalid --lang value '$LANG' (expected haskell|ocaml|typescript|all)"
 fi
 
 clean_artifacts() {
     log "Cleaning build artifacts (preserving generated source files)..."
     rm -rf "$HS_DIR/dist-newstyle"
     rm -rf "$ML_DIR/_build"
+    rm -rf "$TS_DIR/dist"
     success "Cleaned build artifacts"
 }
 
@@ -104,6 +106,28 @@ fi
 
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || error "Required command not found: $1"
+}
+
+have_cmd_with_opam_env() {
+    local cmd="$1"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v opam >/dev/null 2>&1; then
+        (
+            eval "$(opam env)" >/dev/null 2>&1
+            command -v "$cmd" >/dev/null 2>&1
+        )
+        return $?
+    fi
+    return 1
+}
+
+run_with_opam_env() {
+    if command -v opam >/dev/null 2>&1; then
+        eval "$(opam env)" >/dev/null 2>&1
+    fi
+    "$@"
 }
 
 build_isabelle() {
@@ -261,6 +285,38 @@ verify_wrapper_provenance() {
     fi
 }
 
+verify_typescript_source_surface() {
+    log "Verifying TypeScript wrapper surface..."
+    local required=(
+        "package.json"
+        "tsconfig.json"
+        "src/index.ts"
+        "src/runtime.cjs"
+        "scripts/write-esm-wrapper.mjs"
+    )
+
+    if ! verify_files_exist "$TS_DIR" "${required[@]}"; then
+        error "TypeScript surface incomplete. Refusing to continue."
+    fi
+
+    verify_wrapper_provenance
+    success "TypeScript wrapper surface verified"
+}
+
+verify_typescript_dist() {
+    local required=(
+        "dist/index.js"
+        "dist/index.mjs"
+        "dist/index.d.ts"
+        "dist/runtime.cjs"
+        "dist/isabella.js"
+    )
+
+    if ! verify_files_exist "$TS_DIR" "${required[@]}"; then
+        error "TypeScript build artifacts incomplete."
+    fi
+}
+
 verify_haskell_surface() {
     log "Verifying Haskell export surface..."
     local required=(
@@ -277,6 +333,12 @@ verify_haskell_surface() {
         "src/Canon/Crypto/Commit_SIS.hs"
         "src/Canon/Crypto/Kyber.hs"
         "src/Canon/Crypto/Dilithium.hs"
+        "src/Canon/ZK/Confidential_Balance.hs"
+        "src/Canon/ZK/Confidential_Range.hs"
+        "src/Canon/ZK/Confidential_Transaction.hs"
+        "src/Canon/Confidential_balance.hs"
+        "src/Canon/Confidential_range.hs"
+        "src/Canon/Confidential_transaction.hs"
         "src/Canon.hs"
     )
 
@@ -308,6 +370,9 @@ verify_ocaml_surface() {
         "src/canon/commit_sis.ml"
         "src/canon/kyber.ml"
         "src/canon/dilithium.ml"
+        "src/canon/confidential_balance.ml"
+        "src/canon/confidential_range.ml"
+        "src/canon/confidential_transaction.ml"
         "src/canon/canon.ml"
     )
 
@@ -349,13 +414,52 @@ build_ocaml() {
     verify_ocaml_surface
 
     log "Building OCaml library..."
-    if ! command -v dune >/dev/null 2>&1; then
-        warn "dune not found, skipping OCaml build"
+    if ! have_cmd_with_opam_env dune; then
+        warn "dune not found (even via opam env), skipping OCaml build"
         return
     fi
     cd "$ML_DIR"
-    dune build
+    run_with_opam_env dune build
     success "OCaml library built"
+}
+
+build_typescript() {
+    if [[ "$LANG" != "all" && "$LANG" != "typescript" ]]; then
+        return
+    fi
+
+    verify_ocaml_surface
+    verify_typescript_source_surface
+
+    if ! have_cmd_with_opam_env dune; then
+        warn "dune not found (even via opam env), skipping TypeScript build"
+        return
+    fi
+    if ! command -v node >/dev/null 2>&1; then
+        warn "node not found, skipping TypeScript build"
+        return
+    fi
+    if ! command -v npx >/dev/null 2>&1; then
+        warn "npx not found, skipping TypeScript build"
+        return
+    fi
+
+    log "Building TypeScript library..."
+    mkdir -p "$TS_DIR/dist"
+
+    cd "$ML_DIR"
+    run_with_opam_env dune build src/js/isabella_js.bc.js
+
+    rm -f "$TS_DIR/dist/isabella.js" "$TS_DIR/dist/index.mjs"
+    cp "$ML_DIR/_build/default/src/js/isabella_js.bc.js" "$TS_DIR/dist/isabella.js"
+    cp "$TS_DIR/src/runtime.cjs" "$TS_DIR/dist/runtime.cjs"
+
+    cd "$TS_DIR"
+    npx tsc
+    node ./scripts/write-esm-wrapper.mjs
+
+    verify_typescript_dist
+    success "TypeScript library built"
 }
 
 run_haskell_examples() {
@@ -367,7 +471,13 @@ run_haskell_examples() {
 run_ocaml_examples() {
     log "Running OCaml examples..."
     cd "$ML_DIR"
-    dune exec isabella_cli -- examples
+    run_with_opam_env dune exec isabella_cli -- examples
+}
+
+run_typescript_examples() {
+    log "Running TypeScript examples..."
+    cd "$TS_DIR"
+    node examples/example.mjs
 }
 
 run_examples() {
@@ -376,6 +486,9 @@ run_examples() {
     fi
     if [[ "$LANG" == "all" || "$LANG" == "ocaml" ]]; then
         run_ocaml_examples
+    fi
+    if [[ "$LANG" == "all" || "$LANG" == "typescript" ]]; then
+        run_typescript_examples
     fi
 }
 
@@ -390,6 +503,7 @@ main() {
 
     build_haskell
     build_ocaml
+    build_typescript
 
     if $RUN_EXAMPLES; then
         run_examples
@@ -401,6 +515,7 @@ main() {
     log "Libraries available at:"
     echo "  Haskell: $HS_DIR"
     echo "  OCaml:   $ML_DIR"
+    echo "  TS/JS:   $TS_DIR"
 }
 
 main

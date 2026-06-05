@@ -62,6 +62,10 @@ lemma poly_add_coeff:
   shows "(poly_add p q) ! i = poly_coeff p i + poly_coeff q i"
   using assms unfolding poly_add_def by simp
 
+lemma poly_coeff_poly_add:
+  "poly_coeff (poly_add p r) k = poly_coeff p k + poly_coeff r k"
+  unfolding poly_add_def poly_coeff_def by auto
+
 lemma poly_add_comm:
   "poly_add p q = poly_add q p"
   unfolding poly_add_def by (simp add: max.commute add.commute)
@@ -85,7 +89,7 @@ lemma poly_add_zero_left [simp]:
 
 lemma poly_add_zero_right [simp]:
   "poly_add p [] = p"
-  using poly_add_comm poly_add_zero_left by metis
+  by (simp add: poly_add_comm)
 
 (* === Step 3: Polynomial Subtraction and Negation === *)
 text \<open>
@@ -154,8 +158,29 @@ text \<open>
 
 lemma poly_add_assoc:
   "poly_add (poly_add p q) r = poly_add p (poly_add q r)"
-  unfolding poly_add_def poly_coeff_def
-  by (intro nth_equalityI) (auto simp: algebra_simps)
+proof (intro nth_equalityI)
+  show "length (poly_add (poly_add p q) r) = length (poly_add p (poly_add q r))"
+    by (simp add: poly_add_length max.assoc)
+next
+  fix i assume i_lt: "i < length (poly_add (poly_add p q) r)"
+  have i_lhs: "i < max (max (length p) (length q)) (length r)"
+    using i_lt by (simp add: poly_add_length)
+  have i_rhs: "i < max (length p) (max (length q) (length r))"
+    using i_lhs by (simp add: max.assoc)
+
+  have "(poly_add (poly_add p q) r) ! i =
+        poly_coeff (poly_add p q) i + poly_coeff r i"
+    using i_lhs by (simp add: poly_add_coeff poly_add_length)
+  also have "... = (poly_coeff p i + poly_coeff q i) + poly_coeff r i"
+    by (simp add: poly_coeff_poly_add)
+  also have "... = poly_coeff p i + (poly_coeff q i + poly_coeff r i)"
+    by (simp add: algebra_simps)
+  also have "... = poly_coeff p i + poly_coeff (poly_add q r) i"
+    by (simp add: poly_coeff_poly_add)
+  also have "... = (poly_add p (poly_add q r)) ! i"
+    using i_rhs by (simp add: poly_add_coeff poly_add_length)
+  finally show "(poly_add (poly_add p q) r) ! i = (poly_add p (poly_add q r)) ! i" .
+qed
 
 (* === Step 5: Polynomial Multiplication === *)
 text \<open>
@@ -353,7 +378,8 @@ proof -
       thus ?thesis by simp
     qed
   }
-  hence all_zero: "\<forall>j < Suc k. poly_coeff p j * poly_coeff q (k - j) = 0" by blast
+  hence all_zero: "\<forall>j < Suc k. poly_coeff p j * poly_coeff q (k - j) = 0"
+    by auto
 
   have "(\<Sum>j = 0 ..< Suc k. poly_coeff p j * poly_coeff q (k - j)) =
         (\<Sum>j = 0 ..< Suc k. 0)"
@@ -733,7 +759,7 @@ proof -
     proof (cases k)
       case 0
       have False using k_ge1 0 by simp
-      then show ?thesis by blast
+      then show ?thesis by simp
     next
       case (Suc k')
       then show ?thesis by simp
@@ -819,10 +845,6 @@ text \<open>
   Each coefficient of ring_mod is a sum of coefficients from the input
   (with alternating signs for wraparound), and addition distributes over this.
 \<close>
-
-lemma poly_coeff_poly_add:
-  "poly_coeff (poly_add p r) k = poly_coeff p k + poly_coeff r k"
-  unfolding poly_add_def poly_coeff_def by auto
 
 lemma sum_list_map_add:
   fixes f g :: "nat \<Rightarrow> int"
@@ -954,7 +976,7 @@ proof -
   have sum_map_add_eq:
     "sum_list (map (\<lambda>k. ?f_p k + ?f_r k) [0..< ?t_sum]) =
      sum_list (map ?f_p [0..< ?t_sum]) + sum_list (map ?f_r [0..< ?t_sum])"
-    using sum_list_map_add[of ?f_p ?f_r "[0..< ?t_sum]"] by simp
+    by (rule sum_list_map_add)
 
   (* Monotonicity: because length p \<le> max(length p)(length r), we get ?t_p \<le> ?t_sum (same for r). *)
   have t_p_le: "?t_p \<le> ?t_sum"
@@ -1033,10 +1055,23 @@ proof -
 
   have step3: "sum_list (map ?f_p [0..< ?t_sum]) + sum_list (map ?f_r [0..< ?t_sum]) =
                sum_list (map ?f_p [0..< ?t_p]) + sum_list (map ?f_r [0..< ?t_r])"
-    using sum_p_to_tsum sum_r_to_tsum by simp
+    by (simp only: sum_p_to_tsum sum_r_to_tsum)
 
-  show ?thesis
-    using lhs rhs step1 step2 step3 by simp
+  have rhs': "sum_list (map ?f_p [0..< ?t_p]) + sum_list (map ?f_r [0..< ?t_r]) =
+              ring_mod_coeff p n i + ring_mod_coeff r n i"
+    using rhs by simp
+
+  have "ring_mod_coeff (poly_add p r) n i = sum_list (map ?f_sum [0..< ?t_sum])"
+    using lhs .
+  also have "... = sum_list (map (\<lambda>k. ?f_p k + ?f_r k) [0..< ?t_sum])"
+    using step1 .
+  also have "... = sum_list (map ?f_p [0..< ?t_sum]) + sum_list (map ?f_r [0..< ?t_sum])"
+    using step2 .
+  also have "... = sum_list (map ?f_p [0..< ?t_p]) + sum_list (map ?f_r [0..< ?t_r])"
+    using step3 .
+  also have "... = ring_mod_coeff p n i + ring_mod_coeff r n i"
+    using rhs' .
+  finally show ?thesis .
 qed
 
 lemma ring_mod_add:
@@ -1254,7 +1289,15 @@ qed
 lemma poly_mod_poly_add_right:
   assumes qpos: "q > 0"
   shows "poly_mod (poly_add a (poly_mod b q)) q = poly_mod (poly_add a b) q"
-  using poly_mod_poly_add_left[OF qpos] poly_add_comm by metis
+proof -
+  have "poly_mod (poly_add a (poly_mod b q)) q = poly_mod (poly_add (poly_mod b q) a) q"
+    by (simp add: poly_add_comm)
+  also have "... = poly_mod (poly_add b a) q"
+    using poly_mod_poly_add_left[OF qpos] .
+  also have "... = poly_mod (poly_add a b) q"
+    by (simp add: poly_add_comm)
+  finally show ?thesis .
+qed
 
 lemma ring_add_assoc:
   assumes npos: "n > 0" and qpos: "q > 0"

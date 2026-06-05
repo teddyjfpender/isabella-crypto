@@ -54,12 +54,72 @@ type_synonym commit_key = int_matrix
 definition valid_commit_key :: "commit_params \<Rightarrow> commit_key \<Rightarrow> bool" where
   "valid_commit_key p ck = valid_matrix ck (cp_m p) (commit_total_dim p)"
 
+definition message_commit_key :: "commit_params \<Rightarrow> commit_key \<Rightarrow> int_matrix" where
+  "message_commit_key p ck = map (take (cp_n1 p)) ck"
+
+definition randomness_commit_key :: "commit_params \<Rightarrow> commit_key \<Rightarrow> int_matrix" where
+  "randomness_commit_key p ck = map (drop (cp_n1 p)) ck"
+
 lemma valid_commit_key_dims:
   assumes "valid_commit_key p ck"
   shows "length ck = cp_m p"
     and "\<forall>row \<in> set ck. length row = cp_n1 p + cp_n2 p"
   using assms unfolding valid_commit_key_def valid_matrix_def commit_total_dim_def
   by auto
+
+lemma message_commit_key_dims:
+  assumes "valid_commit_key p ck"
+  shows "length (message_commit_key p ck) = cp_m p"
+    and "\<forall>row \<in> set (message_commit_key p ck). length row = cp_n1 p"
+proof -
+  show "length (message_commit_key p ck) = cp_m p"
+    using assms
+    unfolding message_commit_key_def
+    by (simp add: valid_commit_key_dims)
+next
+  have row_len:
+    "\<forall>row \<in> set ck. length row = cp_n1 p + cp_n2 p"
+    using valid_commit_key_dims[OF assms] by simp
+  show "\<forall>row \<in> set (message_commit_key p ck). length row = cp_n1 p"
+    unfolding message_commit_key_def
+  proof
+    fix row
+    assume "row \<in> set (map (take (cp_n1 p)) ck)"
+    then obtain row0 where row0_in: "row0 \<in> set ck" and row_def: "row = take (cp_n1 p) row0"
+      by auto
+    have "length row0 = cp_n1 p + cp_n2 p"
+      using row_len row0_in by auto
+    then show "length row = cp_n1 p"
+      using row_def by simp
+  qed
+qed
+
+lemma randomness_commit_key_dims:
+  assumes "valid_commit_key p ck"
+  shows "length (randomness_commit_key p ck) = cp_m p"
+    and "\<forall>row \<in> set (randomness_commit_key p ck). length row = cp_n2 p"
+proof -
+  show "length (randomness_commit_key p ck) = cp_m p"
+    using assms
+    unfolding randomness_commit_key_def
+    by (simp add: valid_commit_key_dims)
+next
+  have row_len:
+    "\<forall>row \<in> set ck. length row = cp_n1 p + cp_n2 p"
+    using valid_commit_key_dims[OF assms] by simp
+  show "\<forall>row \<in> set (randomness_commit_key p ck). length row = cp_n2 p"
+    unfolding randomness_commit_key_def
+  proof
+    fix row
+    assume "row \<in> set (map (drop (cp_n1 p)) ck)"
+    then obtain row0 where row0_in: "row0 \<in> set ck" and row_def: "row = drop (cp_n1 p) row0"
+      by auto
+    have "length row0 = cp_n1 p + cp_n2 p"
+      using row_len row0_in by auto
+    then show "length row = cp_n2 p"
+      using row_def by simp
+  qed
+qed
 
 (* === Step 3: Commitment and Opening Types === *)
 text \<open>
@@ -114,6 +174,35 @@ lemma opening_vec_length:
 definition commit :: "commit_key \<Rightarrow> commit_opening \<Rightarrow> int \<Rightarrow> commitment" where
   "commit ck op q = vec_mod (mat_vec_mult ck (opening_vec op)) q"
 
+definition message_commit :: "commit_params \<Rightarrow> commit_key \<Rightarrow> int_vec \<Rightarrow> commitment" where
+  "message_commit p ck msg = vec_mod (mat_vec_mult (message_commit_key p ck) msg) (cp_q p)"
+
+definition randomness_commit :: "commit_params \<Rightarrow> commit_key \<Rightarrow> int_vec \<Rightarrow> commitment" where
+  "randomness_commit p ck rand = vec_mod (mat_vec_mult (randomness_commit_key p ck) rand) (cp_q p)"
+
+definition residue_scalars :: "int \<Rightarrow> int list" where
+  "residue_scalars q = map int [0..<nat q]"
+
+fun residue_vectors_from :: "nat \<Rightarrow> int list \<Rightarrow> int_vec list" where
+  "residue_vectors_from 0 scalars = [[]]"
+| "residue_vectors_from (Suc n) scalars =
+    concat (map (\<lambda>x. map (\<lambda>v. x # v) (residue_vectors_from n scalars)) scalars)"
+
+definition residue_vectors :: "nat \<Rightarrow> int \<Rightarrow> int_vec list" where
+  "residue_vectors n q = residue_vectors_from n (residue_scalars q)"
+
+definition message_not_in_randomness_span :: "commit_params \<Rightarrow> commit_key \<Rightarrow> bool" where
+  "message_not_in_randomness_span p ck \<longleftrightarrow>
+    valid_commit_key p ck \<and>
+    (\<forall>msg \<in> set (residue_vectors (cp_n1 p) (cp_q p)).
+      \<forall>rand \<in> set (residue_vectors (cp_n2 p) (cp_q p)).
+        \<forall>rand' \<in> set (residue_vectors (cp_n2 p) (cp_q p)).
+          commit ck \<lparr> open_msg = msg, open_rand = rand \<rparr> (cp_q p) = randomness_commit p ck rand'
+          \<longrightarrow> vec_mod msg (cp_q p) = replicate (cp_n1 p) 0)"
+
+definition separating_commit_key :: "commit_params \<Rightarrow> commit_key \<Rightarrow> bool" where
+  "separating_commit_key p ck \<longleftrightarrow> message_not_in_randomness_span p ck"
+
 lemma commit_length:
   "length (commit ck op q) = length ck"
   unfolding commit_def by (simp add: vec_mod_length mat_vec_mult_length)
@@ -152,6 +241,25 @@ lemma verify_opening_valid:
 lemma verify_opening_eq:
   "verify_opening p ck c op \<Longrightarrow> commit ck op (cp_q p) = c"
   unfolding verify_opening_def by simp
+
+lemma message_not_in_randomness_span_valid:
+  assumes "message_not_in_randomness_span p ck"
+  shows "valid_commit_key p ck"
+  using assms unfolding message_not_in_randomness_span_def by simp
+
+lemma separating_commit_key_valid:
+  assumes "separating_commit_key p ck"
+  shows "valid_commit_key p ck"
+  using assms unfolding separating_commit_key_def by (rule message_not_in_randomness_span_valid)
+
+lemma separating_commit_key_zero_message_mod:
+  assumes sep: "message_not_in_randomness_span p ck"
+      and msg_in: "msg \<in> set (residue_vectors (cp_n1 p) (cp_q p))"
+      and rand_in: "rand \<in> set (residue_vectors (cp_n2 p) (cp_q p))"
+      and rand'_in: "rand' \<in> set (residue_vectors (cp_n2 p) (cp_q p))"
+      and eq: "commit ck \<lparr> open_msg = msg, open_rand = rand \<rparr> (cp_q p) = randomness_commit p ck rand'"
+  shows "vec_mod msg (cp_q p) = replicate (cp_n1 p) 0"
+  using assms unfolding message_not_in_randomness_span_def by auto
 
 text \<open>
   Correctness: if we commit with a valid opening, verification succeeds.
@@ -250,6 +358,46 @@ proof
   hence "v = replicate (length v) 0"
     unfolding is_zero_vec_def using all_zero_replicate by simp
   thus False using assms by simp
+qed
+
+lemma vec_mod_zero_imp_zero_bounded:
+  assumes vec_ok: "valid_vec v n"
+      and bound_ok: "all_bounded v B"
+      and q_pos: "q > 0"
+      and bound_lt_q: "B < q"
+      and mod_zero: "vec_mod v q = replicate n 0"
+  shows "v = replicate n 0"
+proof (rule nth_equalityI)
+  show "length v = length (replicate n 0)"
+    using vec_ok unfolding valid_vec_def by simp
+next
+  fix i
+  assume i_lt: "i < length v"
+  have len_v: "length v = n"
+    using vec_ok unfolding valid_vec_def by simp
+  have i_lt_n: "i < n"
+    using i_lt len_v by simp
+  have vec_mod_i_zero: "(vec_mod v q) ! i = 0"
+    using mod_zero i_lt_n by simp
+  have v_mod_zero: "(v ! i) mod q = 0"
+    using vec_mod_i_zero i_lt
+    by (simp add: vec_mod_nth)
+  have abs_bound: "abs (v ! i) \<le> B"
+    using all_bounded_nth[OF bound_ok i_lt] .
+  have abs_lt_q: "abs (v ! i) < q"
+    using abs_bound bound_lt_q by linarith
+  obtain k where k_def: "v ! i = q * k"
+    using v_mod_zero q_pos
+    by (meson dvdE mod_eq_0_iff_dvd)
+  have "q * abs k < q"
+    using abs_lt_q q_pos
+    by (simp add: k_def abs_mult)
+  then have "abs k = 0"
+    using q_pos by (cases "abs k") auto
+  then have "k = 0"
+    by simp
+  then show "v ! i = replicate n 0 ! i"
+    using k_def i_lt_n by simp
 qed
 
 lemma binding_to_sis_nonzero:
@@ -595,10 +743,11 @@ end
 export_code
   commit_params.make valid_commit_params commit_total_dim
   cp_n1 cp_n2 cp_m cp_q cp_beta
-  valid_commit_key
+  valid_commit_key message_commit_key randomness_commit_key
   commit_opening.make valid_opening opening_vec
   open_msg open_rand
-  commit verify_opening
+  commit message_commit randomness_commit verify_opening
+  residue_vectors message_not_in_randomness_span separating_commit_key
   is_binding_break binding_to_sis_witness
   in Haskell module_name "Canon.Crypto.Commit_SIS"
 

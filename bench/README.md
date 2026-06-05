@@ -29,6 +29,43 @@ Compares the same functions across all language targets:
 ./run-benchmarks.sh --iterations 20 --warmup 5
 ```
 
+### Deterministic TypeScript Confidential-Proving Benchmark
+
+This repo also ships a dedicated benchmark for the confidential-token TypeScript
+proving surface:
+
+```bash
+make bench-typescript-confidential
+
+# or run it directly after building the TypeScript package
+cd ../isabella.ts && npm run bench:confidential -- --iterations 20 --warmup 5
+
+# benchmark one proving function at a time
+cd ../isabella.ts && npm run bench:confidential -- \
+  --case transaction_fs_prove \
+  --iterations 5 \
+  --warmup 1
+```
+
+Benchmark contract:
+- Uses only the public TypeScript SDK entrypoints.
+- Uses fixed deterministic fixtures.
+- Benchmarks `membershipProve`, `nullifierFsProve`, `ConfidentialBalance.fsProve`,
+  `ConfidentialRange.fsProve`, `ConfidentialTransaction.fsProve`, and one
+  end-to-end proving flow.
+- Immediately re-verifies each generated proof, so invalid benchmark artifacts
+  fail fast instead of producing misleading timings.
+
+To emit machine-readable results:
+
+```bash
+node typescript-confidential-proving-bench.mjs \
+  --iterations 20 \
+  --warmup 5 \
+  --out data/typescript-confidential-proving.json \
+  --json
+```
+
 ### Function-Specific Examples
 
 **Quick benchmark (recommended):**

@@ -182,8 +182,11 @@ proof -
 
       have k_ge_bound: "k \<ge> (length p + n - 1 - i) div n + 1"
         using k_ge by simp
+      have n_nonneg: "(0::nat) \<le> n" by simp
+      have "((length p + n - 1 - i) div n + 1) * n \<le> k * n"
+        using k_ge_bound n_nonneg by (rule mult_right_mono)
       hence "k * n \<ge> ((length p + n - 1 - i) div n + 1) * n"
-        using mult_le_mono1 by blast
+        by simp
       hence kn_ge: "k * n \<ge> ((length p + n - 1 - i) div n) * n + n"
         by (simp add: algebra_simps)
 
@@ -232,7 +235,7 @@ proof -
     have "length p \<le> max (length p) m" by simp
     hence "length p + n - 1 - i \<le> max (length p) m + n - 1 - i" by linarith
     hence "(length p + n - 1 - i) div n \<le> (max (length p) m + n - 1 - i) div n"
-      using div_le_mono by blast
+      using npos by (simp add: div_le_mono)
     hence "(length p + n - 1 - i) div n \<le> (length ?p' + n - 1 - i) div n"
       using len_eq by simp
     thus ?thesis by simp
@@ -295,7 +298,13 @@ qed
 lemma ring_add_zero_left:
   assumes "n > 0" and "q > 0"
   shows "ring_add (replicate n 0) p n q = poly_mod (ring_mod p n) q"
-  using ring_add_zero_right[OF assms] ring_add_comm by metis
+proof -
+  have "ring_add (replicate n 0) p n q = ring_add p (replicate n 0) n q"
+    by (simp add: ring_add_comm)
+  also have "... = poly_mod (ring_mod p n) q"
+    using ring_add_zero_right[OF assms] .
+  finally show ?thesis .
+qed
 
 (* Module element addition - defined here to be available for mod_inner_prod_add_right *)
 definition mod_add :: "mod_elem \<Rightarrow> mod_elem \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mod_elem" where
@@ -351,9 +360,9 @@ proof (induct v arbitrary: u w)
 next
   case (Cons p ps)
   then obtain u0 us where u_def: "u = u0 # us"
-    by (metis length_Suc_conv)
+    by (cases u) simp_all
   from Cons obtain w0 ws where w_def: "w = w0 # ws"
-    by (metis length_Suc_conv u_def)
+    using u_def by (cases w) simp_all
 
   have len_ps_us: "length ps = length us"
     using Cons.prems u_def by simp
@@ -652,7 +661,19 @@ next
 
     have commute_assoc:
       "ring_mult p (ring_mult c r n q) n q = ring_mult c (ring_mult p r n q) n q"
-      by (metis ring_mult_comm mult_assoc)
+    proof -
+      have "ring_mult p (ring_mult c r n q) n q = ring_mult (ring_mult p c n q) r n q"
+      proof -
+        have "ring_mult (ring_mult p c n q) r n q = ring_mult p (ring_mult c r n q) n q"
+          using mult_assoc[of p c r] by simp
+        thus ?thesis by simp
+      qed
+      also have "... = ring_mult (ring_mult c p n q) r n q"
+        by (simp add: ring_mult_comm)
+      also have "... = ring_mult c (ring_mult p r n q) n q"
+        using mult_assoc[of c p r] by simp
+      finally show ?thesis .
+    qed
 
     show ?thesis
       using Cons IH distrib commute_assoc
@@ -798,7 +819,7 @@ proof -
     have "mod_elem_small v 0"
       unfolding mod_elem_small_def poly_coeffs_bounded_def
       using True by (auto simp: concat_eq_Nil_conv)
-    thus ?thesis by blast
+    thus ?thesis by auto
   next
     case False
     (* Take B = Max of all |c| *)
@@ -815,7 +836,7 @@ proof -
     qed
     hence "mod_elem_small v ?B"
       unfolding mod_elem_small_def poly_coeffs_bounded_def by auto
-    thus ?thesis by blast
+    thus ?thesis by auto
   qed
 qed
 
@@ -825,7 +846,7 @@ lemma mod_elem_small_add_exists:
       and "bound1 \<ge> 0" and "bound2 \<ge> 0"
       and "length v1 = length v2"
   shows "\<exists>bound. mod_elem_small (mod_add v1 v2 n q) bound"
-  using mod_elem_small_exists[of "mod_add v1 v2 n q"] by blast
+  by (rule mod_elem_small_exists)
 
 lemma mod_elem_small_nth:
   assumes "mod_elem_small v eta" and "i < length v"
@@ -979,7 +1000,39 @@ definition "b \<equiv> mlwe_sample A s e n q"
 
 definition "inst \<equiv> \<lparr> mlwe_A = A, mlwe_b = b \<rparr>"
 
-(* Lemma inst_is_real omitted - requires verbose proof showing valid_mlwe_instance *)
+lemma b_valid: "valid_mod_elem b kp n q"
+proof -
+  have len_As: "length (mod_mat_vec_mult A s n q) = kp"
+    using len_A by (simp add: mod_mat_vec_mult_length)
+  have len_e': "length e = kp"
+    using len_e by simp
+  show ?thesis
+    unfolding b_def mlwe_sample_def valid_mod_elem_def mod_add_def
+    using len_As len_e' n_pos q_pos
+    by (auto simp: ring_add_valid)
+qed
+
+lemma inst_valid: "valid_mlwe_instance p inst"
+proof -
+  have A_valid:
+    "valid_mod_matrix (mlwe_A inst) kp k n q"
+    unfolding inst_def
+    using A_ok by simp
+  moreover have b_valid_inst:
+    "valid_mod_elem (mlwe_b inst) kp n q"
+    unfolding inst_def
+    using b_valid by simp
+  ultimately show ?thesis
+    unfolding valid_mlwe_instance_def by simp
+qed
+
+lemma inst_is_real: "is_real_mlwe_instance p inst"
+proof -
+  show ?thesis
+    unfolding is_real_mlwe_instance_def
+    using inst_valid s_ok e_ok
+    by (auto simp: inst_def b_def)
+qed
 
 end
 

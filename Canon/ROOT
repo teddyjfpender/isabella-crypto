@@ -39,6 +39,11 @@ session Canon_Crypto in "Crypto" = Canon_Rings +
     Kyber
     Dilithium
 
+session Canon_Crypto_Export in "Crypto_Export" = Canon_Crypto +
+  options [document = false]
+  theories
+    Dilithium_Export
+
 (* Session 4: Gadget constructions *)
 session Canon_Gadgets in "Gadgets" = Canon_Base +
   options [document = false]
@@ -60,8 +65,14 @@ session Canon_Rings in "Rings" = Canon_Hardness +
 (* Session 6: Zero-Knowledge foundations *)
 session Canon_ZK in "ZK" = Canon_Rings +
   options [document = false]
+  sessions
+    Canon_Crypto
+    Canon_Gadgets
   theories
     Sigma_Base
+    Confidential_Balance
+    Confidential_Range
+    Confidential_Transaction
 
 (* Future sessions - uncomment as theories are added:
 

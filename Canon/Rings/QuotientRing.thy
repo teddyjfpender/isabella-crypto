@@ -494,7 +494,8 @@ next
       have k_ge: "k \<ge> ?t1" using k_in by auto
       show "x = 0" using f1_zero[OF k_ge] x_def by simp
     qed
-    thus ?thesis using sum_list_all_zero_int by simp
+    from all_zero show ?thesis
+      by (rule sum_list_all_zero_int)
   qed
 
   have tail2_zero: "sum_list (map ?f2 [?t2 ..< ?t]) = 0"
@@ -506,13 +507,28 @@ next
       have k_ge: "k \<ge> ?t2" using k_in by auto
       show "x = 0" using f2_zero[OF k_ge] x_def by simp
     qed
-    thus ?thesis using sum_list_all_zero_int by simp
+    from all_zero show ?thesis
+      by (rule sum_list_all_zero_int)
   qed
 
   have extend1: "sum_list (map ?f1 [0 ..< ?t]) = sum_list (map ?f1 [0 ..< ?t1])"
-    using split1 tail1_zero by simp
+  proof -
+    have "sum_list (map ?f1 [0 ..< ?t]) =
+          sum_list (map ?f1 [0 ..< ?t1]) + sum_list (map ?f1 [?t1 ..< ?t])"
+      using split1 by simp
+    also have "... = sum_list (map ?f1 [0 ..< ?t1])"
+      using tail1_zero by simp
+    finally show ?thesis .
+  qed
   have extend2: "sum_list (map ?f2 [0 ..< ?t]) = sum_list (map ?f2 [0 ..< ?t2])"
-    using split2 tail2_zero by simp
+  proof -
+    have "sum_list (map ?f2 [0 ..< ?t]) =
+          sum_list (map ?f2 [0 ..< ?t2]) + sum_list (map ?f2 [?t2 ..< ?t])"
+      using split2 by simp
+    also have "... = sum_list (map ?f2 [0 ..< ?t2])"
+      using tail2_zero by simp
+    finally show ?thesis .
+  qed
 
   have coeff_equiv: "\<And>k. k \<in> set [0 ..< ?t] \<Longrightarrow>
         poly_coeff p1 (k * n + i) mod q = poly_coeff p2 (k * n + i) mod q"
@@ -523,8 +539,31 @@ next
      sum_list (map ?f2 [0 ..< ?t]) mod q"
     using sum_list_signed_mod_eq[OF coeff_equiv] .
 
-  show ?thesis
-    using rm1 rm2 extend1 extend2 sum_eq by simp
+  have rm1_common: "ring_mod_coeff p1 n i = sum_list (map ?f1 [0 ..< ?t])"
+  proof -
+    have "ring_mod_coeff p1 n i = sum_list (map ?f1 [0 ..< ?t1])"
+      using rm1 .
+    also have "... = sum_list (map ?f1 [0 ..< ?t])"
+      using extend1 by simp
+    finally show ?thesis .
+  qed
+
+  have rm2_common: "ring_mod_coeff p2 n i = sum_list (map ?f2 [0 ..< ?t])"
+  proof -
+    have "ring_mod_coeff p2 n i = sum_list (map ?f2 [0 ..< ?t2])"
+      using rm2 .
+    also have "... = sum_list (map ?f2 [0 ..< ?t])"
+      using extend2 by simp
+    finally show ?thesis .
+  qed
+
+  have "ring_mod_coeff p1 n i mod q = sum_list (map ?f1 [0 ..< ?t]) mod q"
+    by (simp only: rm1_common)
+  also have "... = sum_list (map ?f2 [0 ..< ?t]) mod q"
+    using sum_eq .
+  also have "... = ring_mod_coeff p2 n i mod q"
+    by (simp only: rm2_common)
+  finally show ?thesis .
 qed
 
 text \<open>Helper: poly_mod of empty list is empty.\<close>

@@ -7,17 +7,19 @@ module Canon.Crypto.Commit_SIS (
     CommitParams(..), makeCommitParams, validCommitParams, commit_total_dim,
     cp_n1, cp_n2, cp_m, cp_q, cp_beta,
     -- * Commitment Key
-    valid_commit_key,
+    valid_commit_key, message_commit_key, randomness_commit_key,
+    residue_vectors, message_not_in_randomness_span,
     -- * Opening
     CommitOpening(..), makeOpening, validOpening, opening_vec,
     open_msg, open_rand,
     -- * Core Operations
-    commit, verify_opening,
+    commit, message_commit, randomness_commit, verify_opening,
+    separating_commit_key,
     -- * Security Reduction
     is_binding_break, binding_to_sis_witness
 ) where
 
-import Prelude ((+), (-), (*), mod, (==), (/=), (>), (>=), (&&), not,
+import Prelude ((+), (-), (*), mod, (==), (/=), (>), (>=), (&&), (||), not,
                 Bool(..), Int, length, (++), take, drop)
 import qualified Prelude
 import Canon.Linear.ListVec (Int_vec, Int_matrix, valid_vec, valid_matrix,
@@ -56,6 +58,12 @@ commit_total_dim p = cp_n1 p + cp_n2 p
 valid_commit_key :: CommitParams -> Int_matrix -> Bool
 valid_commit_key p a = valid_matrix (cp_m p) (commit_total_dim p) a
 
+message_commit_key :: CommitParams -> Int_matrix -> Int_matrix
+message_commit_key p = Prelude.map (Prelude.take (cp_n1 p))
+
+randomness_commit_key :: CommitParams -> Int_matrix -> Int_matrix
+randomness_commit_key p = Prelude.map (Prelude.drop (cp_n1 p))
+
 -- | Commitment opening (message, randomness)
 data CommitOpening = CommitOpening {
     open_msg :: Int_vec,   -- ^ Message part
@@ -80,6 +88,34 @@ opening_vec op = open_msg op ++ open_rand op
 -- | Compute commitment: c = A * (m || r) mod q
 commit :: Int_matrix -> CommitOpening -> Int -> Int_vec
 commit a op q = vec_mod (mat_vec_mult a (opening_vec op)) q
+
+message_commit :: CommitParams -> Int_matrix -> Int_vec -> Int_vec
+message_commit p a msg = vec_mod (mat_vec_mult (message_commit_key p a) msg) (cp_q p)
+
+randomness_commit :: CommitParams -> Int_matrix -> Int_vec -> Int_vec
+randomness_commit p a rand = vec_mod (mat_vec_mult (randomness_commit_key p a) rand) (cp_q p)
+
+residue_vectors :: Int -> Int -> [Int_vec]
+residue_vectors 0 _ = [[]]
+residue_vectors n q =
+    Prelude.concat
+      [ Prelude.map (\v -> x : v) (residue_vectors (n - 1) q)
+      | x <- [0 .. q - 1]
+      ]
+
+message_not_in_randomness_span :: CommitParams -> Int_matrix -> Bool
+message_not_in_randomness_span p a =
+    valid_commit_key p a &&
+    Prelude.and
+      [ not (commit a (CommitOpening msg rand) (cp_q p) == randomness_commit p a rand')
+          || vec_mod msg (cp_q p) == Prelude.replicate (cp_n1 p) 0
+      | msg <- residue_vectors (cp_n1 p) (cp_q p)
+      , rand <- residue_vectors (cp_n2 p) (cp_q p)
+      , rand' <- residue_vectors (cp_n2 p) (cp_q p)
+      ]
+
+separating_commit_key :: CommitParams -> Int_matrix -> Bool
+separating_commit_key = message_not_in_randomness_span
 
 -- | Verify opening: check that c = A * (m || r) mod q
 verify_opening :: Int_matrix -> CommitOpening -> Int_vec -> Int -> Bool

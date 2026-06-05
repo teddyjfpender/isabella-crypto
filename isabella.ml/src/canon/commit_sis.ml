@@ -18,6 +18,12 @@ let commit_total_dim p = p.cp_n1 + p.cp_n2
 
 let valid_commit_key p a = Listvec.valid_matrix p.cp_m (commit_total_dim p) a
 
+let message_commit_key p a =
+  List.map (fun row -> fst (Listvec.split_vec p.cp_n1 row)) a
+
+let randomness_commit_key p a =
+  List.map (fun row -> snd (Listvec.split_vec p.cp_n1 row)) a
+
 type commit_opening = { open_msg : int list; open_rand : int list }
 
 let make_opening msg rand = { open_msg = msg; open_rand = rand }
@@ -30,6 +36,43 @@ let valid_opening p op =
   Norms.all_bounded (opening_vec op) p.cp_beta
 
 let commit a op q = Zq.vec_mod (Listvec.mat_vec_mult a (opening_vec op)) q
+
+let message_commit p a msg =
+  Zq.vec_mod (Listvec.mat_vec_mult (message_commit_key p a) msg) p.cp_q
+
+let randomness_commit p a rand =
+  Zq.vec_mod (Listvec.mat_vec_mult (randomness_commit_key p a) rand) p.cp_q
+
+let rec residue_vectors n q =
+  if n <= 0 then [ [] ]
+  else
+    let tails = residue_vectors (n - 1) q in
+    let rec loop x acc =
+      if x >= q then List.rev acc
+      else
+        let acc' = List.rev_append (List.map (fun tail -> x :: tail) tails) acc in
+        loop (x + 1) acc'
+    in
+    loop 0 []
+
+let message_not_in_randomness_span p a =
+  valid_commit_key p a &&
+  let zero_msg = List.init p.cp_n1 (fun _ -> 0) in
+  let msgs = residue_vectors p.cp_n1 p.cp_q in
+  let rands = residue_vectors p.cp_n2 p.cp_q in
+  List.for_all
+    (fun msg ->
+      List.for_all
+        (fun rand ->
+          List.for_all
+            (fun rand' ->
+              commit a { open_msg = msg; open_rand = rand } p.cp_q <> randomness_commit p a rand' ||
+              Zq.vec_mod msg p.cp_q = zero_msg)
+            rands)
+        rands)
+    msgs
+
+let separating_commit_key = message_not_in_randomness_span
 
 let verify_opening a op c q = commit a op q = c
 

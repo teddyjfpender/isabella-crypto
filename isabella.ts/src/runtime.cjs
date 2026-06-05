@@ -5,12 +5,13 @@
  * and exports the Isabella object. In CommonJS context, js_of_ocaml
  * exports to module.exports rather than globalThis.
  *
- * Provenance: Adapter over `isabella.ts/src/isabella.js` generated from
+ * Provenance: Adapter over the generated js_of_ocaml runtime copied into
+ * `dist/isabella.cjs` during the TypeScript package build.
  * Isabelle-exported OCaml Canon modules.
  */
 
 // Load the js_of_ocaml output
-const jsoo = require('./isabella.js');
+const jsoo = require('./isabella.cjs');
 
 // Set globalThis.Isabella for access by ES modules
 globalThis.Isabella = jsoo.Isabella;

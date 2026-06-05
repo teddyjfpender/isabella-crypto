@@ -103,7 +103,21 @@ next
     have step7: "(x div (B ^ i)) mod B = digit B i x"
       unfolding digit_def by simp
     show ?thesis
-      using step1 step2 step3 step4 step5 step6 step7 by metis
+    proof -
+      have "(decomp_base B (Suc k) x) ! i = digit B j (x div B)"
+        using step1 step2 by simp
+      also have "... = ((x div B) div (B ^ j)) mod B"
+        using step3 by simp
+      also have "... = (x div (B * B ^ j)) mod B"
+        using step4 by simp
+      also have "... = (x div (B ^ Suc j)) mod B"
+        using step5 by simp
+      also have "... = (x div (B ^ i)) mod B"
+        using step6 by simp
+      also have "... = digit B i x"
+        using step7 by simp
+      finally show ?thesis .
+    qed
   qed
 qed
 
@@ -113,10 +127,11 @@ lemma decomp_base_all_bounded:
   unfolding all_bounded_def
 proof
   fix d assume "d \<in> set (decomp_base B k x)"
-  then obtain i where i_lt: "i < k" and d_eq: "d = (decomp_base B k x) ! i"
-    by (metis in_set_conv_nth decomp_base_length)
-  hence "d = digit B i x"
-    using decomp_base_nth[OF assms i_lt] by simp
+  then obtain i where i_lt_len: "i < length (decomp_base B k x)" and d_eq: "d = (decomp_base B k x) ! i"
+    by (auto simp: in_set_conv_nth)
+  have i_lt: "i < k" using i_lt_len by simp
+  have "d = digit B i x"
+    using d_eq decomp_base_nth[OF assms i_lt] by simp
   hence "0 \<le> d \<and> d < B"
     using digit_range[OF assms] by simp
   thus "abs d \<le> B - 1"
@@ -319,7 +334,17 @@ next
       have s4: "(x div B ^ (i + 1)) mod B = digit B (i + 1) x"
         unfolding digit_def by simp
       show "digit B i (x div B) = digit B (i + 1) x"
-        using s1 s2 s3 s4 by metis
+      proof -
+        have "digit B i (x div B) = ((x div B) div B ^ i) mod B"
+          using s1 by simp
+        also have "... = (x div (B * B ^ i)) mod B"
+          using s2 by simp
+        also have "... = (x div B ^ (i + 1)) mod B"
+          using s3 by simp
+        also have "... = digit B (i + 1) x"
+          using s4 by simp
+        finally show ?thesis .
+      qed
     qed
     ultimately show ?thesis by simp
   qed
@@ -404,9 +429,13 @@ lemma decomp_base_linf_bound:
 proof -
   have len_k: "length (decomp_base B k x) = k"
     by simp
-  have "k \<noteq> 0" using assms(2) by simp
-  hence "decomp_base B k x \<noteq> []"
-    using len_k by (metis length_0_conv)
+  have "decomp_base B k x \<noteq> []"
+  proof
+    assume de_nil: "decomp_base B k x = []"
+    hence "length (decomp_base B k x) = 0" by simp
+    with len_k have "k = 0" by simp
+    with assms(2) show False by simp
+  qed
   hence "linf_norm (decomp_base B k x) \<le> B - 1 \<longleftrightarrow>
          all_bounded (decomp_base B k x) (B - 1)"
     using all_bounded_linf by simp

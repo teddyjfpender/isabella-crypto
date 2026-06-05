@@ -15,6 +15,9 @@
     - {!Ntt} - Number Theoretic Transform (O(n log n) Cooley-Tukey)
     - {!Regev_pke} - Regev public-key encryption
     - {!Commit_sis} - SIS-based commitment scheme
+    - {!Confidential_balance} - Confidential balance proof helpers
+    - {!Confidential_range} - Confidential range proof helpers
+    - {!Confidential_transaction} - Confidential transaction proof helpers
     - {!Kyber} - CRYSTALS-Kyber (ML-KEM) key encapsulation
     - {!Dilithium} - CRYSTALS-Dilithium (ML-DSA) digital signatures *)
 
@@ -29,5 +32,8 @@ module Modulelwe = Modulelwe
 module Ntt = Ntt
 module Regev_pke = Regev_pke
 module Commit_sis = Commit_sis
+module Confidential_balance = Confidential_balance
+module Confidential_range = Confidential_range
+module Confidential_transaction = Confidential_transaction
 module Kyber = Kyber
 module Dilithium = Dilithium

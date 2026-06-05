@@ -32,6 +32,11 @@
 -- * "Canon.Crypto.Commit_SIS" - SIS-based commitment scheme
 -- * "Canon.Crypto.Kyber" - CRYSTALS-Kyber (ML-KEM) key encapsulation
 --
+-- The complete namespace-safe surface is available via the OCaml-aligned alias
+-- modules such as "Canon.Zq", "Canon.Kyber", and "Canon.Dilithium".
+-- This flat "Canon" module remains a convenience export for the
+-- non-conflicting surface only.
+--
 -- = Example Usage
 --
 -- @

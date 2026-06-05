@@ -77,9 +77,10 @@ next
     unfolding is_zero_vec_def
   proof
     fix x assume "x \<in> set v"
-    then obtain i where "i < length v" "v ! i = x"
-      by (metis in_set_conv_nth)
-    thus "x = 0" using asm by simp
+    then obtain i where i_lt: "i < length v" and x_eq: "x = v ! i"
+      by (auto simp: in_set_conv_nth)
+    show "x = 0"
+      using asm i_lt x_eq by simp
   qed
 qed
 
@@ -385,9 +386,20 @@ proof -
     hence i_lt_A: "i < length A"
       by (simp add: vec_mod_length mat_vec_mult_length)
 
+    have i_lt_vm: "i < length (vec_mod (mat_vec_mult A z1) q)"
+      using i_lt_A len_Az1 by (simp add: vec_mod_length)
+    have i_lt_Az1: "i < length (mat_vec_mult A z1)"
+      using i_lt_A len_Az1 by simp
+    have i_lt_Az2: "i < length (mat_vec_mult A z2)"
+      using i_lt_A len_Az2 by simp
+
     have eq_mod: "(mat_vec_mult A z1) ! i mod q = (mat_vec_mult A z2) ! i mod q"
-      using collision i_lt_A len_Az1 len_Az2
-      by (metis nth_equalityI vec_mod_length vec_mod_nth)
+    proof -
+      have "(vec_mod (mat_vec_mult A z1) q) ! i = (vec_mod (mat_vec_mult A z2) q) ! i"
+        using collision i_lt_vm by simp
+      thus ?thesis
+        using i_lt_Az1 i_lt_Az2 by (simp add: vec_mod_nth)
+    qed
 
     have "((mat_vec_mult A z1) ! i - (mat_vec_mult A z2) ! i) mod q =
           ((mat_vec_mult A z1) ! i mod q - (mat_vec_mult A z2) ! i mod q) mod q"

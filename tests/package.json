@@ -9,13 +9,14 @@
     "test:kyber": "bun test kyber",
     "test:ntt": "bun test ntt",
     "test:lazer": "bun test lazer-comparison",
-    "generate-vectors": "tsx src/generate-vectors.ts",
-    "validate-haskell": "tsx src/validate-haskell.ts",
-    "validate-ocaml": "tsx src/validate-ocaml.ts"
+    "validate-sdks": "bun run validate-ocaml && bun run validate-haskell",
+    "audit-confidential": "bun build ./src/audit-confidential-transaction.ts --target=node --outfile=/tmp/isabella-audit-confidential.mjs && ISABELLA_PROJECT_ROOT=.. node /tmp/isabella-audit-confidential.mjs",
+    "generate-vectors": "bun src/generate-vectors.ts",
+    "validate-haskell": "bun build ./src/validate-haskell.ts --target=node --outfile=/tmp/isabella-validate-haskell.mjs && ISABELLA_PROJECT_ROOT=.. node /tmp/isabella-validate-haskell.mjs",
+    "validate-ocaml": "bun build ./src/validate-ocaml.ts --target=node --outfile=/tmp/isabella-validate-ocaml.mjs && ISABELLA_PROJECT_ROOT=.. node /tmp/isabella-validate-ocaml.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   },
   "dependencies": {

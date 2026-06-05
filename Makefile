@@ -2,16 +2,49 @@
 # Makefile for building and testing libraries
 
 .PHONY: all canon haskell ocaml typescript clean test examples help \
-        test-validation test-vectors check-formalization
+        test-validation test-vectors check-formalization \
+        build-cool build-balanced build-fast build-export \
+        test-sdk-equivalence bench-typescript-confidential bench-confidential-verify
 
-# Default target
+# Default target: low-heat Canon build profile
+.DEFAULT_GOAL := build-cool
+
+ISABELLE ?= isabelle
+CANON_DIR ?= Canon
+CANON_SESSIONS ?= Canon_Rings Canon_Crypto Canon_ZK
+CANON_EXPORT_SESSION ?= Canon_Crypto_Export
+NICE ?= nice -n 10
+
+# Isabelle build profiles
+ISABELLE_COOL_OPTS ?= -j1 -o threads=2 -o parallel_limit=2 -o parallel_proofs=0
+ISABELLE_BALANCED_OPTS ?= -j2 -o threads=3 -o parallel_limit=3 -o parallel_proofs=1
+ISABELLE_FAST_OPTS ?= -j4 -o threads=0 -o parallel_proofs=1
+
+# Full pipeline target
 all: canon haskell ocaml typescript
 
 # Build Canon Isabelle theories
-canon:
-	@echo "Building Canon Isabelle theories..."
-	@cd Canon && isabelle build -D .
-	@echo "Canon built successfully"
+canon: build-cool
+
+build-cool:
+	@echo "Building Canon Isabelle theories (cool profile: lower CPU/heat)..."
+	@$(NICE) $(ISABELLE) build -d $(CANON_DIR) -b $(ISABELLE_COOL_OPTS) $(CANON_SESSIONS)
+	@echo "Canon build-cool completed"
+
+build-balanced:
+	@echo "Building Canon Isabelle theories (balanced profile)..."
+	@$(ISABELLE) build -d $(CANON_DIR) -b $(ISABELLE_BALANCED_OPTS) $(CANON_SESSIONS)
+	@echo "Canon build-balanced completed"
+
+build-fast:
+	@echo "Building Canon Isabelle theories (fast profile: higher CPU usage)..."
+	@$(ISABELLE) build -d $(CANON_DIR) -b $(ISABELLE_FAST_OPTS) $(CANON_SESSIONS)
+	@echo "Canon build-fast completed"
+
+build-export:
+	@echo "Building optional code-export session..."
+	@$(ISABELLE) build -d $(CANON_DIR) -b -j1 $(CANON_EXPORT_SESSION)
+	@echo "Canon export session built"
 
 # Check formal proof hygiene (no sorry/oops/admit in Canon theories)
 check-formalization:
@@ -34,10 +67,11 @@ typescript: ocaml
 	@echo "Building TypeScript library..."
 	@mkdir -p isabella.ts/dist
 	@cd isabella.ml && eval $$(opam env) && dune build src/js/isabella_js.bc.js
-	@rm -f isabella.ts/dist/isabella.js
+	@rm -f isabella.ts/dist/isabella.js isabella.ts/dist/index.mjs
 	@cp isabella.ml/_build/default/src/js/isabella_js.bc.js isabella.ts/dist/isabella.js
 	@cp isabella.ts/src/runtime.cjs isabella.ts/dist/runtime.cjs
 	@cd isabella.ts && npx tsc
+	@cd isabella.ts && node ./scripts/write-esm-wrapper.mjs
 	@echo "TypeScript library built successfully"
 
 # Run all tests
@@ -59,6 +93,18 @@ test-typescript:
 test-validation:
 	@echo "Running cross-validation tests..."
 	@cd tests && bun test
+
+test-sdk-equivalence:
+	@echo "Running cross-SDK equivalence harnesses..."
+	@cd tests && bun run validate-sdks
+
+bench-typescript-confidential: typescript
+	@echo "Running deterministic TypeScript confidential proof benchmarks..."
+	@node bench/typescript-confidential-proving-bench.mjs
+
+bench-confidential-verify: typescript
+	@echo "Running deterministic confidential verifier comparison benchmarks..."
+	@node bench/confidential-verifier-compare.mjs
 
 # Generate test vectors from noble-post-quantum
 test-vectors:
@@ -90,7 +136,7 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf isabella.hs/dist-newstyle
 	@rm -rf isabella.ml/_build
-	@rm -rf isabella.ts/dist/*.js isabella.ts/dist/*.d.ts isabella.ts/dist/*.map isabella.ts/dist/*.cjs
+	@rm -rf isabella.ts/dist/*.js isabella.ts/dist/*.mjs isabella.ts/dist/*.d.ts isabella.ts/dist/*.map isabella.ts/dist/*.cjs
 	@echo "Cleaned"
 
 # Generate code from Isabelle (full pipeline)
@@ -108,8 +154,12 @@ help:
 	@echo "Isabella Makefile"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all                 Build Canon + all libraries (default)"
-	@echo "  canon               Build Canon Isabelle theories"
+	@echo "  build-cool          Build Canon (default, low-heat settings)"
+	@echo "  build-balanced      Build Canon with moderate parallelism"
+	@echo "  build-fast          Build Canon with high parallelism"
+	@echo "  build-export        Build optional Canon export session ($(CANON_EXPORT_SESSION))"
+	@echo "  all                 Build Canon + all libraries"
+	@echo "  canon               Alias for build-cool"
 	@echo "  check-formalization Check Canon has no sorry/oops/admit"
 	@echo "  haskell             Build Haskell library"
 	@echo "  ocaml               Build OCaml library"
@@ -119,6 +169,9 @@ help:
 	@echo "  test-ocaml          Run OCaml tests"
 	@echo "  test-typescript     Run TypeScript tests"
 	@echo "  test-validation     Run cross-validation tests vs noble-post-quantum"
+	@echo "  test-sdk-equivalence Run Haskell/OCaml/TypeScript shared-surface checks"
+	@echo "  bench-typescript-confidential Benchmark TypeScript confidential proof APIs"
+	@echo "  bench-confidential-verify   Compare JS and native confidential verifier hot paths"
 	@echo "  test-vectors        Generate test vectors from noble-post-quantum"
 	@echo "  examples            Run examples in all languages"
 	@echo "  examples-haskell    Run Haskell examples"

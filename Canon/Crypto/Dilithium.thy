@@ -292,6 +292,55 @@ definition highbits_vec :: "dil_vec \<Rightarrow> int \<Rightarrow> dil_vec" whe
 definition lowbits_vec :: "dil_vec \<Rightarrow> int \<Rightarrow> dil_vec" where
   "lowbits_vec v alpha = map (\<lambda>p. lowbits_poly p alpha) v"
 
+lemma decompose_coeff_cases:
+  "decompose_coeff r alpha =
+    (if r - mod_centered r alpha = dil_ntt_q - 1
+     then (0, mod_centered r alpha - 1)
+     else ((r - mod_centered r alpha) div alpha, mod_centered r alpha))"
+  unfolding decompose_coeff_def Let_def by simp
+
+lemma highbits_lowbits_decompose:
+  "(highbits_coeff r alpha, lowbits_coeff r alpha) = decompose_coeff r alpha"
+  unfolding highbits_coeff_def lowbits_coeff_def
+  by (cases "decompose_coeff r alpha") simp
+
+lemma decompose_coeff_boundary:
+  assumes alpha_pos: "alpha > 0"
+  assumes alpha_dvd: "alpha dvd (dil_ntt_q - 1)"
+  shows "decompose_coeff (dil_ntt_q - 1) alpha = (0, -1)"
+proof -
+  have mod_zero: "(dil_ntt_q - 1) mod alpha = 0"
+    using alpha_dvd by auto
+  hence centered_zero: "mod_centered (dil_ntt_q - 1) alpha = 0"
+    unfolding mod_centered_def Let_def
+    using alpha_pos by simp
+  show ?thesis
+    unfolding decompose_coeff_cases
+    using centered_zero by simp
+qed
+
+lemma highbits_coeff_boundary:
+  assumes alpha_pos: "alpha > 0"
+  assumes alpha_dvd: "alpha dvd (dil_ntt_q - 1)"
+  shows "highbits_coeff (dil_ntt_q - 1) alpha = 0"
+proof -
+  have "decompose_coeff (dil_ntt_q - 1) alpha = (0, -1)"
+    by (rule decompose_coeff_boundary[OF alpha_pos alpha_dvd])
+  thus ?thesis
+    unfolding highbits_coeff_def by simp
+qed
+
+lemma lowbits_coeff_boundary:
+  assumes alpha_pos: "alpha > 0"
+  assumes alpha_dvd: "alpha dvd (dil_ntt_q - 1)"
+  shows "lowbits_coeff (dil_ntt_q - 1) alpha = -1"
+proof -
+  have "decompose_coeff (dil_ntt_q - 1) alpha = (0, -1)"
+    by (rule decompose_coeff_boundary[OF alpha_pos alpha_dvd])
+  thus ?thesis
+    unfolding lowbits_coeff_def by simp
+qed
+
 (* === Step 5: Hint Functions (MakeHint and UseHint) === *)
 text \<open>
   Hint Functions:
@@ -334,15 +383,38 @@ text \<open>
 definition hint_weight :: "nat list list \<Rightarrow> nat" where
   "hint_weight h = sum_list (map sum_list h)"
 
+lemma makehint_coeff_eq_0_iff:
+  "makehint_coeff z r alpha = 0 \<longleftrightarrow>
+    highbits_coeff r alpha = highbits_coeff (r + z) alpha"
+  unfolding makehint_coeff_def by simp
+
+lemma makehint_coeff_eq_1_iff:
+  "makehint_coeff z r alpha = 1 \<longleftrightarrow>
+    highbits_coeff r alpha \<noteq> highbits_coeff (r + z) alpha"
+  unfolding makehint_coeff_def by simp
+
+lemma makehint_coeff_bit:
+  "makehint_coeff z r alpha \<in> {0, 1}"
+  unfolding makehint_coeff_def by simp
+
+lemma usehint_coeff_zero:
+  "usehint_coeff 0 r alpha = highbits_coeff r alpha"
+  unfolding usehint_coeff_def highbits_coeff_def
+  by (cases "decompose_coeff r alpha") simp
+
 lemma usehint_makehint_correct:
   assumes hb_eq: "highbits_coeff r alpha = highbits_coeff (r + z) alpha"
   shows "usehint_coeff (makehint_coeff z r alpha) r alpha = highbits_coeff (r + z) alpha"
 proof -
-  have "makehint_coeff z r alpha = 0"
-    using hb_eq unfolding makehint_coeff_def by simp
-  hence "usehint_coeff (makehint_coeff z r alpha) r alpha = highbits_coeff r alpha"
-    unfolding usehint_coeff_def highbits_coeff_def decompose_coeff_def Let_def by simp
-  thus ?thesis using hb_eq by simp
+  have hint_zero: "makehint_coeff z r alpha = 0"
+    using hb_eq by (simp add: makehint_coeff_eq_0_iff)
+  have "usehint_coeff (makehint_coeff z r alpha) r alpha = usehint_coeff 0 r alpha"
+    using hint_zero by simp
+  also have "... = highbits_coeff r alpha"
+    by (rule usehint_coeff_zero)
+  also have "... = highbits_coeff (r + z) alpha"
+    using hb_eq by simp
+  finally show ?thesis .
 qed
 
 (* === Step 6: Infinity Norm Bounds === *)
@@ -620,59 +692,5 @@ text \<open>
 \<close>
 
 end
-
-(* === Step 12: Code Export === *)
-
-text \<open>Export to Haskell\<close>
-export_code
-  dilithium_params.make valid_dilithium_params
-  dil_n dil_q dil_k dil_l dil_eta dil_tau dil_beta
-  dil_gamma1 dil_gamma2 dil_d dil_omega
-  mldsa44_params mldsa65_params mldsa87_params
-  dil_pk.make dil_sk.make dil_signature.make
-  pk_rho pk_t1 sk_rho sk_K sk_tr sk_s1 sk_s2 sk_t0
-  sig_c_tilde sig_z sig_h
-  dil_ntt_q dil_ntt_omega
-  dil_ntt dil_intt dil_poly_mult_ntt
-  dil_poly_add dil_poly_sub
-  dil_vec_add dil_vec_sub dil_vec_ntt dil_vec_intt
-  dil_mat_vec_mult_ntt
-  mod_centered power2round_coeff power2round_poly power2round_vec
-  decompose_coeff highbits_coeff lowbits_coeff
-  highbits_poly lowbits_poly highbits_vec lowbits_vec
-  makehint_coeff usehint_coeff
-  makehint_poly usehint_poly makehint_vec usehint_vec
-  hint_weight
-  poly_linf_bound vec_linf_bound
-  check_z_bound check_lowbits_bound check_ct0_bound
-  valid_challenge challenge_weight challenge_vec_mult
-  dil_keygen dil_sign_compute dil_sign_accept dil_sign dil_verify
-  in Haskell module_name "Canon.Crypto.Dilithium"
-
-text \<open>Export to OCaml\<close>
-export_code
-  dilithium_params.make valid_dilithium_params
-  dil_n dil_q dil_k dil_l dil_eta dil_tau dil_beta
-  dil_gamma1 dil_gamma2 dil_d dil_omega
-  mldsa44_params mldsa65_params mldsa87_params
-  dil_pk.make dil_sk.make dil_signature.make
-  pk_rho pk_t1 sk_rho sk_K sk_tr sk_s1 sk_s2 sk_t0
-  sig_c_tilde sig_z sig_h
-  dil_ntt_q dil_ntt_omega
-  dil_ntt dil_intt dil_poly_mult_ntt
-  dil_poly_add dil_poly_sub
-  dil_vec_add dil_vec_sub dil_vec_ntt dil_vec_intt
-  dil_mat_vec_mult_ntt
-  mod_centered power2round_coeff power2round_poly power2round_vec
-  decompose_coeff highbits_coeff lowbits_coeff
-  highbits_poly lowbits_poly highbits_vec lowbits_vec
-  makehint_coeff usehint_coeff
-  makehint_poly usehint_poly makehint_vec usehint_vec
-  hint_weight
-  poly_linf_bound vec_linf_bound
-  check_z_bound check_lowbits_bound check_ct0_bound
-  valid_challenge challenge_weight challenge_vec_mult
-  dil_keygen dil_sign_compute dil_sign_accept dil_sign dil_verify
-  in OCaml module_name Dilithium
 
 end

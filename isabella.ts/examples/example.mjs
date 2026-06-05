@@ -4,7 +4,7 @@
  * Demonstrates the formally verified lattice cryptography primitives.
  */
 
-import { Zq, Vec, Mat } from '../dist/index.js';
+import { Zq, Vec, Mat, Dilithium, ConfidentialBalance, ConfidentialRange, ConfidentialTransaction } from '../dist/index.js';
 
 console.log('=== Isabella TypeScript Library Examples ===\n');
 
@@ -91,6 +91,46 @@ At.forEach((row, i) => console.log(`    [${row}]`));
 
 console.log(`  isValid(2, 3, A) = ${Mat.isValid(2, 3, A)}`);
 console.log(`  isValid(3, 2, A) = ${Mat.isValid(3, 2, A)}`);
+
+// --- Dilithium Helpers ---
+console.log('\n--- Dilithium: Compression and Hint Helpers ---');
+
+const mldsa44 = Dilithium.params('44');
+const alpha44 = 2 * mldsa44.gamma2;
+const coeff = 1234567;
+const delta = 2000;
+
+console.log(`ML-DSA-44 parameters: q=${mldsa44.q}, gamma2=${mldsa44.gamma2}, d=${mldsa44.d}`);
+console.log(`  modCentered(${coeff}, ${alpha44}) = ${Dilithium.modCentered(coeff, alpha44)}`);
+console.log(`  power2Round(${coeff}, ${mldsa44.d}) =`, Dilithium.power2Round(coeff, mldsa44.d));
+console.log(`  decompose(${coeff}, ${alpha44}) =`, Dilithium.decompose(coeff, alpha44));
+console.log(`  highBits(${coeff}, ${alpha44}) = ${Dilithium.highBits(coeff, alpha44)}`);
+console.log(`  lowBits(${coeff}, ${alpha44}) = ${Dilithium.lowBits(coeff, alpha44)}`);
+
+const hint = Dilithium.makeHint(delta, coeff, alpha44);
+console.log(`  makeHint(${delta}, ${coeff}, ${alpha44}) = ${hint}`);
+console.log(`  useHint(${hint}, ${coeff}, ${alpha44}) = ${Dilithium.useHint(hint, coeff, alpha44)}`);
+console.log(`  checkBound(-77, ${mldsa44.beta}) = ${Dilithium.checkBound(-77, mldsa44.beta)}`);
+console.log(`  hintWeight([[1,0,1],[0,1,0]]) = ${Dilithium.hintWeight([[1, 0, 1], [0, 1, 0]])}`);
+
+// --- Confidential Proof Helpers ---
+console.log('\n--- Confidential Proof Helpers ---');
+
+const ck = [[5, 1, 2], [4, -1, 3]];
+const nk = [[2, 1, 0], [3, 1, 1]];
+const ctParams = ConfidentialBalance.makeParams(2, 2, 17, 6);
+const opening = { msg: [5], rand: [1, 2] };
+const commitment = Zq.matVecMultMod(ck, Vec.concat(opening.msg, opening.rand), ctParams.q);
+const nullifier = ConfidentialTransaction.nullifier(ctParams, nk, opening);
+const membershipProof = ConfidentialTransaction.membershipProve(
+  [commitment, [4, 3]],
+  commitment
+);
+
+console.log(`  balance params valid = ${ConfidentialBalance.validScalarParams(ctParams)}`);
+console.log(`  range oneOpening =`, ConfidentialRange.oneOpening(ctParams));
+console.log(`  nullifier(opening) = [${nullifier}]`);
+console.log(`  membership proof =`, membershipProof);
 
 // --- LWE Encryption Demo ---
 console.log('\n--- LWE Encryption Demo ---');

@@ -40,6 +40,10 @@ bun test
 bun run test:ntt    # NTT operation tests
 bun run test:kyber  # ML-KEM tests
 bun run test:lazer  # Optional LaZer cross-comparison
+bun run validate-ocaml   # OCaml CLI vs TypeScript SDK (Zq/Listvec/Dilithium/ConfidentialBalance/ConfidentialRange/ConfidentialTransaction shared surface)
+bun run validate-haskell # Haskell CLI vs TypeScript SDK (Zq/Listvec/Dilithium/ConfidentialBalance/ConfidentialRange/ConfidentialTransaction shared surface)
+bun run validate-sdks    # Run both SDK equivalence harnesses
+bun run audit-confidential # Red-team audit for confidential-transaction soundness regressions
 
 # Watch mode for development
 bun run test:watch
@@ -71,6 +75,38 @@ Tests that call our Isabelle-generated OCaml CLI and compare results:
 - NTT operations (nttFast, inttFast, ntt roundtrip)
 - Polynomial operations (polyMult, ringMult)
 - Kyber operations (kyberNtt, kyberIntt, kyberPolyMult, encode/decode)
+
+### SDK Equivalence Harnesses (`validate-ocaml.ts`, `validate-haskell.ts`)
+
+Deterministic checks that the packaged SDK boundaries agree on the shared
+exported surface:
+- Centered modular reduction
+- `dist0`
+- Bit encoding / decoding
+- Vector addition
+- Inner product
+- Matrix-vector multiplication mod `q`
+- Dilithium params, decomposition, hints, and bound checks
+- Confidential-balance params, commitment relation, and deterministic proof verification
+- Confidential-range amount residual commitments and deterministic proof verification
+- Confidential-transaction nullifiers, membership proofs, ledger checks, and deterministic transaction-proof verification
+
+The harnesses are repair-aware:
+- They accept the legacy single-round balance proof shape `{ a, z }`.
+- They are prepared to detect repeated-round balance proof shapes such as `{ rounds: [...] }` or `{ as, zs, challenges? }`.
+- They currently expect the legacy range proof record `{ bits, comps, amountA, amountZ, pairAs, pairZs }`.
+- They also accept repeated range proof surfaces as either
+  `{ bits, comps, rounds: [...] }` or `{ bits, comps, amountAs, amountZs, pairAss, pairZss, challenges? }`.
+- They accept repeated nullifier proof surfaces as either `{ rounds: [...] }` or
+  `{ aCommits, aNullifiers, zMsgs, zRands, challenges? }`.
+- The CLI shim in `tests/src/isabella-cli.ts` serializes these repeated proof
+  objects explicitly instead of silently flattening them into the legacy single-round record.
+- Snapshot well-formedness (`ledgerValid`) is treated separately from the
+  semantic ledger-step verifier, exported on the TS SDK as
+  `ConfidentialTransaction.semanticStepValid`.
+
+The harnesses compare the Haskell and OCaml CLIs against the built
+TypeScript SDK artifact in `isabella.ts/dist/`.
 
 ### LaZer Comparison Tests (`lazer-comparison.test.ts`)
 

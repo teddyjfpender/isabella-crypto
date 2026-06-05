@@ -210,6 +210,16 @@ describeIfCli('Dilithium CLI Integration Tests', () => {
         expect(cliResult.r0).toBe(refR0);
       }
     });
+
+    it('takes the q - 1 boundary branch', () => {
+      const cliResult = dilDecompose(q - 1, alpha);
+      const [refR1, refR0] = refDecompose(q - 1, alpha);
+
+      expect(cliResult.r1).toBe(0);
+      expect(cliResult.r0).toBe(-1);
+      expect(cliResult.r1).toBe(refR1);
+      expect(cliResult.r0).toBe(refR0);
+    });
   });
 
   describe('dil-highbits / dil-lowbits', () => {
@@ -273,6 +283,19 @@ describeIfCli('Dilithium CLI Integration Tests', () => {
 
       for (const { z, r } of testCases) {
         expect(dilMakeHint(z, r, alpha)).toBe(refMakeHint(z, r, alpha));
+      }
+    });
+
+    it('makehint is always a bit on representative cases', () => {
+      const testCases = [
+        { z: 0, r: 0 },
+        { z: 100, r: 100000 },
+        { z: 2000, r: q - 1 },
+        { z: -5000, r: 765432 },
+      ];
+
+      for (const { z, r } of testCases) {
+        expect([0, 1]).toContain(dilMakeHint(z, r, alpha));
       }
     });
 

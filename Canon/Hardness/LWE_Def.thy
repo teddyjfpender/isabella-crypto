@@ -272,7 +272,10 @@ proof -
       unfolding inst_def b_def by simp
     ultimately show ?thesis unfolding lwe_witness_valid_def by simp
   qed
-  from this inst_valid show ?thesis using real_lwe_has_witness by blast
+  have "valid_lwe_instance p inst \<and> (\<exists>s e. lwe_witness_valid p inst s e)"
+    using inst_valid \<open>lwe_witness_valid p inst s e\<close> by auto
+  thus ?thesis
+    using real_lwe_has_witness by simp
 qed
 
 end

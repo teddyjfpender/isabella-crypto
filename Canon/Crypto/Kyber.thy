@@ -247,7 +247,7 @@ lemma kyber_inner_prod_ntt_length:
   assumes "\<forall>p \<in> set v. length p = 256"
   assumes "\<forall>r \<in> set w. length r = 256"
   shows "length (kyber_inner_prod_ntt v w) = 256"
-  using assms kyber_inner_prod_ntt_length_aux by blast
+  using assms by (simp add: kyber_inner_prod_ntt_length_aux)
 
 (* === Step 4: Matrix-Vector Multiplication === *)
 text \<open>
@@ -456,7 +456,7 @@ lemma kyber_decrypt_length:
   shows "length (kyber_decrypt sk ct) = 256"
 proof -
   have ip_len: "length (kyber_inner_prod_ntt (sk_s sk) (ct_u ct)) = 256"
-    using kyber_inner_prod_ntt_length assms(2-4) by blast
+    by (rule kyber_inner_prod_ntt_length[OF assms(4,2,3)])
   have intt_len: "length (kyber_intt (kyber_inner_prod_ntt (sk_s sk) (ct_u ct))) = 256"
     using ip_len by simp
   show ?thesis

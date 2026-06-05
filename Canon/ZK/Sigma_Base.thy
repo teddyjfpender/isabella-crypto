@@ -454,7 +454,7 @@ theorem linear_sigma_complete:
   shows "linear_verify p x (linear_commit p x w y) c z"
 proof -
   obtain A t where x_def: "x = (A, t)"
-    using prod.exhaust by blast
+    by (cases x) auto
   let ?n = "lsp_n p"
   let ?q = "lsp_q p"
 
@@ -604,7 +604,7 @@ proof -
     using assms
     unfolding extract_witness_with_inverse_def
     by (simp add: Let_def)
-  then show ?thesis by blast
+  then show ?thesis by auto
 qed
 
 lemma linear_sigma_special_sound_with_inverse:
@@ -672,13 +672,13 @@ proof (unfold sigma_special_sound_def, intro allI impI)
   have v2_lin: "linear_verify p x a c2 z2"
     using v2 unfolding linear_sigma_proto_def by simp
   have inv: "challenge_diff_invertible p inv_chal c1 c2"
-    using distinct_invertible c_ne by blast
+    using distinct_invertible c_ne by simp
   have ex:
     "\<exists>w.
       extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w \<and> rel x w"
-    using corr v1_lin v2_lin inv
-    unfolding linear_extractor_correct_def
-    by blast
+    using corr[unfolded linear_extractor_correct_def, rule_format, of x a c1 z1 c2 z2]
+      v1_lin v2_lin inv
+    by simp
   from c_ne v1 v2 ex show
     "\<exists>w.
       (\<lambda>x a c1 z1 c2 z2. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2)
@@ -710,14 +710,14 @@ proof (unfold sigma_special_sound_def, intro allI impI)
   have v2_lin: "linear_verify p x a c2 z2"
     using v2 unfolding linear_sigma_proto_def by simp
   have inv: "challenge_diff_invertible p inv_chal c1 c2"
-    using distinct_invertible c_ne by blast
+    using distinct_invertible c_ne by simp
   have ex:
     "\<exists>w.
       extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2 = Some w \<and>
       rel x w \<and> witness_in_range p w"
-    using corr v1_lin v2_lin inv
-    unfolding linear_extractor_correct_bounded_def
-    by blast
+    using corr[unfolded linear_extractor_correct_bounded_def, rule_format, of x a c1 z1 c2 z2]
+      v1_lin v2_lin inv
+    by simp
   from c_ne v1 v2 ex show
     "\<exists>w.
       (\<lambda>x a c1 z1 c2 z2. extract_witness_with_inverse p inv_chal x a c1 z1 c2 z2)

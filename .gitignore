@@ -150,6 +150,7 @@ bench/data/summary.json
 *.tmp
 *.temp
 *.bak
+idea.md
 
 # --------------------------------------------
 # Secrets & Credentials (never commit!)

@@ -33,23 +33,45 @@ library
         Canon
         -- Algebra
         Canon.Algebra.Zq
+        Canon.Zq
         -- Linear
         Canon.Linear.ListVec
+        Canon.Listvec
         -- Analysis
         Canon.Analysis.Norms
+        Canon.Norms
         -- Gadgets
         Canon.Gadgets.Decomp
+        Canon.Decomp
         -- Hardness
         Canon.Hardness.LWE_Def
         Canon.Hardness.SIS_Def
+        Canon.Lwe_def
+        Canon.Sis_def
         -- Rings
         Canon.Rings.PolyMod
         Canon.Rings.ModuleLWE
         Canon.Rings.NTT
+        Canon.Polymod
+        Canon.Modulelwe
+        Canon.Ntt
         -- Crypto
         Canon.Crypto.Regev_PKE
         Canon.Crypto.Commit_SIS
         Canon.Crypto.Kyber
+        Canon.Crypto.Dilithium
+        Canon.ZK.Confidential_Balance
+        Canon.ZK.Confidential_Range
+        Canon.ZK.Confidential_Transaction
+        Canon.Regev_pke
+        Canon.Commit_sis
+        Canon.Kyber
+        Canon.Dilithium
+        Canon.Confidential_balance
+        Canon.Confidential_range
+        Canon.Confidential_transaction
+    other-modules:
+        Canon.ZK.Internal.RepeatedFS
 
     build-depends:
         base >= 4.14 && < 5

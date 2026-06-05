@@ -1,13 +1,18 @@
 (** Modular arithmetic for Z_q
     Generated from Canon/Algebra/Zq.thy *)
 
+(** Canonical representative in [0, q) even for negative OCaml [mod] results. *)
+let mod_nonneg x q =
+  let r = x mod q in
+  if r < 0 then r + q else r
+
 (** Centered modular reduction: maps to (-q/2, q/2] *)
 let mod_centered x q =
-  let r = x mod q in
+  let r = mod_nonneg x q in
   if r > q / 2 then r - q else r
 
 (** Apply mod to each element of a vector *)
-let vec_mod v q = List.map (fun x -> x mod q) v
+let vec_mod v q = List.map (fun x -> mod_nonneg x q) v
 
 (** Apply centered mod to each element *)
 let vec_mod_centered v q = List.map (fun x -> mod_centered x q) v

@@ -43,6 +43,7 @@ Isabella provides formally verified implementations of post-quantum cryptographi
 | **NTT** | - | O(n log n) Cooley-Tukey |
 | **Regev PKE** | - | Verified |
 | **SIS Commitments** | - | Verified |
+| **Confidential Balance Proof Slice** | - | Verified deterministic Fiat-Shamir verifier over SIS commitments |
 
 ## Quick Start
 
@@ -68,6 +69,7 @@ make canon        # Build Isabelle theories
 make haskell      # Build Haskell library
 make ocaml        # Build OCaml library
 make typescript   # Build TypeScript library
+make test-sdk-equivalence  # Check shared SDK surface across targets
 ```
 
 ### Code Generation
@@ -82,6 +84,7 @@ stubs.
 ./generate.sh --run-examples  # Verify + build + run examples
 ./generate.sh --lang haskell  # Only Haskell
 ./generate.sh --lang ocaml    # Only OCaml
+./generate.sh --lang typescript  # Only TypeScript/JS wrapper build
 ./generate.sh --clean         # Clean build artifacts
 ```
 
@@ -227,6 +230,26 @@ import Canon.Crypto.Kyber
 -- Use kyber768Params for NIST Level 3 security
 ```
 
+For namespace-safe parity with the OCaml `Canon.<Module>` surface, the Haskell
+package also exposes alias modules such as `Canon.Zq`, `Canon.Kyber`, and
+`Canon.Dilithium`:
+
+```haskell
+import qualified Canon.Zq as Zq
+import qualified Canon.Dilithium as Dilithium
+import qualified Canon.Confidential_balance as ConfidentialBalance
+import qualified Canon.Confidential_range as ConfidentialRange
+import qualified Canon.Confidential_transaction as ConfidentialTransaction
+
+x = Zq.mod_centered 7 5
+y = Dilithium.modCentered 1234567 (2 * Dilithium.dilGamma2 Dilithium.mldsa44Params)
+z = Dilithium.power2Round 1234567 (Dilithium.dilD Dilithium.mldsa44Params)
+params = ConfidentialBalance.makeScalarCommitParams 2 2 17 3
+one = ConfidentialRange.oneOpening params
+nk = [[0,1,0],[1,0,0]]
+nf = ConfidentialTransaction.nullifier params nk one
+```
+
 ```bash
 # Run CLI
 cd isabella.hs && cabal run isabella-cli -- examples
@@ -261,7 +284,7 @@ cd isabella.ml && dune exec isabella_cli -- examples
 ### TypeScript
 
 ```typescript
-import { Zq, Vec, Mat } from '@isabella/canon';
+import { Zq, Vec, Mat, Dilithium, ConfidentialBalance, ConfidentialRange, ConfidentialTransaction } from '@isabella/canon';
 
 // Basic modular arithmetic
 const x = Zq.modCentered(15, 17);     // => -2
@@ -273,6 +296,47 @@ const dot = Vec.dot([1,2,3], [4,5,6]); // => 32
 // Matrix operations
 const A = [[1,2,3], [4,5,6]];
 const Ax = Mat.vecMult(A, [1,1,1]);    // => [6, 15]
+
+// ML-DSA helper surface
+const params44 = Dilithium.params('44');
+const split = Dilithium.power2Round(1234567, params44.d);
+const hint = Dilithium.makeHint(2000, 100000, 2 * params44.gamma2);
+
+// Confidential-balance proof slice
+const cbParams = ConfidentialBalance.makeParams(2, 2, 17, 3);
+const cbCommitment = ConfidentialBalance.randCommit(cbParams, [[5, 1, 2], [4, -1, 3]], [1, 2]);
+
+// Confidential-range proof slice
+const crParams = ConfidentialBalance.makeParams(2, 2, 17, 6);
+const amountOpening = { msg: [5], rand: [1, 2] };
+const bits = [
+  { msg: [1], rand: [1, 0] },
+  { msg: [0], rand: [0, 1] },
+  { msg: [1], rand: [1, 1] },
+];
+const comps = [
+  { msg: [0], rand: [0, 1] },
+  { msg: [1], rand: [1, 0] },
+  { msg: [0], rand: [0, -1] },
+];
+const cAmount = Zq.matVecMultMod([[5, 1, 2], [4, -1, 3]], Vec.concat(amountOpening.msg, amountOpening.rand), crParams.q);
+const rangeProof = ConfidentialRange.fsProve(
+  crParams,
+  5,
+  bits.length,
+  [[5, 1, 2], [4, -1, 3]],
+  cAmount,
+  amountOpening,
+  bits,
+  comps,
+  [0, 1],
+  [[1, 0], [0, 0], [1, -1]]
+);
+
+// Confidential-transaction proof slice
+const nk = [[2, 1, 0], [3, 1, 1]];
+const nullifier = ConfidentialTransaction.nullifier(crParams, nk, amountOpening);
+const semanticStep = ConfidentialTransaction.semanticStepValid;
 ```
 
 ```bash
@@ -556,6 +620,34 @@ Compare performance across languages:
 ./bench/summarize.sh
 ```
 
+For the repaired confidential-token proving slice, use the deterministic
+TypeScript benchmark harness:
+
+```bash
+make bench-typescript-confidential
+cd isabella.ts && npm run bench:confidential -- --iterations 20 --warmup 5
+cd isabella.ts && npm run bench:confidential -- --case transaction_fs_prove --iterations 5 --warmup 1
+```
+
+The harness measures the stable public proving entrypoints
+`membershipProve`, `nullifierFsProve`, `ConfidentialBalance.fsProve`,
+`ConfidentialRange.fsProve`, `ConfidentialTransaction.fsProve`, and one
+end-to-end proving flow. Every timed proof is re-verified immediately, so the
+benchmark fails if any benchmarked artifact is invalid.
+
+For verifier hot paths, compare the current js_of_ocaml-backed TypeScript
+runtime against native OCaml and Haskell CLI loops that parse the proof once
+and benchmark `range_fs_verify` / `transaction_fs_verify` in-process:
+
+```bash
+make bench-confidential-verify
+cd isabella.ts && npm run bench:verify -- --iterations 2 --warmup 0
+```
+
+The native benchmark commands are `cr-verify-bench` and `ct-verify-bench`.
+They keep the stable SDK surface unchanged and exist only to measure native
+verification without subprocess startup dominating the result.
+
 ## Tests
 
 ```bash
@@ -629,6 +721,96 @@ let recovered = use_hint h r alpha      (* Recover high bits using hint *)
 
 (* Bounds checking *)
 let ok = check_bound value bound        (* Check |value| < bound *)
+```
+
+## Confidential Proof Slices
+
+Isabella includes deterministic confidential-balance, confidential-range, and
+confidential-transaction verifier slices over SIS commitments. The balance
+slice proves that an aggregate input/output commitment opens to zero amount.
+The range slice extends that with a bounded-amount proof by committing to bits
+and complement bits and checking only zero-message residual commitments in the
+Fiat-Shamir verifier. The confidential-transaction slice adds nullifiers,
+membership witnesses against a commitment ledger, and a combined
+ledger-validity-preserving transfer proof with explicit proof objects that can
+be serialized across Haskell, OCaml, wasm, and TypeScript.
+
+System diagram:
+- [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)
+
+Validation note:
+- The repair path keeps proof objects JSON-friendly.
+- Legacy balance proofs use `{ a, z }`.
+- The in-flight repaired balance protocol may instead expose repeated rounds as
+  `{ rounds: [{ a, z, challenge? }, ...] }` or `{ as, zs, challenges? }`.
+- Legacy range proofs currently use
+  `{ bits, comps, amountA, amountZ, pairAs, pairZs }`.
+- Repaired range proofs may also appear as repeated rounds
+  `{ bits, comps, rounds: [{ amountA, amountZ, pairAs, pairZs, challenge? }, ...] }`
+  or as explicit list fields
+  `{ bits, comps, amountAs, amountZs, pairAss, pairZss, challenges? }`.
+- Legacy nullifier proofs use `{ aCommit, aNullifier, zMsg, zRand }`.
+- Repaired nullifier proofs may also appear as repeated rounds
+  `{ rounds: [{ aCommit, aNullifier, zMsg, zRand, challenge? }, ...] }`
+  or as explicit list fields
+  `{ aCommits, aNullifiers, zMsgs, zRands, challenges? }`.
+- The audit and SDK-equivalence harnesses detect these proof surfaces explicitly
+  and route them through the current CLI/runtime boundary without flattening
+  them silently.
+- Snapshot well-formedness (`ledgerValid`) is tracked separately from the
+  semantic ledger-step verifier, exported on the stable TypeScript surface as
+  `ConfidentialTransaction.semanticStepValid` with `ledgerStepValid` retained as
+  a compatibility alias.
+
+```typescript
+const params = ConfidentialBalance.makeParams(2, 2, 17, 3);
+const ck = [[5, 1, 2], [4, -1, 3]];
+const r = [1, 2];
+const y = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [0, 1]);
+const c = ConfidentialBalance.randCommit(params, ck, r);
+const proof = ConfidentialBalance.fsProve(params, 5, ck, c, r, y);
+const ok = proof !== null && ConfidentialBalance.fsVerify(params, 5, ck, c, proof);
+
+const rangeParams = ConfidentialBalance.makeParams(2, 2, 17, 6);
+const amountOpening = { msg: [5], rand: [1, 2] };
+const bitOpenings = [
+  { msg: [1], rand: [1, 0] },
+  { msg: [0], rand: [0, 1] },
+  { msg: [1], rand: [1, 1] },
+];
+const compOpenings = [
+  { msg: [0], rand: [0, 1] },
+  { msg: [1], rand: [1, 0] },
+  { msg: [0], rand: [0, -1] },
+];
+const cAmount = Zq.matVecMultMod(ck, Vec.concat(amountOpening.msg, amountOpening.rand), rangeParams.q);
+const rangeProof = ConfidentialRange.fsProve(
+  rangeParams,
+  5,
+  bitOpenings.length,
+  ck,
+  cAmount,
+  amountOpening,
+  bitOpenings,
+  compOpenings,
+  [0, 1],
+  [[1, 0], [0, 0], [1, -1]]
+);
+const rangeOk = rangeProof !== null && ConfidentialRange.fsVerify(rangeParams, 5, ck, cAmount, rangeProof);
+
+const nk = [[2, 1, 0], [3, 1, 1]];
+const nf = ConfidentialTransaction.nullifier(rangeParams, nk, amountOpening);
+const ledger = [
+  cAmount,
+  Zq.matVecMultMod(ck, Vec.concat([3], [0, 1]), rangeParams.q),
+];
+const membershipProof = ConfidentialTransaction.membershipProve(rangeParams, ledger, cAmount);
+const nullifierOk = nf.length === rangeParams.m;
+const membershipOk = membershipProof !== null
+  && ConfidentialTransaction.membershipVerify(rangeParams, cAmount, membershipProof);
+const semanticStep = ConfidentialTransaction.semanticStepValid;
+// The full deterministic confidential-transfer fixture is exercised in
+// isabella.ts/examples/test.mjs and the cross-SDK harnesses in tests/src/.
 ```
 
 ## Contributing

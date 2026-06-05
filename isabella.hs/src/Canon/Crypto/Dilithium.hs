@@ -2,7 +2,8 @@
 
 -- Generated from Canon/Crypto/Dilithium.thy
 module
-  Canon.Crypto.Dilithium(Int, Num, Nat, Set, Dil_pk_ext, Dil_sk_ext,
+  Canon.Crypto.Dilithium(Int(..), integer_of_int, Num, Nat, nat_of_integer,
+                          integer_of_nat, Set, Dil_pk_ext, Dil_sk_ext,
                           Dil_signature_ext, Dil_sign_state_ext,
                           Dilithium_params_ext, dil_ntt_omega, dil_ntt_q,
                           dil_ntt, dil_intt, dil_gamma2, dil_poly_mult_ntt,
@@ -13,17 +14,17 @@ module
                           dil_vec_intt, sk_t0, sk_s2, sk_s1, lowbits_coeff,
                           lowbits_poly, lowbits_vec, dil_poly_sub, dil_vec_sub,
                           dil_vec_ntt, dil_vec_add, dil_sign_compute, dil_omega,
-                          dil_beta, poly_linf_bound, vec_linf_bound,
-                          check_lowbits_bound, check_ct0_bound, dil_gamma1,
-                          check_z_bound, hint_weight, dil_sign_accept, dil_sign,
-                          dil_d, power2round_coeff, power2round_poly,
-                          power2round_vec, dil_keygen, sig_z, sig_h, pk_t1,
-                          usehint_coeff, usehint_poly, usehint_vec, dil_verify,
-                          make, makea, sk_K, sk_tr, pk_rho, sk_rho,
-                          mldsa44_params, mldsa65_params, mldsa87_params,
-                          valid_challenge, challenge_weight, makeb, makec,
-                          dil_k, dil_l, dil_n, dil_q, dil_tau, dil_eta,
-                          valid_dilithium_params, sig_c_tilde)
+                          dil_beta, coeff_in_range, poly_linf_bound,
+                          vec_linf_bound, check_lowbits_bound, check_ct0_bound,
+                          dil_gamma1, check_z_bound, hint_weight,
+                          dil_sign_accept, dil_sign, dil_d, power2round_coeff,
+                          power2round_poly, power2round_vec, dil_keygen, sig_z,
+                          sig_h, pk_t1, usehint_coeff, usehint_poly,
+                          usehint_vec, dil_verify, make, makea, sk_K, sk_tr,
+                          pk_rho, sk_rho, mldsa44_params, mldsa65_params,
+                          mldsa87_params, valid_challenge, challenge_weight,
+                          makeb, makec, dil_k, dil_l, dil_n, dil_q, dil_tau,
+                          dil_eta, valid_dilithium_params, sig_c_tilde)
   where {
 
 import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
