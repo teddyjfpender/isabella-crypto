@@ -9,6 +9,14 @@ module Canon.ZK.Confidential_Transaction
   , makeVerifiedNote
   , TransactionProof(..)
   , makeTransactionProof
+  , MerkleMembershipProof
+  , makeMerkleMembershipProof
+  , merkleMemberIndex
+  , merkleMemberRoot
+  , merkleMemberSiblings
+  , merkleMemberDirections
+  , MerkleTransactionProof(..)
+  , makeMerkleTransactionProof
   , nullifier
   , validNullifierMask
   , validNullifierResponse
@@ -24,20 +32,30 @@ module Canon.ZK.Confidential_Transaction
   , ledgerRoot
   , membershipProve
   , membershipVerify
+  , merkleLedgerRoot
+  , merkleMembershipProve
+  , merkleMembershipVerify
   , commitmentLedger
   , ledgerValid
+  , ledgerValidMerkle
   , ledgerStepValid
   , semanticStepValid
+  , ledgerStepValidMerkle
+  , semanticStepValidMerkle
   , transactionRelation
   , transactionFsProve
+  , transactionFsProveMerkle
   , transactionFsVerify
+  , transactionFsVerifyMerkle
   , ledgerApplyNotes
+  , ledgerApplyNotesMerkle
   , ledgerApplySpent
   ) where
 
 import Data.List (delete, nub)
 import qualified Canon.Commit_sis as Commit
 import qualified Canon.Confidential_balance as ConfidentialBalance
+import qualified Canon.Confidential_merkle as ConfidentialMerkle
 import qualified Canon.Confidential_range as ConfidentialRange
 import qualified Canon.Listvec as Listvec
 import qualified Canon.Norms as Norms
@@ -96,6 +114,45 @@ makeTransactionProof ::
   ConfidentialRange.RangeProof ->
   TransactionProof
 makeTransactionProof = TransactionProof
+
+type MerkleMembershipProof = ConfidentialMerkle.MerkleMembershipProof
+
+makeMerkleMembershipProof :: Int -> String -> [String] -> [Bool] -> MerkleMembershipProof
+makeMerkleMembershipProof = ConfidentialMerkle.MerkleMembershipProof
+
+merkleMemberIndex :: MerkleMembershipProof -> Int
+merkleMemberIndex = ConfidentialMerkle.merkle_index
+
+merkleMemberRoot :: MerkleMembershipProof -> String
+merkleMemberRoot = ConfidentialMerkle.merkle_root
+
+merkleMemberSiblings :: MerkleMembershipProof -> [String]
+merkleMemberSiblings = ConfidentialMerkle.merkle_siblings
+
+merkleMemberDirections :: MerkleMembershipProof -> [Bool]
+merkleMemberDirections = ConfidentialMerkle.merkle_directions
+
+data MerkleTransactionProof = MerkleTransactionProof
+  { tx_merkle_in1_member :: MerkleMembershipProof
+  , tx_merkle_in2_member :: MerkleMembershipProof
+  , tx_merkle_in1_nullifier :: NullifierProof
+  , tx_merkle_in2_nullifier :: NullifierProof
+  , tx_merkle_balance :: ConfidentialBalance.BalanceProof
+  , tx_merkle_out1_range :: ConfidentialRange.RangeProof
+  , tx_merkle_out2_range :: ConfidentialRange.RangeProof
+  }
+  deriving (Eq, Show)
+
+makeMerkleTransactionProof ::
+  MerkleMembershipProof ->
+  MerkleMembershipProof ->
+  NullifierProof ->
+  NullifierProof ->
+  ConfidentialBalance.BalanceProof ->
+  ConfidentialRange.RangeProof ->
+  ConfidentialRange.RangeProof ->
+  MerkleTransactionProof
+makeMerkleTransactionProof = MerkleTransactionProof
 
 validCommitment :: Commit.CommitParams -> [Int] -> Bool
 validCommitment p = Listvec.valid_vec (Commit.cp_m p)
@@ -373,6 +430,15 @@ membershipVerify p c proof =
       directions == indexDirections (length siblings) (member_index proof) &&
       authPathRoot p c siblings directions == member_root proof
 
+merkleLedgerRoot :: [[Int]] -> String
+merkleLedgerRoot = ConfidentialMerkle.root
+
+merkleMembershipProve :: [[Int]] -> [Int] -> Maybe MerkleMembershipProof
+merkleMembershipProve = ConfidentialMerkle.membershipProve
+
+merkleMembershipVerify :: [Int] -> MerkleMembershipProof -> Bool
+merkleMembershipVerify = ConfidentialMerkle.membershipVerify
+
 commitmentLedger :: [VerifiedNote] -> [[Int]]
 commitmentLedger = map note_commitment
 
@@ -392,6 +458,24 @@ ledgerValid p gamma k ck root notes spent =
   ConfidentialBalance.validScalarCommitParams p &&
   Commit.valid_commit_key p ck &&
   root == ledgerRoot p (commitmentLedger notes) &&
+  distinctList spent &&
+  all
+    (\note -> ConfidentialRange.rangeFsVerify p gamma k ck (note_commitment note) (note_range_proof note))
+    notes
+
+ledgerValidMerkle ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  String ->
+  [VerifiedNote] ->
+  [[Int]] ->
+  Bool
+ledgerValidMerkle p gamma k ck root notes spent =
+  ConfidentialBalance.validScalarCommitParams p &&
+  Commit.valid_commit_key p ck &&
+  root == merkleLedgerRoot (commitmentLedger notes) &&
   distinctList spent &&
   all
     (\note -> ConfidentialRange.rangeFsVerify p gamma k ck (note_commitment note) (note_range_proof note))
@@ -439,6 +523,49 @@ semanticStepValid ::
   TransactionProof ->
   Bool
 semanticStepValid = ledgerStepValid
+
+ledgerStepValidMerkle ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  [VerifiedNote] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  Bool
+ledgerStepValidMerkle p gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+  let preRoot = merkleLedgerRoot (commitmentLedger notes)
+      updatedNotes = ledgerApplyNotesMerkle notes proof cOut1 cOut2
+      updatedSpent = ledgerApplySpent spent nf1 nf2
+      postRoot = merkleLedgerRoot (commitmentLedger updatedNotes)
+   in ledgerValidMerkle p gamma k ck preRoot notes spent &&
+      transactionFsVerifyMerkle p gamma k ck nk preRoot spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof &&
+      ledgerValidMerkle p gamma k ck postRoot updatedNotes updatedSpent
+
+semanticStepValidMerkle ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  [VerifiedNote] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  Bool
+semanticStepValidMerkle = ledgerStepValidMerkle
 
 transactionRelation ::
   Commit.CommitParams ->
@@ -543,6 +670,41 @@ transactionFsVerify p gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 pro
   ConfidentialRange.rangeFsVerify p gamma k ck cOut1 (tx_out1_range proof) &&
   ConfidentialRange.rangeFsVerify p gamma k ck cOut2 (tx_out2_range proof)
 
+transactionFsVerifyMerkle ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  String ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  Bool
+transactionFsVerifyMerkle p gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+  Commit.valid_commit_key p ck &&
+  Commit.valid_commit_key p nk &&
+  merkleMembershipVerify cIn1 (tx_merkle_in1_member proof) &&
+  merkleMembershipVerify cIn2 (tx_merkle_in2_member proof) &&
+  merkleMemberRoot (tx_merkle_in1_member proof) == root &&
+  merkleMemberRoot (tx_merkle_in2_member proof) == root &&
+  merkleMemberIndex (tx_merkle_in1_member proof) /= merkleMemberIndex (tx_merkle_in2_member proof) &&
+  nf1 `notElem` spent &&
+  nf2 `notElem` spent &&
+  nf1 /= nf2 &&
+  nullifierFsVerify p gamma ck nk cIn1 nf1 (tx_merkle_in1_nullifier proof) &&
+  nullifierFsVerify p gamma ck nk cIn2 nf2 (tx_merkle_in2_nullifier proof) &&
+  ConfidentialBalance.balanceFsVerify p gamma ck
+    (ConfidentialBalance.balanceCommitment cIn1 cIn2 cOut1 cOut2 (Commit.cp_q p))
+    (tx_merkle_balance proof) &&
+  ConfidentialRange.rangeFsVerify p gamma k ck cOut1 (tx_merkle_out1_range proof) &&
+  ConfidentialRange.rangeFsVerify p gamma k ck cOut2 (tx_merkle_out2_range proof)
+
 transactionFsProve ::
   Commit.CommitParams ->
   Int ->
@@ -593,8 +755,61 @@ transactionFsProve p gamma k ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 op
         else Nothing
     _ -> Nothing
 
+transactionFsProveMerkle ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  [[Int]] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [[Int]] ->
+  [[Int]] ->
+  [[[Int]]] ->
+  [[Int]] ->
+  [[[Int]]] ->
+  Maybe MerkleTransactionProof
+transactionFsProveMerkle p gamma k ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 opIn1 opIn2 opOut1 opOut2 out1Bits out1Comps out2Bits out2Comps yIn1 yIn2 yBalance yOut1 yOut1Pairs yOut2 yOut2Pairs =
+  case ( merkleMembershipProve ledger cIn1
+       , merkleMembershipProve ledger cIn2
+       , nullifierFsProve p gamma ck nk cIn1 nf1 opIn1 yIn1
+       , nullifierFsProve p gamma ck nk cIn2 nf2 opIn2 yIn2
+       , ConfidentialBalance.balanceFsProve p gamma ck
+           (ConfidentialBalance.balanceCommitment cIn1 cIn2 cOut1 cOut2 (Commit.cp_q p))
+           (ConfidentialBalance.aggregateRandomness opIn1 opIn2 opOut1 opOut2)
+           yBalance
+       , ConfidentialRange.rangeFsProve p gamma k ck cOut1 opOut1 out1Bits out1Comps yOut1 yOut1Pairs
+       , ConfidentialRange.rangeFsProve p gamma k ck cOut2 opOut2 out2Bits out2Comps yOut2 yOut2Pairs
+       ) of
+    (Just member1, Just member2, Just nfProof1, Just nfProof2, Just balProof, Just range1, Just range2) ->
+      if transactionRelationWellformed p ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2
+           opIn1 opIn2 opOut1 opOut2 out1Bits out1Comps out2Bits out2Comps &&
+         merkleMemberIndex member1 /= merkleMemberIndex member2
+        then Just (MerkleTransactionProof member1 member2 nfProof1 nfProof2 balProof range1 range2)
+        else Nothing
+    _ -> Nothing
+
 ledgerNoteAt :: [VerifiedNote] -> MembershipProof -> VerifiedNote
 ledgerNoteAt notes proof = notes !! member_index proof
+
+ledgerNoteAtMerkle :: [VerifiedNote] -> MerkleMembershipProof -> VerifiedNote
+ledgerNoteAtMerkle notes proof = notes !! merkleMemberIndex proof
 
 ledgerApplyNotes ::
   [VerifiedNote] ->
@@ -608,6 +823,20 @@ ledgerApplyNotes notes proof cOut1 cOut2 =
       remaining = delete note2 (delete note1 notes)
       out1 = VerifiedNote cOut1 (tx_out1_range proof)
       out2 = VerifiedNote cOut2 (tx_out2_range proof)
+   in out1 : out2 : remaining
+
+ledgerApplyNotesMerkle ::
+  [VerifiedNote] ->
+  MerkleTransactionProof ->
+  [Int] ->
+  [Int] ->
+  [VerifiedNote]
+ledgerApplyNotesMerkle notes proof cOut1 cOut2 =
+  let note1 = ledgerNoteAtMerkle notes (tx_merkle_in1_member proof)
+      note2 = ledgerNoteAtMerkle notes (tx_merkle_in2_member proof)
+      remaining = delete note2 (delete note1 notes)
+      out1 = VerifiedNote cOut1 (tx_merkle_out1_range proof)
+      out2 = VerifiedNote cOut2 (tx_merkle_out2_range proof)
    in out1 : out2 : remaining
 
 ledgerApplySpent :: [[Int]] -> [Int] -> [Int] -> [[Int]]

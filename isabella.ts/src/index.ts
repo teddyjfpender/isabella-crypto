@@ -181,6 +181,17 @@ export interface TransactionProof {
   out2Range: RangeProofLike;
 }
 
+/** Deterministic Fiat-Shamir transfer proof with cryptographic Merkle membership */
+export interface MerkleTransactionProof {
+  in1Member: MerkleMembershipProof;
+  in2Member: MerkleMembershipProof;
+  in1Nullifier: NullifierProofLike;
+  in2Nullifier: NullifierProofLike;
+  balance: BalanceProof;
+  out1Range: RangeProofLike;
+  out2Range: RangeProofLike;
+}
+
 /**
  * Raw Isabella module interface (from js_of_ocaml)
  * @internal
@@ -496,6 +507,33 @@ function normalizeMat(m: IntMatrix): IntMatrix {
     }
   }
   return normalized ?? m;
+}
+
+function sameVec(left: IntVec, right: IntVec): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function containsVec(values: IntMatrix, value: IntVec): boolean {
+  return values.some((entry) => sameVec(entry, value));
+}
+
+function distinctMat(values: IntMatrix): boolean {
+  const seen = new Set<string>();
+  for (const value of values) {
+    const key = JSON.stringify(value);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+  }
+  return true;
+}
+
+function validCommitKeyShape(params: ScalarCommitParams, key: IntMatrix): boolean {
+  return (
+    key.length === params.m &&
+    key.every((row) => row.length === params.n1 + params.n2)
+  );
 }
 
 function normalizeSplit(split: DilithiumSplit): DilithiumSplit {
@@ -817,6 +855,37 @@ function normalizeTransactionProof(proof: TransactionProof | null): TransactionP
   return {
     in1Member,
     in2Member,
+    in1Nullifier,
+    in2Nullifier,
+    balance,
+    out1Range,
+    out2Range,
+  };
+}
+
+function normalizeMerkleTransactionProof(
+  proof: MerkleTransactionProof | null
+): MerkleTransactionProof | null {
+  if (proof === null) {
+    return null;
+  }
+  const in1Nullifier = normalizeNullifierProof(proof.in1Nullifier)!;
+  const in2Nullifier = normalizeNullifierProof(proof.in2Nullifier)!;
+  const balance = normalizeProof(proof.balance)!;
+  const out1Range = normalizeRangeProof(proof.out1Range)!;
+  const out2Range = normalizeRangeProof(proof.out2Range)!;
+  if (
+    in1Nullifier === proof.in1Nullifier &&
+    in2Nullifier === proof.in2Nullifier &&
+    balance === proof.balance &&
+    out1Range === proof.out1Range &&
+    out2Range === proof.out2Range
+  ) {
+    return proof;
+  }
+  return {
+    in1Member: proof.in1Member,
+    in2Member: proof.in2Member,
     in1Nullifier,
     in2Nullifier,
     balance,
@@ -1738,9 +1807,9 @@ export namespace ConfidentialRange {
  * Cryptographic Merkle helpers for confidential note membership.
  *
  * This is the SHA3-256 runtime target for `Authenticated_Merkle.thy`. The
- * current transaction verifier still uses the algebraic ledger scaffold, so
- * these helpers are exposed separately until the formal transaction relation is
- * migrated to cryptographic roots.
+ * The compatibility transaction verifier still exposes the algebraic ledger
+ * scaffold, while `ConfidentialTransaction.fsVerifyMerkle` uses these roots
+ * for the cryptographic membership path.
  */
 export namespace ConfidentialMerkle {
   export const dst = CT_MERKLE_DST;
@@ -1945,6 +2014,24 @@ export namespace ConfidentialTransaction {
     return Isabella.ctMembershipVerify(params, c, proof);
   }
 
+  export function merkleLedgerRoot(ledger: IntMatrix): MerkleDigest {
+    return ConfidentialMerkle.root(ledger);
+  }
+
+  export function merkleMembershipProve(
+    ledger: IntMatrix,
+    c: IntVec
+  ): MerkleMembershipProof | null {
+    return ConfidentialMerkle.membershipProve(ledger, c);
+  }
+
+  export function merkleMembershipVerify(
+    c: IntVec,
+    proof: MerkleMembershipProof
+  ): boolean {
+    return ConfidentialMerkle.membershipVerify(c, proof);
+  }
+
   export function commitmentLedger(notes: VerifiedNote[]): IntMatrix {
     return normalizeMat(Isabella.ctCommitmentLedger(notes));
   }
@@ -1959,6 +2046,26 @@ export namespace ConfidentialTransaction {
     spent: IntMatrix
   ): boolean {
     return Isabella.ctLedgerValid(params, gamma, k, ck, root, notes, spent);
+  }
+
+  export function ledgerValidMerkle(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    root: MerkleDigest,
+    notes: VerifiedNote[],
+    spent: IntMatrix
+  ): boolean {
+    return (
+      ConfidentialBalance.validScalarParams(params) &&
+      validCommitKeyShape(params, ck) &&
+      root === ConfidentialMerkle.root(commitmentLedger(notes)) &&
+      distinctMat(spent) &&
+      notes.every((note) =>
+        ConfidentialRange.fsVerify(params, gamma, k, ck, note.commitment, note.rangeProof)
+      )
+    );
   }
 
   export function ledgerStepValid(
@@ -2018,6 +2125,86 @@ export namespace ConfidentialTransaction {
     proof: TransactionProof
   ): boolean {
     return ledgerStepValid(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      notes,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    );
+  }
+
+  export function ledgerStepValidMerkle(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    notes: VerifiedNote[],
+    spent: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    proof: MerkleTransactionProof
+  ): boolean {
+    try {
+      const preRoot = ConfidentialMerkle.root(commitmentLedger(notes));
+      const updatedNotes = ledgerApplyNotesMerkle(notes, proof, cOut1, cOut2);
+      const updatedSpent = ledgerApplySpent(spent, nf1, nf2);
+      const postRoot = ConfidentialMerkle.root(commitmentLedger(updatedNotes));
+      return (
+        ledgerValidMerkle(params, gamma, k, ck, preRoot, notes, spent) &&
+        fsVerifyMerkle(
+          params,
+          gamma,
+          k,
+          ck,
+          nk,
+          preRoot,
+          spent,
+          cIn1,
+          cIn2,
+          cOut1,
+          cOut2,
+          nf1,
+          nf2,
+          proof
+        ) &&
+        ledgerValidMerkle(params, gamma, k, ck, postRoot, updatedNotes, updatedSpent)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function semanticStepValidMerkle(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    notes: VerifiedNote[],
+    spent: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    proof: MerkleTransactionProof
+  ): boolean {
+    return ledgerStepValidMerkle(
       params,
       gamma,
       k,
@@ -2150,6 +2337,126 @@ export namespace ConfidentialTransaction {
     );
   }
 
+  export function fsProveMerkle(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    ledger: IntMatrix,
+    spent: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    opIn1: CommitOpening,
+    opIn2: CommitOpening,
+    opOut1: CommitOpening,
+    opOut2: CommitOpening,
+    out1Bits: CommitOpening[],
+    out1Comps: CommitOpening[],
+    out2Bits: CommitOpening[],
+    out2Comps: CommitOpening[],
+    yIn1: CommitOpening[],
+    yIn2: CommitOpening[],
+    yBalance: IntMatrix,
+    yOut1: IntMatrix,
+    yOut1Pairs: IntMatrix[],
+    yOut2: IntMatrix,
+    yOut2Pairs: IntMatrix[]
+  ): MerkleTransactionProof | null {
+    const scaffoldProof = fsProve(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2,
+      out1Bits,
+      out1Comps,
+      out2Bits,
+      out2Comps,
+      yIn1,
+      yIn2,
+      yBalance,
+      yOut1,
+      yOut1Pairs,
+      yOut2,
+      yOut2Pairs
+    );
+    const in1Member = ConfidentialMerkle.membershipProve(ledger, cIn1);
+    const in2Member = ConfidentialMerkle.membershipProve(ledger, cIn2);
+    if (scaffoldProof === null || in1Member === null || in2Member === null) {
+      return null;
+    }
+    if (in1Member.index === in2Member.index) {
+      return null;
+    }
+    return normalizeMerkleTransactionProof({
+      in1Member,
+      in2Member,
+      in1Nullifier: scaffoldProof.in1Nullifier,
+      in2Nullifier: scaffoldProof.in2Nullifier,
+      balance: scaffoldProof.balance,
+      out1Range: scaffoldProof.out1Range,
+      out2Range: scaffoldProof.out2Range,
+    });
+  }
+
+  export function fsVerifyMerkle(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    root: MerkleDigest,
+    spent: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    proof: MerkleTransactionProof
+  ): boolean {
+    return (
+      validCommitKeyShape(params, ck) &&
+      validCommitKeyShape(params, nk) &&
+      ConfidentialMerkle.membershipVerify(cIn1, proof.in1Member) &&
+      ConfidentialMerkle.membershipVerify(cIn2, proof.in2Member) &&
+      proof.in1Member.root === root &&
+      proof.in2Member.root === root &&
+      proof.in1Member.index !== proof.in2Member.index &&
+      !containsVec(spent, nf1) &&
+      !containsVec(spent, nf2) &&
+      !sameVec(nf1, nf2) &&
+      nullifierFsVerify(params, gamma, ck, nk, cIn1, nf1, proof.in1Nullifier) &&
+      nullifierFsVerify(params, gamma, ck, nk, cIn2, nf2, proof.in2Nullifier) &&
+      ConfidentialBalance.fsVerify(
+        params,
+        gamma,
+        ck,
+        ConfidentialBalance.balanceCommitment(cIn1, cIn2, cOut1, cOut2, params.q),
+        proof.balance
+      ) &&
+      ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, proof.out1Range) &&
+      ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, proof.out2Range)
+    );
+  }
+
   export function ledgerApplyNotes(
     notes: VerifiedNote[],
     proof: TransactionProof,
@@ -2157,6 +2464,30 @@ export namespace ConfidentialTransaction {
     cOut2: IntVec
   ): VerifiedNote[] {
     return normalizeVerifiedNotes(Isabella.ctLedgerApplyNotes(notes, proof, cOut1, cOut2));
+  }
+
+  export function ledgerApplyNotesMerkle(
+    notes: VerifiedNote[],
+    proof: MerkleTransactionProof,
+    cOut1: IntVec,
+    cOut2: IntVec
+  ): VerifiedNote[] {
+    const in1Index = proof.in1Member.index;
+    const in2Index = proof.in2Member.index;
+    if (
+      in1Index < 0 ||
+      in2Index < 0 ||
+      in1Index >= notes.length ||
+      in2Index >= notes.length
+    ) {
+      throw new RangeError('Merkle membership index is outside the note ledger');
+    }
+    const remaining = notes.filter((_, index) => index !== in1Index && index !== in2Index);
+    return normalizeVerifiedNotes([
+      { commitment: cOut1, rangeProof: proof.out1Range },
+      { commitment: cOut2, rangeProof: proof.out2Range },
+      ...remaining,
+    ]);
   }
 
   export function ledgerApplySpent(

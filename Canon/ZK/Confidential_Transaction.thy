@@ -1,5 +1,5 @@
 theory Confidential_Transaction
-  imports Confidential_Range Authenticated_Ledger
+  imports Confidential_Range Authenticated_Ledger Authenticated_Merkle
 begin
 
 text \<open>
@@ -282,6 +282,36 @@ definition membership_verify ::
     auth_path_root p c (member_siblings proof) (member_directions proof) =
       member_root proof"
 
+record merkle_membership_proof =
+  merkle_member_index :: nat
+  merkle_member_root :: digest
+  merkle_member_siblings :: "digest list"
+  merkle_member_directions :: "bool list"
+
+definition merkle_membership_verify ::
+  "merkle_hash \<Rightarrow> commitment \<Rightarrow> merkle_membership_proof \<Rightarrow> bool" where
+  "merkle_membership_verify h c proof \<longleftrightarrow>
+    length (merkle_member_siblings proof) = length (merkle_member_directions proof) \<and>
+    merkle_member_directions proof =
+      index_directions (length (merkle_member_siblings proof)) (merkle_member_index proof) \<and>
+    merkle_membership_valid h c
+      (merkle_member_root proof)
+      (merkle_member_siblings proof)
+      (merkle_member_directions proof)"
+
+theorem merkle_membership_verify_same_path_sound:
+  assumes cr: "collision_resistant_hash h"
+      and valid1: "merkle_membership_verify h c1 proof"
+      and valid2: "merkle_membership_verify h c2 proof"
+  shows "c1 = c2"
+  using merkle_membership_same_path_sound[OF cr, of c1
+        "merkle_member_root proof"
+        "merkle_member_siblings proof"
+        "merkle_member_directions proof" c2]
+        valid1 valid2
+  unfolding merkle_membership_verify_def
+  by blast
+
 record verified_note =
   note_commitment :: commitment
   note_range_proof :: range_proof
@@ -307,6 +337,15 @@ record transaction_proof =
   tx_balance :: balance_proof
   tx_out1_range :: range_proof
   tx_out2_range :: range_proof
+
+record merkle_transaction_proof =
+  tx_merkle_in1_member :: merkle_membership_proof
+  tx_merkle_in2_member :: merkle_membership_proof
+  tx_merkle_in1_nullifier :: nullifier_proof
+  tx_merkle_in2_nullifier :: nullifier_proof
+  tx_merkle_balance :: balance_proof
+  tx_merkle_out1_range :: range_proof
+  tx_merkle_out2_range :: range_proof
 
 definition transaction_relation ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
@@ -377,6 +416,60 @@ definition transaction_fs_verify ::
       (tx_balance proof) \<and>
     range_fs_verify p gamma k ck c_out1 (tx_out1_range proof) \<and>
     range_fs_verify p gamma k ck c_out2 (tx_out2_range proof)"
+
+definition transaction_fs_verify_merkle ::
+  "merkle_hash \<Rightarrow> commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> digest \<Rightarrow> commitment list \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   merkle_transaction_proof \<Rightarrow> bool" where
+  "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof \<longleftrightarrow>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
+    merkle_membership_verify h c_in1 (tx_merkle_in1_member proof) \<and>
+    merkle_membership_verify h c_in2 (tx_merkle_in2_member proof) \<and>
+    merkle_member_root (tx_merkle_in1_member proof) = ledger_rt \<and>
+    merkle_member_root (tx_merkle_in2_member proof) = ledger_rt \<and>
+    merkle_member_index (tx_merkle_in1_member proof) \<noteq> merkle_member_index (tx_merkle_in2_member proof) \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    nullifier_fs_verify p gamma ck nk c_in1 nf1 (tx_merkle_in1_nullifier proof) \<and>
+    nullifier_fs_verify p gamma ck nk c_in2 nf2 (tx_merkle_in2_nullifier proof) \<and>
+    balance_fs_verify p gamma ck
+      (balance_commitment c_in1 c_in2 c_out1 c_out2 (cp_q p))
+      (tx_merkle_balance proof) \<and>
+    range_fs_verify p gamma k ck c_out1 (tx_merkle_out1_range proof) \<and>
+    range_fs_verify p gamma k ck c_out2 (tx_merkle_out2_range proof)"
+
+lemma transaction_fs_verify_merkle_roots:
+  assumes "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+  shows "merkle_member_root (tx_merkle_in1_member proof) = ledger_rt"
+    and "merkle_member_root (tx_merkle_in2_member proof) = ledger_rt"
+  using assms
+  unfolding transaction_fs_verify_merkle_def
+  by blast+
+
+theorem transaction_fs_verify_merkle_in1_same_path_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in1' (tx_merkle_in1_member proof)"
+  shows "c_in1' = c_in1"
+  using merkle_membership_verify_same_path_sound[OF cr alternate]
+        verified
+  unfolding transaction_fs_verify_merkle_def
+  by blast
+
+theorem transaction_fs_verify_merkle_in2_same_path_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in2' (tx_merkle_in2_member proof)"
+  shows "c_in2' = c_in2"
+  using merkle_membership_verify_same_path_sound[OF cr alternate]
+        verified
+  unfolding transaction_fs_verify_merkle_def
+  by blast
 
 definition transaction_fs_prove ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
@@ -1620,12 +1713,19 @@ export_code
   empty_commitment ledger_hash ledger_root index_directions auth_path_root membership_siblings
   membership_proof.make member_index member_root member_siblings member_directions
   membership_prove membership_verify
+  merkle_membership_proof.make
+    merkle_member_index merkle_member_root merkle_member_siblings merkle_member_directions
+  merkle_membership_verify
   verified_note.make note_commitment note_range_proof
   commitment_ledger ledger_valid
   transaction_proof.make
     tx_in1_member tx_in2_member tx_in1_nullifier tx_in2_nullifier
     tx_balance tx_out1_range tx_out2_range
-  transaction_relation transaction_fs_prove transaction_fs_verify
+  merkle_transaction_proof.make
+    tx_merkle_in1_member tx_merkle_in2_member
+    tx_merkle_in1_nullifier tx_merkle_in2_nullifier
+    tx_merkle_balance tx_merkle_out1_range tx_merkle_out2_range
+  transaction_relation transaction_fs_prove transaction_fs_verify transaction_fs_verify_merkle
   ledger_apply_notes ledger_apply_spent
   in Haskell module_name "Canon.ZK.Confidential_Transaction"
 
@@ -1643,12 +1743,19 @@ export_code
   empty_commitment ledger_hash ledger_root index_directions auth_path_root membership_siblings
   membership_proof.make member_index member_root member_siblings member_directions
   membership_prove membership_verify
+  merkle_membership_proof.make
+    merkle_member_index merkle_member_root merkle_member_siblings merkle_member_directions
+  merkle_membership_verify
   verified_note.make note_commitment note_range_proof
   commitment_ledger ledger_valid
   transaction_proof.make
     tx_in1_member tx_in2_member tx_in1_nullifier tx_in2_nullifier
     tx_balance tx_out1_range tx_out2_range
-  transaction_relation transaction_fs_prove transaction_fs_verify
+  merkle_transaction_proof.make
+    tx_merkle_in1_member tx_merkle_in2_member
+    tx_merkle_in1_nullifier tx_merkle_in2_nullifier
+    tx_merkle_balance tx_merkle_out1_range tx_merkle_out2_range
+  transaction_relation transaction_fs_prove transaction_fs_verify transaction_fs_verify_merkle
   ledger_apply_notes ledger_apply_spent
   in OCaml module_name Confidential_transaction
 

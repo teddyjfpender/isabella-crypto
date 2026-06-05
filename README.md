@@ -749,7 +749,9 @@ Current status and roadmap:
   non-production; `Canon/ZK/Authenticated_Merkle.thy` is the checked target
   model for the cryptographic Merkle/hash replacement, with SHA3-256 encoding
   vectors in `tests/fixtures/confidential-merkle-vectors.json` and
-  TypeScript/OCaml/Haskell Merkle APIs for leaf/node/root/path checks.
+  TypeScript/OCaml/Haskell Merkle APIs for leaf/node/root/path checks plus a
+  separate Merkle-backed transaction verifier path. The scaffold API remains
+  for compatibility until callers are migrated.
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.

@@ -1,6 +1,6 @@
 {
   "benchmark": "confidential-balance-128",
-  "timestamp": "2026-06-05T20:32:53.381Z",
+  "timestamp": "2026-06-05T20:51:45.980Z",
   "environment": {
     "platform": "darwin",
     "arch": "arm64",
@@ -21,18 +21,18 @@
   },
   "cases": {
     "balance_fs_prove": {
-      "min_ms": 3.796875,
-      "median_ms": 3.815334,
-      "max_ms": 4.112875,
-      "mean_ms": 3.9103250000000003,
-      "stdev_ms": 0.12966232942686165
+      "min_ms": 3.645875,
+      "median_ms": 3.801917,
+      "max_ms": 4.11325,
+      "mean_ms": 3.8483918000000004,
+      "stdev_ms": 0.19141588252953298
     },
     "balance_fs_verify": {
-      "min_ms": 3.68375,
-      "median_ms": 3.858833,
-      "max_ms": 4.661125,
-      "mean_ms": 4.0002164,
-      "stdev_ms": 0.35275917945227175
+      "min_ms": 3.571125,
+      "median_ms": 3.79125,
+      "max_ms": 4.038833,
+      "mean_ms": 3.7896666000000003,
+      "stdev_ms": 0.1685119173169662
     }
   }
 }
