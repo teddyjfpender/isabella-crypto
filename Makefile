@@ -118,6 +118,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@$(MAKE) test-sdk-equivalence
 	@node scripts/bench_confidential_balance_128.mjs
 	@node scripts/bench_confidential_balance_realistic.mjs
+	@node scripts/check_confidential_bench_budgets.mjs
 
 bench-typescript-confidential: typescript
 	@echo "Running deterministic TypeScript confidential proof benchmarks..."

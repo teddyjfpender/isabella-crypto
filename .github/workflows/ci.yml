@@ -318,8 +318,13 @@ jobs:
           python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
           git diff --exit-code -- bench/data/confidential-parameter-screen.json
 
-      - name: Run realistic confidential balance benchmark
-        run: OUT=/tmp/confidential-balance-realistic.json node scripts/bench_confidential_balance_realistic.mjs
+      - name: Run confidential balance benchmark budget gates
+        run: |
+          OUT=/tmp/confidential-balance-128.json node scripts/bench_confidential_balance_128.mjs
+          OUT=/tmp/confidential-balance-realistic.json node scripts/bench_confidential_balance_realistic.mjs
+          node scripts/check_confidential_bench_budgets.mjs \
+            --balance128 /tmp/confidential-balance-128.json \
+            --realistic /tmp/confidential-balance-realistic.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

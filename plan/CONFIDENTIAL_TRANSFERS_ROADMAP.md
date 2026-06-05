@@ -150,6 +150,7 @@ Benchmark checks:
 make bench-typescript-confidential
 make bench-confidential-verify
 make bench-confidential-realistic
+node scripts/check_confidential_bench_budgets.mjs
 ```
 
 The benchmark harnesses still use deterministic fixtures. The realistic balance
@@ -167,19 +168,24 @@ Completed:
 - `make test-validation`
 - `node scripts/bench_confidential_balance_128.mjs`
 - `node scripts/bench_confidential_balance_realistic.mjs`
+- `node scripts/check_confidential_bench_budgets.mjs`
 - `python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json`
 
 Important validation caveats:
 
 - `audit-confidential` now runs the 128-round semantic transaction/tampering
   fixture by default.
+- `tests/src/confidential-merkle.test.ts` now runs a deterministic Merkle
+  transaction mutation matrix covering root/path changes, spent nullifiers,
+  nullifier responses, balance responses, range responses, and swapped proof
+  components.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, and transaction equivalence by default for both OCaml and
   Haskell.
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 4.021958 ms median and verification had a 3.79425 ms median.
+  proving had a 3.801209 ms median and verification had a 3.751583 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -188,6 +194,11 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 3.468890209 s proving time, a 3.57796 s verification time, and a
+  a 0.733704542 s proving time, a 0.733947834 s verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.
+- `scripts/check_confidential_bench_budgets.mjs` enforces current CI ceilings
+  for the 128-round toy benchmark, the realistic-dimension benchmark, and the
+  realistic JSON proof size. The ceilings are deliberately wider than local
+  medians so CI catches regressions without pretending to be a security
+  estimate.
