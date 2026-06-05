@@ -109,6 +109,19 @@ openingAdd op1 op2 =
 nullifierFsRounds :: Int
 nullifierFsRounds = ConfidentialBalance.balanceFsRounds
 
+nullifierFsDomain :: Int
+nullifierFsDomain = 3001
+
+nullifierFsFields :: [[Int]] -> [[Int]] -> [Int] -> [Int] -> [[Int]] -> [[Int]] -> [Int]
+nullifierFsFields ck nk c nf aCommits aNullifiers =
+  [ sum (concat ck)
+  , sum (concat nk)
+  , sum c
+  , sum nf
+  , sum (concat aCommits)
+  , sum (concat aNullifiers)
+  ]
+
 nullifierSigmaRespond :: Commit.CommitOpening -> Commit.CommitOpening -> Int -> Commit.CommitOpening
 nullifierSigmaRespond op y challenge =
   openingAdd y (ConfidentialRange.openingScale challenge op)
@@ -123,14 +136,9 @@ nullifierFsChallenges ::
   [[Int]] ->
   [Int]
 nullifierFsChallenges _p ck nk c nf aCommits aNullifiers =
-  let challengeBase =
-        sum (concat ck) +
-        sum (concat nk) +
-        sum c +
-        sum nf +
-        sum (concat aCommits) +
-        sum (concat aNullifiers)
-   in RepeatedFS.boolFsChallenges challengeBase
+  RepeatedFS.binaryFsChallenges
+    nullifierFsDomain
+    (nullifierFsFields ck nk c nf aCommits aNullifiers)
 
 nullifierZOpenings :: NullifierProof -> [Commit.CommitOpening]
 nullifierZOpenings proof =
@@ -187,16 +195,11 @@ canonicalNullifierChallenge ::
   [Int] ->
   [Int] ->
   Int
-canonicalNullifierChallenge p ck nk c nf aCommit aNullifier =
-  mod
-    ( sum (concat ck)
-    + sum (concat nk)
-    + sum c
-    + sum nf
-    + sum aCommit
-    + sum aNullifier
-    )
-    2
+canonicalNullifierChallenge _p ck nk c nf aCommit aNullifier =
+  RepeatedFS.binaryFsChallenge
+    nullifierFsDomain
+    (nullifierFsFields ck nk c nf [aCommit] [aNullifier])
+    0
 
 nullifierSigmaVerify ::
   Commit.CommitParams ->

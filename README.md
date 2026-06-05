@@ -43,7 +43,7 @@ Isabella provides formally verified implementations of post-quantum cryptographi
 | **NTT** | - | O(n log n) Cooley-Tukey |
 | **Regev PKE** | - | Verified |
 | **SIS Commitments** | - | Verified |
-| **Confidential Balance Proof Slice** | - | Verified deterministic Fiat-Shamir verifier over SIS commitments |
+| **Confidential Proof Slices** | - | SIS-note balance/range/nullifier MVP with 128-round domain-separated transcript challenges |
 
 ## Quick Start
 
@@ -734,6 +734,16 @@ Fiat-Shamir verifier. The confidential-transaction slice adds nullifiers,
 membership witnesses against a commitment ledger, and a combined
 ledger-validity-preserving transfer proof with explicit proof objects that can
 be serialized across Haskell, OCaml, wasm, and TypeScript.
+
+Current status and roadmap:
+- [Confidential transfer roadmap](plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md)
+- The Fiat-Shamir layer now uses 128 domain-separated binary transcript rounds,
+  but the executable mixer is still a reference model until the runtime backends
+  instantiate SHAKE/SHA3 transcript hashing.
+- Soundness and HVZK are stated as explicit extractor/simulator assumptions for
+  the concrete proof slices; they are not yet full LaZer-grade proofs.
+- The ledger hash remains an execution scaffold and is explicitly marked
+  non-production in `Canon/ZK/Authenticated_Ledger.thy`.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)

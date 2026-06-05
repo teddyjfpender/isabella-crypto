@@ -88,8 +88,13 @@ let balance_sigma_respond r y challenge =
 
 let sum_list = List.fold_left ( + ) 0
 
+let balance_fs_domain = 1001
+
+let balance_fs_fields ck c as_ =
+  [sum_list (List.concat ck); sum_list c; sum_list (List.concat as_)]
+
 let canonical_balance_challenge _p ck c a =
-  (sum_list (List.concat ck) + sum_list c + sum_list a) mod 2
+  Repeated_fs.binary_fs_challenge balance_fs_domain (balance_fs_fields ck c [a]) 0
 
 let balance_sigma_verify p gamma ck c a challenge z =
   valid_scalar_commit_params p &&
@@ -101,8 +106,7 @@ let balance_sigma_verify p gamma ck c a challenge z =
     Zq.vec_mod (Listvec.vec_add a (Listvec.scalar_mult challenge c)) p.Commit_sis.cp_q
 
 let balance_fs_challenges _p ck c as_ =
-  Repeated_fs.bool_fs_challenges
-    (sum_list (List.concat ck) + sum_list c + sum_list (List.concat as_))
+  Repeated_fs.binary_fs_challenges balance_fs_domain (balance_fs_fields ck c as_)
 
 let balance_sigma_responds r ys es =
   Repeated_fs.sigma_response_rounds balance_sigma_respond r ys es

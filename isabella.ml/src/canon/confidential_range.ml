@@ -163,17 +163,21 @@ let valid_range_pair_responses p gamma challenge zs =
 
 let range_fs_rounds = Confidential_balance.balance_fs_rounds
 
-let range_fs_challenges _p ck c_amount c_bits c_comps a_amounts a_pairss =
+let range_fs_domain = 2001
+
+let range_fs_fields ck c_amount c_bits c_comps a_amounts a_pairss =
   let sum_list = List.fold_left ( + ) 0 in
-  let base =
-    sum_list (List.concat ck) +
-    sum_list c_amount +
-    sum_list (List.concat c_bits) +
-    sum_list (List.concat c_comps) +
-    sum_list (List.concat a_amounts) +
-    sum_list (List.concat (List.concat a_pairss))
-  in
-  Repeated_fs.bool_fs_challenges base
+  [ sum_list (List.concat ck);
+    sum_list c_amount;
+    sum_list (List.concat c_bits);
+    sum_list (List.concat c_comps);
+    sum_list (List.concat a_amounts);
+    sum_list (List.concat (List.concat a_pairss)) ]
+
+let range_fs_challenges _p ck c_amount c_bits c_comps a_amounts a_pairss =
+  Repeated_fs.binary_fs_challenges
+    range_fs_domain
+    (range_fs_fields ck c_amount c_bits c_comps a_amounts a_pairss)
 
 let range_amount_sigma_announcements p ck y_amounts =
   List.map (Confidential_balance.rand_commit p ck) y_amounts
@@ -199,13 +203,10 @@ let range_pair_sigma_response_rounds rs y_pairss challenges =
   Repeated_fs.sigma_response_rounds range_sigma_responses rs y_pairss challenges
 
 let canonical_range_challenge _p ck c_amount c_bits c_comps a_amounts a_pairss =
-  let sum_list = List.fold_left ( + ) 0 in
-  (sum_list (List.concat ck) +
-   sum_list c_amount +
-   sum_list (List.concat c_bits) +
-   sum_list (List.concat c_comps) +
-   sum_list (List.concat a_amounts) +
-   sum_list (List.concat (List.concat a_pairss))) mod 2
+  Repeated_fs.binary_fs_challenge
+    range_fs_domain
+    (range_fs_fields ck c_amount c_bits c_comps a_amounts a_pairss)
+    0
 
 let range_amount_sigma_verify p gamma k ck c a challenge z =
   Confidential_balance.valid_scalar_commit_params p &&

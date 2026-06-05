@@ -3,20 +3,81 @@ theory Repeated_FS
 begin
 
 text \<open>
-  Small internal helpers for the fixed-round deterministic Fiat-Shamir slices
-  used by the confidential-balance, range, and nullifier proofs.
+  Domain-separated helpers for the fixed-round Fiat-Shamir slices used by the
+  confidential-balance, range, and nullifier proofs.
 
-  The goal here is only to share the repeated-list plumbing. The protocol
-  relations, announcement seeds, and verifier predicates remain local to the
-  concrete proof theories.
+  The security-facing interpretation of the binary challenge function below is
+  a cryptographic hash-to-bit expansion from the transcript domain and encoded
+  public transcript fields. The arithmetic equation below is the executable
+  model used by the generated reference backends; production adapters must
+  instantiate the same interface with a collision-resistant/XOF transcript hash
+  such as SHAKE or SHA3.
 \<close>
 
+type_synonym transcript_domain = int
+
+definition fs_soundness_bits :: nat where
+  "fs_soundness_bits = 128"
+
 definition fixed_fs_rounds :: nat where
-  "fixed_fs_rounds = 8"
+  "fixed_fs_rounds = fs_soundness_bits"
+
+definition fs_challenge_cardinality :: int where
+  "fs_challenge_cardinality = 2"
+
+definition transcript_mix :: "int list \<Rightarrow> int" where
+  "transcript_mix xs =
+    foldl
+      (\<lambda>acc x. (acc * 257 + (x mod 2097143) + 65537) mod 2097143)
+      104729 xs"
+
+definition binary_fs_challenge :: "transcript_domain \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
+  "binary_fs_challenge domain fields round =
+    transcript_mix (domain # int round # fields) mod fs_challenge_cardinality"
+
+definition binary_fs_challenges :: "transcript_domain \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int list" where
+  "binary_fs_challenges domain fields rounds =
+    map (\<lambda>i. binary_fs_challenge domain fields i) [0..<rounds]"
+
+definition legacy_fs_domain :: transcript_domain where
+  "legacy_fs_domain = 1"
 
 definition bool_fs_challenges :: "nat \<Rightarrow> int \<Rightarrow> int list" where
   "bool_fs_challenges rounds seed =
-    map (\<lambda>i. (seed + int i) mod 2) [0..<rounds]"
+    binary_fs_challenges legacy_fs_domain [seed] rounds"
+
+lemma binary_fs_challenge_bit:
+  "binary_fs_challenge domain fields round = 0 \<or> binary_fs_challenge domain fields round = 1"
+proof -
+  have lower: "0 \<le> binary_fs_challenge domain fields round"
+    unfolding binary_fs_challenge_def fs_challenge_cardinality_def
+    by simp
+  have upper: "binary_fs_challenge domain fields round < 2"
+    unfolding binary_fs_challenge_def fs_challenge_cardinality_def
+    by simp
+  show ?thesis
+    using lower upper by linarith
+qed
+
+lemma binary_fs_challenges_length [simp]:
+  "length (binary_fs_challenges domain fields rounds) = rounds"
+  unfolding binary_fs_challenges_def
+  by simp
+
+lemma binary_fs_challenges_nth:
+  assumes "i < rounds"
+  shows "binary_fs_challenges domain fields rounds ! i = binary_fs_challenge domain fields i"
+  using assms
+  unfolding binary_fs_challenges_def
+  by simp
+
+lemma binary_fs_challenges_bit:
+  assumes "i < rounds"
+  shows "binary_fs_challenges domain fields rounds ! i = 0 \<or>
+         binary_fs_challenges domain fields rounds ! i = 1"
+  using assms binary_fs_challenge_bit[of domain fields i]
+  unfolding binary_fs_challenges_def
+  by simp
 
 lemma bool_fs_challenges_length [simp]:
   "length (bool_fs_challenges rounds seed) = rounds"
@@ -25,24 +86,17 @@ lemma bool_fs_challenges_length [simp]:
 
 lemma bool_fs_challenges_nth:
   assumes "i < rounds"
-  shows "bool_fs_challenges rounds seed ! i = (seed + int i) mod 2"
+  shows "bool_fs_challenges rounds seed ! i = binary_fs_challenge legacy_fs_domain [seed] i"
   using assms
   unfolding bool_fs_challenges_def
-  by simp
+  by (simp add: binary_fs_challenges_nth)
 
 lemma bool_fs_challenges_bit:
   assumes "i < rounds"
   shows "bool_fs_challenges rounds seed ! i = 0 \<or> bool_fs_challenges rounds seed ! i = 1"
-proof -
-  have mod_nonneg: "0 \<le> bool_fs_challenges rounds seed ! i"
-    using assms
-    by (simp add: bool_fs_challenges_nth)
-  have mod_lt_two: "bool_fs_challenges rounds seed ! i < 2"
-    using assms
-    by (simp add: bool_fs_challenges_nth)
-  then show ?thesis
-    using mod_nonneg by linarith
-qed
+  using assms
+  unfolding bool_fs_challenges_def
+  by (simp add: binary_fs_challenges_bit)
 
 definition sigma_response_rounds ::
   "('w \<Rightarrow> 'm \<Rightarrow> int \<Rightarrow> 'z) \<Rightarrow> 'w \<Rightarrow> 'm list \<Rightarrow> int list \<Rightarrow> 'z list" where

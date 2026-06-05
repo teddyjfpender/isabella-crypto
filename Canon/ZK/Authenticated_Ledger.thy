@@ -8,7 +8,27 @@ text \<open>
   The authenticated structure is intentionally simple to serialize across
   native and SDK boundaries: a proof consists of a claimed root, a sibling
   path, and direction bits derived from the leaf index.
+
+  The current ledger hash is an algebraic execution scaffold, not a
+  cryptographic hash or production Merkle commitment. Production confidential
+  transfers must replace this function with a domain-separated cryptographic
+  Merkle/hash commitment and discharge collision-resistance/opening-uniqueness
+  assumptions for membership soundness.
 \<close>
+
+definition ledger_hash_execution_scaffold :: bool where
+  "ledger_hash_execution_scaffold \<longleftrightarrow> True"
+
+definition ledger_hash_production_ready :: bool where
+  "ledger_hash_production_ready \<longleftrightarrow> False"
+
+lemma ledger_hash_marked_as_execution_scaffold:
+  "ledger_hash_execution_scaffold"
+  unfolding ledger_hash_execution_scaffold_def by simp
+
+lemma ledger_hash_not_marked_production_ready:
+  "\<not> ledger_hash_production_ready"
+  unfolding ledger_hash_production_ready_def by simp
 
 definition empty_commitment :: "commit_params \<Rightarrow> commitment" where
   "empty_commitment p = replicate (cp_m p) 0"

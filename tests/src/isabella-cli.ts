@@ -63,6 +63,26 @@ function parseCliBool(output: string): boolean {
   throw new Error(`Failed to parse CLI output as a boolean result: ${output}`);
 }
 
+function euclideanMod(x: number, q: number): number {
+  const r = x % q;
+  return r < 0 ? r + q : r;
+}
+
+function transcriptMix(fields: number[]): number {
+  return fields.reduce(
+    (acc, x) => euclideanMod(acc * 257 + euclideanMod(x, 2097143) + 65537, 2097143),
+    104729
+  );
+}
+
+function binaryFsChallenge(domain: number, fields: number[], round: number): number {
+  return euclideanMod(transcriptMix([domain, round, ...fields]), 2);
+}
+
+function sumList(xs: number[]): number {
+  return xs.reduce((acc, value) => acc + value, 0);
+}
+
 /**
  * NTT operations via CLI
  */
@@ -585,10 +605,7 @@ export function cbCanonicalChallenge(
   c: number[],
   a: number[]
 ): number {
-  const sum = ck.flat().reduce((acc, value) => acc + value, 0) +
-    c.reduce((acc, value) => acc + value, 0) +
-    a.reduce((acc, value) => acc + value, 0);
-  return ((sum % 2) + 2) % 2;
+  return binaryFsChallenge(1001, [sumList(ck.flat()), sumList(c), sumList(a)], 0);
 }
 
 export function cbSigmaCommit(

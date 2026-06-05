@@ -137,6 +137,14 @@ definition balance_relation ::
 definition balance_fs_rounds :: nat where
   "balance_fs_rounds = fixed_fs_rounds"
 
+definition balance_fs_domain :: transcript_domain where
+  "balance_fs_domain = 1001"
+
+definition balance_fs_fields ::
+  "commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow> int list" where
+  "balance_fs_fields ck c as =
+    [sum_list (concat ck), sum_list c, sum_list (concat as)]"
+
 record balance_proof =
   balance_as :: "commitment list"
   balance_zs :: "int_vec list"
@@ -152,7 +160,7 @@ definition balance_sigma_respond ::
 definition canonical_balance_challenge ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> int" where
   "canonical_balance_challenge p ck c a =
-    (sum_list (concat ck) + sum_list c + sum_list a) mod 2"
+    binary_fs_challenge balance_fs_domain (balance_fs_fields ck c [a]) 0"
 
 definition balance_sigma_verify ::
   "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> bool" where
@@ -168,8 +176,7 @@ definition balance_sigma_verify ::
 definition balance_fs_challenges ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow> int list" where
   "balance_fs_challenges p ck c as =
-    bool_fs_challenges balance_fs_rounds
-      (sum_list (concat ck) + sum_list c + sum_list (concat as))"
+    binary_fs_challenges balance_fs_domain (balance_fs_fields ck c as) balance_fs_rounds"
 
 definition balance_sigma_responds ::
   "int_vec \<Rightarrow> int_vec list \<Rightarrow> int list \<Rightarrow> int_vec list" where
@@ -479,15 +486,20 @@ lemma canonical_balance_challenge_valid:
   assumes "valid_scalar_commit_params p"
   shows "valid_balance_challenge p (canonical_balance_challenge p ck c a)"
 proof -
+  have bit:
+    "canonical_balance_challenge p ck c a = 0 \<or>
+     canonical_balance_challenge p ck c a = 1"
+    unfolding canonical_balance_challenge_def
+    by (rule binary_fs_challenge_bit)
   show ?thesis
-    using assms
+    using assms bit
     unfolding valid_balance_challenge_def canonical_balance_challenge_def
     by auto
 qed
 
 lemma balance_fs_challenges_length:
   "length (balance_fs_challenges p ck c as) = balance_fs_rounds"
-  unfolding balance_fs_challenges_def balance_fs_rounds_def fixed_fs_rounds_def
+  unfolding balance_fs_challenges_def
   by simp
 
 lemma balance_fs_challenge_valid:
@@ -499,8 +511,8 @@ proof -
     "(balance_fs_challenges p ck c as) ! i = 0 \<or>
      (balance_fs_challenges p ck c as) ! i = 1"
     using assms(2)
-    unfolding balance_fs_challenges_def balance_fs_rounds_def fixed_fs_rounds_def
-    by (rule bool_fs_challenges_bit)
+    unfolding balance_fs_challenges_def
+    by (rule binary_fs_challenges_bit)
   show ?thesis
     using assms(1) bit
     unfolding valid_balance_challenge_def

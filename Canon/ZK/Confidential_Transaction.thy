@@ -60,6 +60,20 @@ definition nullifier_relation ::
 definition nullifier_fs_rounds :: nat where
   "nullifier_fs_rounds = balance_fs_rounds"
 
+definition nullifier_fs_domain :: transcript_domain where
+  "nullifier_fs_domain = 3001"
+
+definition nullifier_fs_fields ::
+  "commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   commitment list \<Rightarrow> commitment list \<Rightarrow> int list" where
+  "nullifier_fs_fields ck nk c nf a_commits a_nullifiers =
+    [sum_list (concat ck),
+     sum_list (concat nk),
+     sum_list c,
+     sum_list nf,
+     sum_list (concat a_commits),
+     sum_list (concat a_nullifiers)]"
+
 record nullifier_proof =
   nullifier_a_commits :: "commitment list"
   nullifier_a_nullifiers :: "commitment list"
@@ -74,20 +88,21 @@ definition canonical_nullifier_challenge ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
    commitment \<Rightarrow> commitment \<Rightarrow> int" where
   "canonical_nullifier_challenge p ck nk c nf a_commit a_nullifier =
-    (sum_list (concat ck) +
-     sum_list (concat nk) +
-     sum_list c +
-     sum_list nf +
-     sum_list a_commit +
-     sum_list a_nullifier) mod 2"
+    binary_fs_challenge nullifier_fs_domain
+      (nullifier_fs_fields ck nk c nf [a_commit] [a_nullifier]) 0"
 
 lemma canonical_nullifier_challenge_valid:
   assumes "valid_scalar_commit_params p"
   shows "valid_nullifier_challenge p
            (canonical_nullifier_challenge p ck nk c nf a_commit a_nullifier)"
 proof -
+  have bit:
+    "canonical_nullifier_challenge p ck nk c nf a_commit a_nullifier = 0 \<or>
+     canonical_nullifier_challenge p ck nk c nf a_commit a_nullifier = 1"
+    unfolding canonical_nullifier_challenge_def
+    by (rule binary_fs_challenge_bit)
   show ?thesis
-    using assms
+    using assms bit
     unfolding valid_nullifier_challenge_def valid_balance_challenge_def
               canonical_nullifier_challenge_def
     by auto
@@ -97,13 +112,9 @@ definition nullifier_fs_challenges ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
    commitment list \<Rightarrow> commitment list \<Rightarrow> int list" where
   "nullifier_fs_challenges p ck nk c nf a_commits a_nullifiers =
-    bool_fs_challenges nullifier_fs_rounds
-      (sum_list (concat ck) +
-       sum_list (concat nk) +
-       sum_list c +
-       sum_list nf +
-       sum_list (concat a_commits) +
-       sum_list (concat a_nullifiers))"
+    binary_fs_challenges nullifier_fs_domain
+      (nullifier_fs_fields ck nk c nf a_commits a_nullifiers)
+      nullifier_fs_rounds"
 
 definition nullifier_sigma_responses ::
   "commit_opening \<Rightarrow> commit_opening list \<Rightarrow> int list \<Rightarrow> commit_opening list" where
@@ -112,8 +123,7 @@ definition nullifier_sigma_responses ::
 
 lemma nullifier_fs_challenges_length:
   "length (nullifier_fs_challenges p ck nk c nf a_commits a_nullifiers) = nullifier_fs_rounds"
-  unfolding nullifier_fs_challenges_def nullifier_fs_rounds_def
-            balance_fs_rounds_def fixed_fs_rounds_def
+  unfolding nullifier_fs_challenges_def
   by simp
 
 lemma nullifier_fs_challenge_valid:
@@ -126,9 +136,8 @@ proof -
     "(nullifier_fs_challenges p ck nk c nf a_commits a_nullifiers) ! i = 0 \<or>
      (nullifier_fs_challenges p ck nk c nf a_commits a_nullifiers) ! i = 1"
     using assms(2)
-    unfolding nullifier_fs_challenges_def nullifier_fs_rounds_def
-              balance_fs_rounds_def fixed_fs_rounds_def
-    by (rule bool_fs_challenges_bit)
+    unfolding nullifier_fs_challenges_def
+    by (rule binary_fs_challenges_bit)
   show ?thesis
     using assms(1) bit
     unfolding valid_nullifier_challenge_def valid_balance_challenge_def
@@ -1362,6 +1371,174 @@ proof -
     using ledger_step_semantic_after_transaction[OF ledger_ok tx_prove] .
   show ?thesis
     using reach step_ok by (meson ledger_reachable.intros)
+qed
+
+text \<open>
+  Security-facing contracts.
+
+  The executable verifier lemmas above prove completeness and ledger-state
+  preservation. Knowledge soundness and zero knowledge are exposed below as
+  explicit extractor and simulator assumptions. This keeps the current
+  formalization honest: a production LaZer-grade proof must instantiate these
+  predicates with concrete extractors, simulators, distribution bounds, and
+  Fiat--Shamir assumptions.
+\<close>
+
+type_synonym balance_fs_extractor =
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> balance_proof \<Rightarrow> int_vec option"
+
+type_synonym range_fs_extractor =
+  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> range_proof \<Rightarrow>
+    (commit_opening \<times> commit_opening list \<times> commit_opening list) option"
+
+type_synonym nullifier_fs_extractor =
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+    commitment \<Rightarrow> nullifier_proof \<Rightarrow> commit_opening option"
+
+definition balance_fs_extractor_correct :: "balance_fs_extractor \<Rightarrow> bool" where
+  "balance_fs_extractor_correct E \<longleftrightarrow>
+    (\<forall>p gamma ck c proof.
+      balance_fs_verify p gamma ck c proof \<longrightarrow>
+      (\<exists>r. E p gamma ck c proof = Some r \<and> balance_relation p ck c r))"
+
+definition range_fs_extractor_correct :: "range_fs_extractor \<Rightarrow> bool" where
+  "range_fs_extractor_correct E \<longleftrightarrow>
+    (\<forall>p gamma k ck c proof.
+      range_fs_verify p gamma k ck c proof \<longrightarrow>
+      (\<exists>op_amount ops_bits ops_comps.
+        E p gamma k ck c proof = Some (op_amount, ops_bits, ops_comps) \<and>
+        range_relation p ck c op_amount ops_bits ops_comps))"
+
+definition nullifier_fs_extractor_correct :: "nullifier_fs_extractor \<Rightarrow> bool" where
+  "nullifier_fs_extractor_correct E \<longleftrightarrow>
+    (\<forall>p gamma ck nk c nf proof.
+      nullifier_fs_verify p gamma ck nk c nf proof \<longrightarrow>
+      (\<exists>op. E p gamma ck nk c nf proof = Some op \<and> nullifier_relation p ck nk c nf op))"
+
+lemma balance_fs_knowledge_sound_if_extractor_correct:
+  assumes "balance_fs_extractor_correct E"
+      and "balance_fs_verify p gamma ck c proof"
+  obtains r where
+    "E p gamma ck c proof = Some r"
+    "balance_relation p ck c r"
+  using assms
+  unfolding balance_fs_extractor_correct_def
+  by blast
+
+lemma range_fs_knowledge_sound_if_extractor_correct:
+  assumes "range_fs_extractor_correct E"
+      and "range_fs_verify p gamma k ck c proof"
+  obtains op_amount ops_bits ops_comps where
+    "E p gamma k ck c proof = Some (op_amount, ops_bits, ops_comps)"
+    "range_relation p ck c op_amount ops_bits ops_comps"
+  using assms
+  unfolding range_fs_extractor_correct_def
+  by blast
+
+theorem range_fs_soundness_in_range_if_extractor_correct:
+  assumes corr: "range_fs_extractor_correct E"
+      and verify: "range_fs_verify p gamma k ck c proof"
+  obtains op_amount ops_bits ops_comps where
+    "E p gamma k ck c proof = Some (op_amount, ops_bits, ops_comps)"
+    "range_relation p ck c op_amount ops_bits ops_comps"
+    "0 \<le> amount_of_opening op_amount"
+    "amount_of_opening op_amount < 2 ^ length ops_bits"
+proof -
+  obtain op_amount ops_bits ops_comps where extracted:
+    "E p gamma k ck c proof = Some (op_amount, ops_bits, ops_comps)"
+    "range_relation p ck c op_amount ops_bits ops_comps"
+    using range_fs_knowledge_sound_if_extractor_correct[OF corr verify] by blast
+  have lower: "0 \<le> amount_of_opening op_amount"
+    using range_relation_in_range(1)[OF extracted(2)] .
+  have upper: "amount_of_opening op_amount < 2 ^ length ops_bits"
+    using range_relation_in_range(2)[OF extracted(2)] .
+  show ?thesis
+    using that extracted lower upper by blast
+qed
+
+lemma nullifier_fs_knowledge_sound_if_extractor_correct:
+  assumes "nullifier_fs_extractor_correct E"
+      and "nullifier_fs_verify p gamma ck nk c nf proof"
+  obtains op where
+    "E p gamma ck nk c nf proof = Some op"
+    "nullifier_relation p ck nk c nf op"
+  using assms
+  unfolding nullifier_fs_extractor_correct_def
+  by blast
+
+type_synonym balance_fs_simulator =
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> balance_proof"
+
+type_synonym range_fs_simulator =
+  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> range_proof"
+
+type_synonym nullifier_fs_simulator =
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+    commitment \<Rightarrow> nullifier_proof"
+
+definition balance_fs_hvzk_assumption ::
+  "balance_fs_simulator \<Rightarrow> balance_fs_simulator \<Rightarrow> (balance_proof \<Rightarrow> balance_proof \<Rightarrow> bool) \<Rightarrow> bool" where
+  "balance_fs_hvzk_assumption simulator real_transcript indist \<longleftrightarrow>
+    (\<forall>p gamma ck c.
+      balance_fs_verify p gamma ck c (simulator p gamma ck c) \<and>
+      indist (simulator p gamma ck c) (real_transcript p gamma ck c))"
+
+definition range_fs_hvzk_assumption ::
+  "range_fs_simulator \<Rightarrow> range_fs_simulator \<Rightarrow> (range_proof \<Rightarrow> range_proof \<Rightarrow> bool) \<Rightarrow> bool" where
+  "range_fs_hvzk_assumption simulator real_transcript indist \<longleftrightarrow>
+    (\<forall>p gamma k ck c.
+      range_fs_verify p gamma k ck c (simulator p gamma k ck c) \<and>
+      indist (simulator p gamma k ck c) (real_transcript p gamma k ck c))"
+
+definition nullifier_fs_hvzk_assumption ::
+  "nullifier_fs_simulator \<Rightarrow> nullifier_fs_simulator \<Rightarrow>
+   (nullifier_proof \<Rightarrow> nullifier_proof \<Rightarrow> bool) \<Rightarrow> bool" where
+  "nullifier_fs_hvzk_assumption simulator real_transcript indist \<longleftrightarrow>
+    (\<forall>p gamma ck nk c nf.
+      nullifier_fs_verify p gamma ck nk c nf (simulator p gamma ck nk c nf) \<and>
+      indist (simulator p gamma ck nk c nf) (real_transcript p gamma ck nk c nf))"
+
+lemma balance_fs_hvzk_if_assumed:
+  assumes "balance_fs_hvzk_assumption simulator real_transcript indist"
+  shows "balance_fs_verify p gamma ck c (simulator p gamma ck c)"
+    and "indist (simulator p gamma ck c) (real_transcript p gamma ck c)"
+  using assms
+  unfolding balance_fs_hvzk_assumption_def
+  by auto
+
+lemma range_fs_hvzk_if_assumed:
+  assumes "range_fs_hvzk_assumption simulator real_transcript indist"
+  shows "range_fs_verify p gamma k ck c (simulator p gamma k ck c)"
+    and "indist (simulator p gamma k ck c) (real_transcript p gamma k ck c)"
+  using assms
+  unfolding range_fs_hvzk_assumption_def
+  by auto
+
+lemma nullifier_fs_hvzk_if_assumed:
+  assumes "nullifier_fs_hvzk_assumption simulator real_transcript indist"
+  shows "nullifier_fs_verify p gamma ck nk c nf (simulator p gamma ck nk c nf)"
+    and "indist (simulator p gamma ck nk c nf) (real_transcript p gamma ck nk c nf)"
+  using assms
+  unfolding nullifier_fs_hvzk_assumption_def
+  by auto
+
+theorem verified_opening_collision_yields_sis:
+  assumes params_ok: "valid_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and open1: "verify_opening p ck c op1"
+      and open2: "verify_opening p ck c op2"
+      and diff: "opening_vec op1 \<noteq> opening_vec op2"
+  shows "\<exists>z. valid_vec z (cp_n1 p + cp_n2 p) \<and>
+             \<not> is_zero_vec z \<and>
+             all_bounded z (2 * cp_beta p) \<and>
+             is_zero_vec (vec_mod (mat_vec_mult ck z) (cp_q p))"
+proof -
+  have break: "is_binding_break p ck c op1 op2"
+    using open1 open2 diff
+    unfolding is_binding_break_def
+    by simp
+  show ?thesis
+    using binding_implies_sis[OF params_ok key_ok break] .
 qed
 
 export_code

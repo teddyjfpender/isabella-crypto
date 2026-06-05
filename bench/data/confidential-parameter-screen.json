@@ -1,0 +1,47 @@
+{
+  "tool": "confidential_parameter_screen",
+  "external_lattice_estimator_available": false,
+  "warning": "This JSON is a deterministic parameter screening artifact. It is not a production security estimate and does not replace lattice-estimator, LaZer parameter generation, or implementation benchmarks.",
+  "candidates": [
+    {
+      "name": "ct_sis_note_mvp_v0",
+      "architecture": "SIS note commitment MVP",
+      "n1": 1,
+      "n2": 1024,
+      "m": 1024,
+      "q": 8380417,
+      "beta": 65536,
+      "gamma": 16777216,
+      "range_bits": 64,
+      "fs_rounds": 128,
+      "notes": "Formal MVP target for note commitments/nullifiers/range proofs; requires external lattice-estimator validation before production.",
+      "total_opening_dimension": 1025,
+      "syndrome_capacity_bits": 23550.56,
+      "short_opening_volume_bits": 17425.01,
+      "capacity_minus_opening_bits": 6125.55,
+      "balance_response_volume_bits": 25622.9,
+      "fiat_shamir_soundness_bits": 128,
+      "screening_status": "screen_only"
+    },
+    {
+      "name": "rlwe_ahe_transfer_research_v0",
+      "architecture": "Separate RLWE/AHE EncryptValid/SamePlaintext/TransferValid layer",
+      "n1": 1,
+      "n2": 2048,
+      "m": 2048,
+      "q": 8380417,
+      "beta": 65536,
+      "gamma": 16777216,
+      "range_bits": 64,
+      "fs_rounds": 128,
+      "notes": "Research track from idea.md; kept separate from the SIS-note MVP until EncryptValid/SamePlaintext/TransferValid relations are formalized.",
+      "total_opening_dimension": 2049,
+      "syndrome_capacity_bits": 47101.11,
+      "short_opening_volume_bits": 34833.02,
+      "capacity_minus_opening_bits": 12268.09,
+      "balance_response_volume_bits": 51245.81,
+      "fiat_shamir_soundness_bits": 128,
+      "screening_status": "screen_only"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ text \<open>
   proves that each pair sums to one, and proves that the committed amount
   equals the base-2 recomposition of the bit openings.
 
-  The verifier only checks deterministic Fiat-Shamir transcripts over
+  The verifier checks domain-separated Fiat-Shamir transcript challenges over
   zero-message residual commitments, which keeps the eventual smart-contract
   verifier path explicit and simple.
 \<close>
@@ -235,24 +235,39 @@ record range_proof =
 definition range_fs_rounds :: nat where
   "range_fs_rounds = balance_fs_rounds"
 
+definition range_fs_domain :: transcript_domain where
+  "range_fs_domain = 2001"
+
+definition range_fs_fields ::
+  "commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   commitment list \<Rightarrow> commitment list list \<Rightarrow> int list" where
+  "range_fs_fields ck c_amount c_bits c_comps a_amounts a_pairss =
+    [sum_list (concat ck),
+     sum_list c_amount,
+     sum_list (concat c_bits),
+     sum_list (concat c_comps),
+     sum_list (concat a_amounts),
+     sum_list (concat (concat a_pairss))]"
+
 definition canonical_range_challenge ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow>
    commitment list \<Rightarrow> commitment list \<Rightarrow> commitment list list \<Rightarrow> int" where
   "canonical_range_challenge p ck c_amount c_bits c_comps a_amounts a_pairss =
-    (sum_list (concat ck) +
-     sum_list c_amount +
-     sum_list (concat c_bits) +
-     sum_list (concat c_comps) +
-     sum_list (concat a_amounts) +
-     sum_list (concat (concat a_pairss))) mod 2"
+    binary_fs_challenge range_fs_domain
+      (range_fs_fields ck c_amount c_bits c_comps a_amounts a_pairss) 0"
 
 lemma canonical_range_challenge_valid:
   assumes "valid_scalar_commit_params p"
   shows "valid_range_challenge p
            (canonical_range_challenge p ck c_amount c_bits c_comps a_amounts a_pairss)"
 proof -
+  have bit:
+    "canonical_range_challenge p ck c_amount c_bits c_comps a_amounts a_pairss = 0 \<or>
+     canonical_range_challenge p ck c_amount c_bits c_comps a_amounts a_pairss = 1"
+    unfolding canonical_range_challenge_def
+    by (rule binary_fs_challenge_bit)
   show ?thesis
-    using assms
+    using assms bit
     unfolding valid_range_challenge_def valid_balance_challenge_def
               canonical_range_challenge_def
     by auto
@@ -295,13 +310,9 @@ definition range_fs_challenges ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow>
    commitment list \<Rightarrow> commitment list \<Rightarrow> commitment list list \<Rightarrow> int list" where
   "range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss =
-    bool_fs_challenges range_fs_rounds
-      (sum_list (concat ck) +
-       sum_list c_amount +
-       sum_list (concat c_bits) +
-       sum_list (concat c_comps) +
-       sum_list (concat a_amounts) +
-       sum_list (concat (concat a_pairss)))"
+    binary_fs_challenges range_fs_domain
+      (range_fs_fields ck c_amount c_bits c_comps a_amounts a_pairss)
+      range_fs_rounds"
 
 definition range_amount_sigma_announcements ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> int_vec list \<Rightarrow> commitment list" where
@@ -1503,7 +1514,7 @@ qed
 
 lemma range_fs_challenges_length:
   "length (range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss) = range_fs_rounds"
-  unfolding range_fs_challenges_def range_fs_rounds_def balance_fs_rounds_def fixed_fs_rounds_def
+  unfolding range_fs_challenges_def
   by simp
 
 lemma range_fs_challenge_valid:
@@ -1516,8 +1527,8 @@ proof -
     "(range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss) ! i = 0 \<or>
      (range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss) ! i = 1"
     using i_lt
-    unfolding range_fs_challenges_def range_fs_rounds_def balance_fs_rounds_def fixed_fs_rounds_def
-    by (rule bool_fs_challenges_bit)
+    unfolding range_fs_challenges_def
+    by (rule binary_fs_challenges_bit)
   show ?thesis
     using params_ok bit
     unfolding valid_range_challenge_def valid_balance_challenge_def

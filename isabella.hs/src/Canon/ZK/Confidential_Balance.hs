@@ -142,9 +142,16 @@ balanceSigmaRespond :: [Int] -> [Int] -> Int -> [Int]
 balanceSigmaRespond r y challenge =
   Listvec.vec_add y (Listvec.scalar_mult challenge r)
 
+balanceFsDomain :: Int
+balanceFsDomain = 1001
+
+balanceFsFields :: [[Int]] -> [Int] -> [[Int]] -> [Int]
+balanceFsFields ck c as =
+  [sum (concat ck), sum c, sum (concat as)]
+
 canonicalBalanceChallenge :: Commit.CommitParams -> [[Int]] -> [Int] -> [Int] -> Int
-canonicalBalanceChallenge p ck c a =
-  mod (sum (concat ck) + sum c + sum a) 2
+canonicalBalanceChallenge _p ck c a =
+  RepeatedFS.binaryFsChallenge balanceFsDomain (balanceFsFields ck c [a]) 0
 
 balanceSigmaVerify ::
   Commit.CommitParams ->
@@ -166,7 +173,7 @@ balanceSigmaVerify p gamma ck c a challenge z =
 
 balanceFsChallenges :: Commit.CommitParams -> [[Int]] -> [Int] -> [[Int]] -> [Int]
 balanceFsChallenges _ ck c as =
-  RepeatedFS.boolFsChallenges (sum (concat ck) + sum c + sum (concat as))
+  RepeatedFS.binaryFsChallenges balanceFsDomain (balanceFsFields ck c as)
 
 balanceSigmaResponds :: [Int] -> [[Int]] -> [Int] -> [[Int]]
 balanceSigmaResponds r ys es =

@@ -78,17 +78,21 @@ let nullifier_fs_rounds = Confidential_balance.balance_fs_rounds
 let nullifier_sigma_respond op y challenge =
   opening_add y (Confidential_range.opening_scale challenge op)
 
-let nullifier_fs_challenges _p ck nk c nf a_commits a_nullifiers =
+let nullifier_fs_domain = 3001
+
+let nullifier_fs_fields ck nk c nf a_commits a_nullifiers =
   let sum_list = List.fold_left ( + ) 0 in
-  let base =
-    sum_list (List.concat ck) +
-    sum_list (List.concat nk) +
-    sum_list c +
-    sum_list nf +
-    sum_list (List.concat a_commits) +
-    sum_list (List.concat a_nullifiers)
-  in
-  Repeated_fs.bool_fs_challenges base
+  [ sum_list (List.concat ck);
+    sum_list (List.concat nk);
+    sum_list c;
+    sum_list nf;
+    sum_list (List.concat a_commits);
+    sum_list (List.concat a_nullifiers) ]
+
+let nullifier_fs_challenges _p ck nk c nf a_commits a_nullifiers =
+  Repeated_fs.binary_fs_challenges
+    nullifier_fs_domain
+    (nullifier_fs_fields ck nk c nf a_commits a_nullifiers)
 
 let nullifier_z_openings proof =
   List.map2 Commit_sis.make_opening proof.nullifier_z_msgs proof.nullifier_z_rands
@@ -122,13 +126,10 @@ let nullifier_relation p ck nk c nf op =
   nullifier p nk op = nf
 
 let canonical_nullifier_challenge _p ck nk c nf a_commit a_nullifier =
-  let sum_list = List.fold_left ( + ) 0 in
-  (sum_list (List.concat ck) +
-   sum_list (List.concat nk) +
-   sum_list c +
-   sum_list nf +
-   sum_list a_commit +
-   sum_list a_nullifier) mod 2
+  Repeated_fs.binary_fs_challenge
+    nullifier_fs_domain
+    (nullifier_fs_fields ck nk c nf [a_commit] [a_nullifier])
+    0
 
 let nullifier_sigma_verify p gamma ck nk c nf a_commit a_nullifier challenge z =
   Confidential_balance.valid_scalar_commit_params p &&

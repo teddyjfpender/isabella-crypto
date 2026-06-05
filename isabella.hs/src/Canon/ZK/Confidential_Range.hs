@@ -226,6 +226,19 @@ validRangePairResponses p gamma challenge = all (validRangePairResponse p gamma 
 rangeFsRounds :: Int
 rangeFsRounds = ConfidentialBalance.balanceFsRounds
 
+rangeFsDomain :: Int
+rangeFsDomain = 2001
+
+rangeFsFields :: [[Int]] -> [Int] -> [[Int]] -> [[Int]] -> [[Int]] -> [[[Int]]] -> [Int]
+rangeFsFields ck cAmount cBits cComps aAmounts aPairss =
+  [ sum (concat ck)
+  , sum cAmount
+  , sum (concat cBits)
+  , sum (concat cComps)
+  , sum (concat aAmounts)
+  , sum (concat (concat aPairss))
+  ]
+
 rangeFsChallenges ::
   Commit.CommitParams ->
   [[Int]] ->
@@ -236,14 +249,9 @@ rangeFsChallenges ::
   [[[Int]]] ->
   [Int]
 rangeFsChallenges _p ck cAmount cBits cComps aAmounts aPairss =
-  let challengeBase =
-        sum (concat ck) +
-        sum cAmount +
-        sum (concat cBits) +
-        sum (concat cComps) +
-        sum (concat aAmounts) +
-        sum (concat (concat aPairss))
-   in RepeatedFS.boolFsChallenges challengeBase
+  RepeatedFS.binaryFsChallenges
+    rangeFsDomain
+    (rangeFsFields ck cAmount cBits cComps aAmounts aPairss)
 
 rangeAmountSigmaAnnouncements :: Commit.CommitParams -> [[Int]] -> [[Int]] -> [[Int]]
 rangeAmountSigmaAnnouncements p ck = map (ConfidentialBalance.randCommit p ck)
@@ -285,16 +293,11 @@ canonicalRangeChallenge ::
   [[Int]] ->
   [[[Int]]] ->
   Int
-canonicalRangeChallenge p ck cAmount cBits cComps aAmounts aPairss =
-  mod
-    ( sum (concat ck)
-    + sum cAmount
-    + sum (concat cBits)
-    + sum (concat cComps)
-    + sum (concat aAmounts)
-    + sum (concat (concat aPairss))
-    )
-    2
+canonicalRangeChallenge _p ck cAmount cBits cComps aAmounts aPairss =
+  RepeatedFS.binaryFsChallenge
+    rangeFsDomain
+    (rangeFsFields ck cAmount cBits cComps aAmounts aPairss)
+    0
 
 rangeAmountSigmaVerify ::
   Commit.CommitParams ->

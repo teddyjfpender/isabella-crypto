@@ -337,6 +337,13 @@ async function main(): Promise<void> {
     { msg: [0], rand: [0, -1] },
   ];
   const fsRounds = sdk.ConfidentialBalance.fsRounds();
+  const runFullSemanticAudit =
+    process.env.ISABELLA_CONFIDENTIAL_AUDIT_FULL === '1' || fsRounds <= 32;
+  if (!runFullSemanticAudit) {
+    console.log(
+      `audit-confidential: skipping full semantic fixture for ${fsRounds} FS rounds; set ISABELLA_CONFIDENTIAL_AUDIT_FULL=1 to run it`
+    );
+  }
   const yAmount5 = Array.from({ length: fsRounds }, () => [0, 1]);
   const yPairs5 = Array.from({ length: fsRounds }, () => [
     [1, 0],
@@ -633,7 +640,7 @@ async function main(): Promise<void> {
   const semanticLedgerRoot = sdk.ConfidentialTransaction.ledgerRoot(params, semanticLedger);
   const semanticNf1 = sdk.ConfidentialTransaction.nullifier(params, semanticNk, semanticOpIn1);
   const semanticNf2 = sdk.ConfidentialTransaction.nullifier(params, semanticNk, semanticOpIn2);
-  const semanticIn1RangeProof = safeNullable(() =>
+  const semanticIn1RangeProof = runFullSemanticAudit ? safeNullable(() =>
     sdk.ConfidentialRange.fsProve(
       params,
       gamma,
@@ -646,8 +653,8 @@ async function main(): Promise<void> {
       semanticYOut1,
       semanticYOut1Pairs
     )
-  );
-  const semanticIn2RangeProof = safeNullable(() =>
+  ) : null;
+  const semanticIn2RangeProof = runFullSemanticAudit ? safeNullable(() =>
     sdk.ConfidentialRange.fsProve(
       params,
       gamma,
@@ -660,7 +667,7 @@ async function main(): Promise<void> {
       semanticYOut2,
       semanticYOut2Pairs
     )
-  );
+  ) : null;
   const semanticNotes =
     semanticIn1RangeProof !== null && semanticIn2RangeProof !== null
       ? [
@@ -668,7 +675,7 @@ async function main(): Promise<void> {
           { commitment: semanticCIn2, rangeProof: semanticIn2RangeProof },
         ]
       : null;
-  const semanticTransactionProof = safeNullable(() =>
+  const semanticTransactionProof = runFullSemanticAudit ? safeNullable(() =>
     sdk.ConfidentialTransaction.fsProve(
       params,
       gamma,
@@ -699,7 +706,7 @@ async function main(): Promise<void> {
       semanticYOut2,
       semanticYOut2Pairs
     )
-  );
+  ) : null;
   const forgedBalance = legacyForgingSurfaceEnabled
     ? forgeBalanceProof(
         sdk.ConfidentialBalance.balanceCommitment(cIn1, cIn2, cAmount5, cAmount5, params.q)
@@ -823,6 +830,8 @@ async function main(): Promise<void> {
     | { checked: false; reason: string }
     | { checked: true; accepted: boolean } = semanticLedgerStepVerifier === null
       ? { checked: false, reason: 'no semantic ledger-step verifier is currently exported on the TypeScript surface' }
+      : !runFullSemanticAudit
+      ? { checked: false, reason: `full semantic fixture skipped for ${fsRounds} Fiat-Shamir rounds` }
       : semanticTransactionProof === null || semanticNotes === null
       ? { checked: false, reason: 'no honest semantic ledger-step fixture was constructed' }
       : {

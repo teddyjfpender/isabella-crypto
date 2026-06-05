@@ -105,12 +105,18 @@
 
 | Theory | Status | Notes |
 |--------|--------|-------|
-| `ZK/Sigma_Base.thy` | ⬜ | Prompt ready: canon-zk-sigma-base |
-| `ZK/FiatShamir.thy` | ⬜ | Non-interactive via hashing |
-| `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness |
+| `ZK/Sigma_Base.thy` | 🔄 | Generic Sigma protocol, conditional extractor/HVZK statements; still needs concrete LaZer-grade extractor and distribution proofs |
+| `ZK/Repeated_FS.thy` | 🔄 | 128-round domain-separated transcript challenge policy; executable mixer still needs production SHAKE/SHA3 backend instantiation |
+| `ZK/Confidential_Balance.thy` | 🔄 | SIS-note balance proof slice with domain-separated FS challenges and completeness |
+| `ZK/Confidential_Range.thy` | 🔄 | Bit/complement range proof slice with in-range theorem and completeness |
+| `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, membership, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link |
+| `ZK/Authenticated_Ledger.thy` | 🔄 | Authenticated membership scaffold; ledger hash explicitly marked non-production |
+| `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness and abort analysis |
 | `ZK/LinearRelations.thy` | ⬜ | LaZer-style linear proofs |
 
-**Blockers**: None - Phase 4b complete (Kyber + Dilithium done)
+**Blockers**: Production transcript hash backend, concrete extractors/simulators,
+external lattice-estimator pass, realistic proof benchmarks, and cryptographic
+Merkle/hash ledger model. See `plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md`.
 
 ---
 
