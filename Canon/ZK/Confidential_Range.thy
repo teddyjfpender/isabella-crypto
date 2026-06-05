@@ -320,6 +320,349 @@ definition range_pair_sigma_verify ::
     rand_commit p ck z =
       vec_mod (vec_add a (scalar_mult e c)) (cp_q p)"
 
+definition range_amount_sigma_extract ::
+  "int \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> int_vec option" where
+  "range_amount_sigma_extract e1 z1 e2 z2 =
+    balance_sigma_extract e1 z1 e2 z2"
+
+definition range_pair_sigma_extract ::
+  "int \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> int_vec option" where
+  "range_pair_sigma_extract e1 z1 e2 z2 =
+    balance_sigma_extract e1 z1 e2 z2"
+
+lemma range_sigma_extract_algebraic_opening_from_equations:
+  assumes key_ok: "valid_commit_key p ck"
+      and q_pos: "cp_q p > 0"
+      and len_z1: "length z1 = cp_n2 p"
+      and len_z2: "length z2 = cp_n2 p"
+      and len_a_c: "length a = length c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and eq1:
+        "rand_commit p ck z1 =
+          vec_mod (vec_add a (scalar_mult e1 c)) (cp_q p)"
+      and eq2:
+        "rand_commit p ck z2 =
+          vec_mod (vec_add a (scalar_mult e2 c)) (cp_q p)"
+      and ext: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "rand_commit p ck r = c"
+proof (cases "e1 = 1 \<and> e2 = 0")
+  case True
+  then have e_vals: "e1 = 1" "e2 = 0"
+    by auto
+  have r_eq: "r = vec_sub z1 z2"
+    using ext True unfolding balance_sigma_extract_def by simp
+  have hi_eq: "rand_commit p ck z1 = vec_mod (vec_add a c) (cp_q p)"
+    using eq1 e_vals len_a_c by (simp add: scalar_mult_one)
+  have lo_eq: "rand_commit p ck z2 = vec_mod a (cp_q p)"
+    using eq2 e_vals len_a_c by (simp add: vec_add_scalar_zero_right)
+  show ?thesis
+    using balance_sigma_extract_sub_opening[
+      OF key_ok q_pos len_z1 len_z2 hi_eq lo_eq len_a_c c_canonical]
+    by (simp add: r_eq)
+next
+  case False
+  have alt: "e1 = 0 \<and> e2 = 1"
+    using ext False unfolding balance_sigma_extract_def by (auto split: if_splits)
+  then have e_vals: "e1 = 0" "e2 = 1"
+    by auto
+  have r_eq: "r = vec_sub z2 z1"
+    using ext False alt unfolding balance_sigma_extract_def by simp
+  have hi_eq: "rand_commit p ck z2 = vec_mod (vec_add a c) (cp_q p)"
+    using eq2 e_vals len_a_c by (simp add: scalar_mult_one)
+  have lo_eq: "rand_commit p ck z1 = vec_mod a (cp_q p)"
+    using eq1 e_vals len_a_c by (simp add: vec_add_scalar_zero_right)
+  show ?thesis
+    using balance_sigma_extract_sub_opening[
+      OF key_ok q_pos len_z2 len_z1 hi_eq lo_eq len_a_c c_canonical]
+    by (simp add: r_eq)
+qed
+
+lemma range_amount_sigma_extract_some_if_distinct_binary:
+  assumes e1_ok: "valid_range_challenge p e1"
+      and e2_ok: "valid_range_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+  shows "\<exists>r. range_amount_sigma_extract e1 z1 e2 z2 = Some r"
+  using valid_range_challenge_binary[OF e1_ok]
+        valid_range_challenge_binary[OF e2_ok]
+        distinct
+  unfolding range_amount_sigma_extract_def balance_sigma_extract_def
+  by auto
+
+lemma range_pair_sigma_extract_some_if_distinct_binary:
+  assumes e1_ok: "valid_range_challenge p e1"
+      and e2_ok: "valid_range_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+  shows "\<exists>r. range_pair_sigma_extract e1 z1 e2 z2 = Some r"
+  using valid_range_challenge_binary[OF e1_ok]
+        valid_range_challenge_binary[OF e2_ok]
+        distinct
+  unfolding range_pair_sigma_extract_def balance_sigma_extract_def
+  by auto
+
+lemma range_amount_sigma_extract_response_bound:
+  assumes z1_ok: "valid_range_amount_response p gamma k e1 z1"
+      and z2_ok: "valid_range_amount_response p gamma k e2 z2"
+      and ext: "range_amount_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "valid_vec r (cp_n2 p) \<and>
+         all_bounded r (range_amount_response_bound p gamma k e1 +
+                        range_amount_response_bound p gamma k e2)"
+proof -
+  have len1: "length z1 = cp_n2 p"
+    using z1_ok unfolding valid_range_amount_response_def valid_vec_def by simp
+  have len2: "length z2 = cp_n2 p"
+    using z2_ok unfolding valid_range_amount_response_def valid_vec_def by simp
+  have b1: "all_bounded z1 (range_amount_response_bound p gamma k e1)"
+    using z1_ok unfolding valid_range_amount_response_def by simp
+  have b2: "all_bounded z2 (range_amount_response_bound p gamma k e2)"
+    using z2_ok unfolding valid_range_amount_response_def by simp
+  have ext_balance: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+    using ext unfolding range_amount_sigma_extract_def by simp
+  show ?thesis
+  proof (cases "e1 = 1 \<and> e2 = 0")
+    case True
+    then have r_eq: "r = vec_sub z1 z2"
+      using ext_balance unfolding balance_sigma_extract_def by simp
+    have len_r: "length r = cp_n2 p"
+      using r_eq len1 len2 by (simp add: vec_sub_length)
+    have bound_r:
+      "all_bounded r (range_amount_response_bound p gamma k e1 +
+                      range_amount_response_bound p gamma k e2)"
+      using vec_sub_bounded[OF b1 b2] r_eq by simp
+    show ?thesis
+      using len_r bound_r unfolding valid_vec_def by simp
+  next
+    case False
+    then have alt: "e1 = 0 \<and> e2 = 1"
+      using ext_balance unfolding balance_sigma_extract_def by (auto split: if_splits)
+    then have r_eq: "r = vec_sub z2 z1"
+      using ext_balance False unfolding balance_sigma_extract_def by simp
+    have len_r: "length r = cp_n2 p"
+      using r_eq len1 len2 by (simp add: vec_sub_length)
+    have bound_r:
+      "all_bounded r (range_amount_response_bound p gamma k e1 +
+                      range_amount_response_bound p gamma k e2)"
+    proof -
+      have raw_bound:
+        "all_bounded r (range_amount_response_bound p gamma k e2 +
+                        range_amount_response_bound p gamma k e1)"
+        using vec_sub_bounded[OF b2 b1] r_eq by simp
+      have sum_comm:
+        "range_amount_response_bound p gamma k e2 +
+         range_amount_response_bound p gamma k e1 =
+         range_amount_response_bound p gamma k e1 +
+         range_amount_response_bound p gamma k e2"
+        by simp
+      show ?thesis
+        using raw_bound sum_comm by simp
+    qed
+    show ?thesis
+      using len_r bound_r unfolding valid_vec_def by simp
+  qed
+qed
+
+lemma range_pair_sigma_extract_response_bound:
+  assumes z1_ok: "valid_range_pair_response p gamma e1 z1"
+      and z2_ok: "valid_range_pair_response p gamma e2 z2"
+      and ext: "range_pair_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "valid_vec r (cp_n2 p) \<and>
+         all_bounded r (range_pair_response_bound p gamma e1 +
+                        range_pair_response_bound p gamma e2)"
+proof -
+  have len1: "length z1 = cp_n2 p"
+    using z1_ok unfolding valid_range_pair_response_def valid_vec_def by simp
+  have len2: "length z2 = cp_n2 p"
+    using z2_ok unfolding valid_range_pair_response_def valid_vec_def by simp
+  have b1: "all_bounded z1 (range_pair_response_bound p gamma e1)"
+    using z1_ok unfolding valid_range_pair_response_def by simp
+  have b2: "all_bounded z2 (range_pair_response_bound p gamma e2)"
+    using z2_ok unfolding valid_range_pair_response_def by simp
+  have ext_balance: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+    using ext unfolding range_pair_sigma_extract_def by simp
+  show ?thesis
+  proof (cases "e1 = 1 \<and> e2 = 0")
+    case True
+    then have r_eq: "r = vec_sub z1 z2"
+      using ext_balance unfolding balance_sigma_extract_def by simp
+    have len_r: "length r = cp_n2 p"
+      using r_eq len1 len2 by (simp add: vec_sub_length)
+    have bound_r:
+      "all_bounded r (range_pair_response_bound p gamma e1 +
+                      range_pair_response_bound p gamma e2)"
+      using vec_sub_bounded[OF b1 b2] r_eq by simp
+    show ?thesis
+      using len_r bound_r unfolding valid_vec_def by simp
+  next
+    case False
+    then have alt: "e1 = 0 \<and> e2 = 1"
+      using ext_balance unfolding balance_sigma_extract_def by (auto split: if_splits)
+    then have r_eq: "r = vec_sub z2 z1"
+      using ext_balance False unfolding balance_sigma_extract_def by simp
+    have len_r: "length r = cp_n2 p"
+      using r_eq len1 len2 by (simp add: vec_sub_length)
+    have bound_r:
+      "all_bounded r (range_pair_response_bound p gamma e1 +
+                      range_pair_response_bound p gamma e2)"
+    proof -
+      have raw_bound:
+        "all_bounded r (range_pair_response_bound p gamma e2 +
+                        range_pair_response_bound p gamma e1)"
+        using vec_sub_bounded[OF b2 b1] r_eq by simp
+      have sum_comm:
+        "range_pair_response_bound p gamma e2 +
+         range_pair_response_bound p gamma e1 =
+         range_pair_response_bound p gamma e1 +
+         range_pair_response_bound p gamma e2"
+        by simp
+      show ?thesis
+        using raw_bound sum_comm by simp
+    qed
+    show ?thesis
+      using len_r bound_r unfolding valid_vec_def by simp
+  qed
+qed
+
+lemma range_amount_sigma_extract_distinct_binary_bound:
+  assumes e1_ok: "valid_range_challenge p e1"
+      and e2_ok: "valid_range_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+      and z1_ok: "valid_range_amount_response p gamma k e1 z1"
+      and z2_ok: "valid_range_amount_response p gamma k e2 z2"
+      and ext: "range_amount_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "valid_vec r (cp_n2 p) \<and>
+         all_bounded r (2 * gamma + range_amount_witness_bound p k)"
+proof -
+  have extracted:
+    "valid_vec r (cp_n2 p) \<and>
+     all_bounded r (range_amount_response_bound p gamma k e1 +
+                    range_amount_response_bound p gamma k e2)"
+    using range_amount_sigma_extract_response_bound[OF z1_ok z2_ok ext] .
+  have "range_amount_response_bound p gamma k e1 +
+        range_amount_response_bound p gamma k e2 =
+        2 * gamma + range_amount_witness_bound p k"
+    using valid_range_challenge_binary[OF e1_ok]
+          valid_range_challenge_binary[OF e2_ok]
+          distinct
+    unfolding range_amount_response_bound_def
+    by auto
+  then show ?thesis
+    using extracted by simp
+qed
+
+lemma range_pair_sigma_extract_distinct_binary_bound:
+  assumes e1_ok: "valid_range_challenge p e1"
+      and e2_ok: "valid_range_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+      and z1_ok: "valid_range_pair_response p gamma e1 z1"
+      and z2_ok: "valid_range_pair_response p gamma e2 z2"
+      and ext: "range_pair_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "valid_vec r (cp_n2 p) \<and>
+         all_bounded r (2 * gamma + range_pair_witness_bound p)"
+proof -
+  have extracted:
+    "valid_vec r (cp_n2 p) \<and>
+     all_bounded r (range_pair_response_bound p gamma e1 +
+                    range_pair_response_bound p gamma e2)"
+    using range_pair_sigma_extract_response_bound[OF z1_ok z2_ok ext] .
+  have "range_pair_response_bound p gamma e1 +
+        range_pair_response_bound p gamma e2 =
+        2 * gamma + range_pair_witness_bound p"
+    using valid_range_challenge_binary[OF e1_ok]
+          valid_range_challenge_binary[OF e2_ok]
+          distinct
+    unfolding range_pair_response_bound_def
+    by auto
+  then show ?thesis
+    using extracted by simp
+qed
+
+lemma range_amount_sigma_extract_algebraic_opening:
+  assumes t1: "range_amount_sigma_verify p gamma k ck c a e1 z1"
+      and t2: "range_amount_sigma_verify p gamma k ck c a e2 z2"
+      and c_valid: "valid_commitment p c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and ext: "range_amount_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "rand_commit p ck r = c"
+proof -
+  have params_ok: "valid_scalar_commit_params p"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have key_ok: "valid_commit_key p ck"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have a_valid: "valid_commitment p a"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have z1_ok: "valid_range_amount_response p gamma k e1 z1"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have z2_ok: "valid_range_amount_response p gamma k e2 z2"
+    using t2 unfolding range_amount_sigma_verify_def by simp
+  have eq1:
+    "rand_commit p ck z1 =
+      vec_mod (vec_add a (scalar_mult e1 c)) (cp_q p)"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have eq2:
+    "rand_commit p ck z2 =
+      vec_mod (vec_add a (scalar_mult e2 c)) (cp_q p)"
+    using t2 unfolding range_amount_sigma_verify_def by simp
+  have q_pos: "cp_q p > 0"
+    using valid_scalar_commit_params_props(5)[OF params_ok] by linarith
+  have len_z1: "length z1 = cp_n2 p"
+    using z1_ok unfolding valid_range_amount_response_def valid_vec_def by simp
+  have len_z2: "length z2 = cp_n2 p"
+    using z2_ok unfolding valid_range_amount_response_def valid_vec_def by simp
+  have len_a: "length a = cp_m p"
+    using a_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_c: "length c = cp_m p"
+    using c_valid unfolding valid_commitment_def valid_vec_def by simp
+  have ext_balance: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+    using ext unfolding range_amount_sigma_extract_def by simp
+  show ?thesis
+    using range_sigma_extract_algebraic_opening_from_equations[
+      OF key_ok q_pos len_z1 len_z2 _ c_canonical eq1 eq2 ext_balance]
+    using len_a len_c by simp
+qed
+
+lemma range_pair_sigma_extract_algebraic_opening:
+  assumes t1: "range_pair_sigma_verify p gamma ck c a e1 z1"
+      and t2: "range_pair_sigma_verify p gamma ck c a e2 z2"
+      and c_valid: "valid_commitment p c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and ext: "range_pair_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "rand_commit p ck r = c"
+proof -
+  have params_ok: "valid_scalar_commit_params p"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have key_ok: "valid_commit_key p ck"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have a_valid: "valid_commitment p a"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have z1_ok: "valid_range_pair_response p gamma e1 z1"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have z2_ok: "valid_range_pair_response p gamma e2 z2"
+    using t2 unfolding range_pair_sigma_verify_def by simp
+  have eq1:
+    "rand_commit p ck z1 =
+      vec_mod (vec_add a (scalar_mult e1 c)) (cp_q p)"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have eq2:
+    "rand_commit p ck z2 =
+      vec_mod (vec_add a (scalar_mult e2 c)) (cp_q p)"
+    using t2 unfolding range_pair_sigma_verify_def by simp
+  have q_pos: "cp_q p > 0"
+    using valid_scalar_commit_params_props(5)[OF params_ok] by linarith
+  have len_z1: "length z1 = cp_n2 p"
+    using z1_ok unfolding valid_range_pair_response_def valid_vec_def by simp
+  have len_z2: "length z2 = cp_n2 p"
+    using z2_ok unfolding valid_range_pair_response_def valid_vec_def by simp
+  have len_a: "length a = cp_m p"
+    using a_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_c: "length c = cp_m p"
+    using c_valid unfolding valid_commitment_def valid_vec_def by simp
+  have ext_balance: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+    using ext unfolding range_pair_sigma_extract_def by simp
+  show ?thesis
+    using range_sigma_extract_algebraic_opening_from_equations[
+      OF key_ok q_pos len_z1 len_z2 _ c_canonical eq1 eq2 ext_balance]
+    using len_a len_c by simp
+qed
+
 fun range_sigma_verify_pairs ::
   "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow>
    commitment list \<Rightarrow> int \<Rightarrow> int_vec list \<Rightarrow> bool" where
