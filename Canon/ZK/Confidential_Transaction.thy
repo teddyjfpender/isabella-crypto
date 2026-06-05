@@ -40,6 +40,21 @@ definition valid_nullifier_challenge ::
   "commit_params \<Rightarrow> int \<Rightarrow> bool" where
   "valid_nullifier_challenge p e \<longleftrightarrow> valid_balance_challenge p e"
 
+lemma valid_nullifier_challenge_binary:
+  assumes "valid_nullifier_challenge p e"
+  shows "e = 0 \<or> e = 1"
+  using assms
+  unfolding valid_nullifier_challenge_def
+  by (rule valid_balance_challenge_binary)
+
+lemma nullifier_response_bound_binary:
+  assumes "valid_nullifier_challenge p e"
+  shows "nullifier_response_bound p gamma e =
+    (if e = 0 then gamma else gamma + cp_beta p)"
+  using valid_nullifier_challenge_binary[OF assms]
+  unfolding nullifier_response_bound_def
+  by auto
+
 definition valid_nullifier_response ::
   "commit_params \<Rightarrow> int \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> bool" where
   "valid_nullifier_response p gamma e z \<longleftrightarrow>

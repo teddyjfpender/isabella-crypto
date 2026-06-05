@@ -60,7 +60,9 @@ benchmarks are independently checked.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
   assumptions for HVZK, and a theorem reducing verified opening collisions to
-  SIS via `binding_implies_sis`.
+  SIS via `binding_implies_sis`. Balance, range, and nullifier response bounds
+  now also have explicit binary-challenge lemmas for the exact margins used by
+  later SIS reductions.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,

@@ -107,9 +107,9 @@
 |--------|--------|-------|
 | `ZK/Sigma_Base.thy` | 🔄 | Generic Sigma protocol, conditional extractor/HVZK statements; still needs concrete LaZer-grade extractor and distribution proofs |
 | `ZK/Repeated_FS.thy` | 🔄 | 128-round domain-separated transcript challenge policy; runtime backends use canonical SHA3-256 counter-mode vectors; HOL still needs Fiat-Shamir security-model connection |
-| `ZK/Confidential_Balance.thy` | 🔄 | SIS-note balance proof slice with domain-separated FS challenges and completeness |
-| `ZK/Confidential_Range.thy` | 🔄 | Bit/complement range proof slice with in-range theorem and completeness |
-| `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, membership, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link |
+| `ZK/Confidential_Balance.thy` | 🔄 | SIS-note balance proof slice with domain-separated FS challenges, completeness, and exact binary response-bound lemma |
+| `ZK/Confidential_Range.thy` | 🔄 | Bit/complement range proof slice with in-range theorem, completeness, and exact binary response-bound lemmas |
+| `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, membership, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link, exact nullifier response-bound lemma |
 | `ZK/Authenticated_Merkle.thy` | 🔄 | Cryptographic Merkle/hash target model with canonical encodings and same-path soundness under collision resistance |
 | `ZK/Authenticated_Ledger.thy` | 🔄 | Authenticated membership scaffold; ledger hash explicitly marked non-production |
 | `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness and abort analysis |

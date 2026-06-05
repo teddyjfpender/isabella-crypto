@@ -122,6 +122,19 @@ definition valid_balance_challenge :: "commit_params \<Rightarrow> int \<Rightar
   "valid_balance_challenge p e \<longleftrightarrow>
     valid_scalar_commit_params p \<and> (e = 0 \<or> e = 1)"
 
+lemma valid_balance_challenge_binary:
+  assumes "valid_balance_challenge p e"
+  shows "e = 0 \<or> e = 1"
+  using assms unfolding valid_balance_challenge_def by simp
+
+lemma balance_response_bound_binary:
+  assumes "valid_balance_challenge p e"
+  shows "balance_response_bound p gamma e =
+    (if e = 0 then gamma else gamma + 4 * cp_beta p)"
+  using valid_balance_challenge_binary[OF assms]
+  unfolding balance_response_bound_def
+  by auto
+
 definition valid_balance_response :: "commit_params \<Rightarrow> int \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> bool" where
   "valid_balance_response p gamma e z \<longleftrightarrow>
     valid_vec z (cp_n2 p) \<and> all_bounded z (balance_response_bound p gamma e)"

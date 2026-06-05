@@ -186,6 +186,29 @@ definition range_pair_response_bound ::
 definition valid_range_challenge :: "commit_params \<Rightarrow> int \<Rightarrow> bool" where
   "valid_range_challenge p e \<longleftrightarrow> valid_balance_challenge p e"
 
+lemma valid_range_challenge_binary:
+  assumes "valid_range_challenge p e"
+  shows "e = 0 \<or> e = 1"
+  using assms
+  unfolding valid_range_challenge_def
+  by (rule valid_balance_challenge_binary)
+
+lemma range_amount_response_bound_binary:
+  assumes "valid_range_challenge p e"
+  shows "range_amount_response_bound p gamma k e =
+    (if e = 0 then gamma else gamma + range_amount_witness_bound p k)"
+  using valid_range_challenge_binary[OF assms]
+  unfolding range_amount_response_bound_def
+  by auto
+
+lemma range_pair_response_bound_binary:
+  assumes "valid_range_challenge p e"
+  shows "range_pair_response_bound p gamma e =
+    (if e = 0 then gamma else gamma + range_pair_witness_bound p)"
+  using valid_range_challenge_binary[OF assms]
+  unfolding range_pair_response_bound_def
+  by auto
+
 definition valid_range_amount_response ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> bool" where
   "valid_range_amount_response p gamma k e z \<longleftrightarrow>
