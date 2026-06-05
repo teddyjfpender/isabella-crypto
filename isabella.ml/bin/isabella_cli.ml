@@ -191,6 +191,17 @@ let json_of_merkle_membership_proof proof =
           (List.map (fun b -> if b then "true" else "false")
              proof.Confidential_merkle.merkle_directions)))
 
+let json_of_ct_merkle_transaction_proof proof =
+  Printf.sprintf
+    "{\"in1Member\":%s,\"in2Member\":%s,\"in1Nullifier\":%s,\"in2Nullifier\":%s,\"balance\":%s,\"out1Range\":%s,\"out2Range\":%s}"
+    (json_of_merkle_membership_proof proof.Confidential_transaction.tx_merkle_in1_member)
+    (json_of_merkle_membership_proof proof.Confidential_transaction.tx_merkle_in2_member)
+    (json_of_ct_nullifier_proof proof.Confidential_transaction.tx_merkle_in1_nullifier)
+    (json_of_ct_nullifier_proof proof.Confidential_transaction.tx_merkle_in2_nullifier)
+    (json_of_cb_proof proof.Confidential_transaction.tx_merkle_balance)
+    (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out1_range)
+    (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out2_range)
+
 (** JSON output helpers *)
 let[@warning "-32"] output_result key value =
   match !output_format with
@@ -1248,6 +1259,92 @@ let cmd_ct_prove args =
      | _ -> output_error "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors")
   | _ -> output_error "Usage: ct-prove M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
 
+let cmd_ct_prove_merkle args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_amount_str; in1_rand_str; in2_amount_str; in2_rand_str; out1_amount_str; out1_rand_str; out2_amount_str; out2_rand_str; out1_bits_str; out1_bit_rands_str; out1_comps_str; out1_comp_rands_str; out2_bits_str; out2_bit_rands_str; out2_comps_str; out2_comp_rands_str; y_in1_msgs_str; y_in1_rands_str; y_in2_msgs_str; y_in2_rands_str; y_balance_str; y_out1_amounts_str; y_out1_pairss_str; y_out2_amounts_str; y_out2_pairss_str] ->
+    (match
+       make_cb_params m_str n2_str q_str beta_str,
+       parse_int gamma_str,
+       parse_int k_str,
+       parse_mat ck_str,
+       parse_mat nk_str,
+       parse_mat ledger_str,
+       parse_mat spent_str,
+       parse_vec c_in1_str,
+       parse_vec c_in2_str,
+       parse_vec c_out1_str,
+       parse_vec c_out2_str,
+       parse_vec nf1_str,
+       parse_vec nf2_str,
+       parse_int in1_amount_str,
+       parse_vec in1_rand_str,
+       parse_int in2_amount_str,
+       parse_vec in2_rand_str,
+       parse_int out1_amount_str,
+       parse_vec out1_rand_str,
+       parse_int out2_amount_str,
+       parse_vec out2_rand_str,
+       parse_vec out1_bits_str,
+       parse_mat out1_bit_rands_str,
+       parse_vec out1_comps_str,
+       parse_mat out1_comp_rands_str,
+       parse_vec out2_bits_str,
+       parse_mat out2_bit_rands_str,
+       parse_vec out2_comps_str,
+       parse_mat out2_comp_rands_str,
+       parse_vec y_in1_msgs_str,
+       parse_mat y_in1_rands_str,
+       parse_vec y_in2_msgs_str,
+       parse_mat y_in2_rands_str,
+       parse_mat y_balance_str,
+       parse_mat y_out1_amounts_str,
+       parse_cube y_out1_pairss_str,
+       parse_mat y_out2_amounts_str,
+       parse_cube y_out2_pairss_str with
+     | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent, Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2, Some in1_amount, Some in1_rand, Some in2_amount, Some in2_rand, Some out1_amount, Some out1_rand, Some out2_amount, Some out2_rand, Some out1_bits, Some out1_bit_rands, Some out1_comps, Some out1_comp_rands, Some out2_bits, Some out2_bit_rands, Some out2_comps, Some out2_comp_rands, Some y_in1_msgs, Some y_in1_rands, Some y_in2_msgs, Some y_in2_rands, Some y_balance, Some y_out1_amounts, Some y_out1_pairss, Some y_out2_amounts, Some y_out2_pairss ->
+       (match make_scalar_openings out1_bits out1_bit_rands, make_scalar_openings out1_comps out1_comp_rands, make_scalar_openings out2_bits out2_bit_rands, make_scalar_openings out2_comps out2_comp_rands, make_scalar_openings y_in1_msgs y_in1_rands, make_scalar_openings y_in2_msgs y_in2_rands with
+        | Some out1_bit_ops, Some out1_comp_ops, Some out2_bit_ops, Some out2_comp_ops, Some y_in1_ops, Some y_in2_ops ->
+          (match Confidential_transaction.transaction_fs_prove_merkle
+                   params
+                   gamma
+                   k
+                   ck
+                   nk
+                   ledger
+                   spent
+                   c_in1
+                   c_in2
+                   c_out1
+                   c_out2
+                   nf1
+                   nf2
+                   (make_scalar_opening in1_amount in1_rand)
+                   (make_scalar_opening in2_amount in2_rand)
+                   (make_scalar_opening out1_amount out1_rand)
+                   (make_scalar_opening out2_amount out2_rand)
+                   out1_bit_ops
+                   out1_comp_ops
+                   out2_bit_ops
+                   out2_comp_ops
+                   y_in1_ops
+                   y_in2_ops
+                   y_balance
+                   y_out1_amounts
+                   y_out1_pairss
+                   y_out2_amounts
+                   y_out2_pairss with
+           | Some proof ->
+             (match !output_format with
+              | Human -> Printf.printf "transaction_fs_merkle_proof = %s\n" (json_of_ct_merkle_transaction_proof proof)
+              | Json -> Printf.printf "%s\n" (json_of_ct_merkle_transaction_proof proof))
+           | None ->
+             (match !output_format with
+              | Human -> print_endline "transaction_fs_merkle_proof = null"
+              | Json -> print_endline "null"))
+        | _ -> output_error "Bit, complement, and nullifier-mask counts must match their randomness matrices")
+     | _ -> output_error "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors")
+  | _ -> output_error "Usage: ct-prove-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
+
 let prepare_ct_verify args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str; in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str; balance_as_str; balance_zs_str; out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str; out1_pair_as_str; out1_pair_zs_str; out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str; out2_pair_as_str; out2_pair_zs_str] ->
@@ -1324,9 +1421,90 @@ let prepare_ct_verify args =
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
   | _ -> Error "Usage: ct-verify M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
+let prepare_ct_verify_merkle args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str; in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str; balance_as_str; balance_zs_str; out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str; out1_pair_as_str; out1_pair_zs_str; out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str; out2_pair_as_str; out2_pair_zs_str] ->
+    (match
+       make_cb_params m_str n2_str q_str beta_str,
+       parse_int gamma_str,
+       parse_int k_str,
+       parse_mat ck_str,
+       parse_mat nk_str,
+       parse_mat ledger_str,
+       parse_mat spent_str,
+       parse_vec c_in1_str,
+       parse_vec c_in2_str,
+       parse_vec c_out1_str,
+       parse_vec c_out2_str,
+       parse_vec nf1_str,
+       parse_vec nf2_str,
+       parse_mat in1_a_commits_str,
+       parse_mat in1_a_nullifiers_str,
+       parse_mat in1_z_msgs_str,
+       parse_mat in1_z_rands_str,
+       parse_mat in2_a_commits_str,
+       parse_mat in2_a_nullifiers_str,
+       parse_mat in2_z_msgs_str,
+       parse_mat in2_z_rands_str,
+       parse_mat balance_as_str,
+       parse_mat balance_zs_str,
+       parse_mat out1_bits_str,
+       parse_mat out1_comps_str,
+       parse_mat out1_amount_a_str,
+       parse_mat out1_amount_z_str,
+       parse_cube out1_pair_as_str,
+       parse_cube out1_pair_zs_str,
+       parse_mat out2_bits_str,
+       parse_mat out2_comps_str,
+       parse_mat out2_amount_a_str,
+       parse_mat out2_amount_z_str,
+       parse_cube out2_pair_as_str,
+       parse_cube out2_pair_zs_str with
+     | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent, Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2, Some in1_a_commits, Some in1_a_nullifiers, Some in1_z_msgs, Some in1_z_rands, Some in2_a_commits, Some in2_a_nullifiers, Some in2_z_msgs, Some in2_z_rands, Some balance_as, Some balance_zs, Some out1_bits, Some out1_comps, Some out1_amount_a, Some out1_amount_z, Some out1_pair_as, Some out1_pair_zs, Some out2_bits, Some out2_comps, Some out2_amount_a, Some out2_amount_z, Some out2_pair_as, Some out2_pair_zs ->
+       let root = Confidential_transaction.merkle_ledger_root ledger in
+       (match
+          Confidential_transaction.merkle_membership_prove ledger c_in1,
+          Confidential_transaction.merkle_membership_prove ledger c_in2 with
+        | Some in1_member, Some in2_member ->
+          let proof =
+            Confidential_transaction.make_merkle_transaction_proof
+              in1_member
+              in2_member
+              (Confidential_transaction.make_nullifier_proof in1_a_commits in1_a_nullifiers in1_z_msgs in1_z_rands)
+              (Confidential_transaction.make_nullifier_proof in2_a_commits in2_a_nullifiers in2_z_msgs in2_z_rands)
+              (Confidential_balance.make_balance_proof balance_as balance_zs)
+              (Confidential_range.make_range_proof out1_bits out1_comps out1_amount_a out1_amount_z out1_pair_as out1_pair_zs)
+              (Confidential_range.make_range_proof out2_bits out2_comps out2_amount_a out2_amount_z out2_pair_as out2_pair_zs)
+          in
+          Ok
+            (fun () ->
+              Confidential_transaction.transaction_fs_verify_merkle
+                params
+                gamma
+                k
+                ck
+                nk
+                root
+                spent
+                c_in1
+                c_in2
+                c_out1
+                c_out2
+                nf1
+                nf2
+                proof)
+        | _ -> Error "Expected Merkle membership proofs for both input commitments in the supplied ledger")
+     | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
+  | _ -> Error "Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
 let cmd_ct_verify args =
   match prepare_ct_verify args with
   | Ok verify -> output_result "transaction_fs_verify" (if verify () then "true" else "false")
+  | Error msg -> output_error msg
+
+let cmd_ct_verify_merkle args =
+  match prepare_ct_verify_merkle args with
+  | Ok verify -> output_result "transaction_fs_verify_merkle" (if verify () then "true" else "false")
   | Error msg -> output_error msg
 
 let cmd_ct_verify_bench args =
@@ -1617,7 +1795,9 @@ let show_help () =
   print_endline "  ct-member-verify M N2 Q BETA LEDGER C  Verify explicit ledger membership proof";
   print_endline "  ct-ledger-step-verify ... Verify semantic ledger-step validity from verified input notes";
   print_endline "  ct-prove ...  Build deterministic confidential-transaction proof";
+  print_endline "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify ... Verify deterministic confidential-transaction proof";
+  print_endline "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify-bench I W ... Benchmark deterministic confidential-transaction verification natively";
   print_endline "";
   print_endline "Examples:";
@@ -1704,7 +1884,9 @@ let run_command cmd args =
   | "ct-member-verify" -> cmd_ct_member_verify args
   | "ct-ledger-step-verify" -> cmd_ct_ledger_step_verify args
   | "ct-prove" -> cmd_ct_prove args
+  | "ct-prove-merkle" -> cmd_ct_prove_merkle args
   | "ct-verify" -> cmd_ct_verify args
+  | "ct-verify-merkle" -> cmd_ct_verify_merkle args
   | "ct-verify-bench" -> cmd_ct_verify_bench args
   | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
 

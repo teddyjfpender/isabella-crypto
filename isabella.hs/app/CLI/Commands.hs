@@ -70,7 +70,9 @@ runCommand format cmd args = case cmd of
     "ct-member-verify" -> cmdCtMemberVerify format args
     "ct-ledger-step-verify" -> cmdCtLedgerStepVerify format args
     "ct-prove" -> cmdCtProve format args
+    "ct-prove-merkle" -> cmdCtProveMerkle format args
     "ct-verify" -> cmdCtVerify format args
+    "ct-verify-merkle" -> cmdCtVerifyMerkle format args
     "ct-verify-bench" -> cmdCtVerifyBench format args
     _ -> putStrLn $ "Unknown command: " ++ cmd ++ "\nUse --help for usage."
 
@@ -314,6 +316,18 @@ jsonCtTransactionProof proof =
         , ("out2Range", jsonCrProof (ConfidentialTransaction.tx_out2_range proof))
         ]
 
+jsonCtMerkleTransactionProof :: ConfidentialTransaction.MerkleTransactionProof -> String
+jsonCtMerkleTransactionProof proof =
+    jsonObject
+        [ ("in1Member", jsonMerkleMembershipProof (ConfidentialTransaction.tx_merkle_in1_member proof))
+        , ("in2Member", jsonMerkleMembershipProof (ConfidentialTransaction.tx_merkle_in2_member proof))
+        , ("in1Nullifier", jsonCtNullifierProof (ConfidentialTransaction.tx_merkle_in1_nullifier proof))
+        , ("in2Nullifier", jsonCtNullifierProof (ConfidentialTransaction.tx_merkle_in2_nullifier proof))
+        , ("balance", jsonCbProof (ConfidentialTransaction.tx_merkle_balance proof))
+        , ("out1Range", jsonCrProof (ConfidentialTransaction.tx_merkle_out1_range proof))
+        , ("out2Range", jsonCrProof (ConfidentialTransaction.tx_merkle_out2_range proof))
+        ]
+
 parseCbParams :: String -> String -> String -> String -> Maybe Commit.CommitParams
 parseCbParams mStr n2Str qStr betaStr =
     case (parseInt mStr, parseInt n2Str, parseInt qStr, parseInt betaStr) of
@@ -455,6 +469,70 @@ prepareCtVerify [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledge
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
 prepareCtVerify _ =
     Left "Usage: ct-verify M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+prepareCtVerifyMerkle :: [String] -> Either String (() -> Bool)
+prepareCtVerifyMerkle [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
+    case
+        ( parseCbParams mStr n2Str qStr betaStr
+        , parseInt gammaStr
+        , parseInt kStr
+        , parseMat ckStr
+        , parseMat nkStr
+        , parseMat ledgerStr
+        , parseMat spentStr
+        , parseVec cIn1Str
+        , parseVec cIn2Str
+        , parseVec cOut1Str
+        , parseVec cOut2Str
+        , parseVec nf1Str
+        , parseVec nf2Str
+        , parseMat in1ACommitsStr
+        , parseMat in1ANullifiersStr
+        , parseMat in1ZMsgsStr
+        , parseMat in1ZRandsStr
+        , parseMat in2ACommitsStr
+        , parseMat in2ANullifiersStr
+        , parseMat in2ZMsgsStr
+        , parseMat in2ZRandsStr
+        , parseMat balanceAStr
+        , parseMat balanceZsStr
+        , parseMat out1BitsStr
+        , parseMat out1CompsStr
+        , parseMat out1AmountAStr
+        , parseMat out1AmountZStr
+        , parseCube out1PairAsStr
+        , parseCube out1PairZsStr
+        , parseMat out2BitsStr
+        , parseMat out2CompsStr
+        , parseMat out2AmountAStr
+        , parseMat out2AmountZStr
+        , parseCube out2PairAsStr
+        , parseCube out2PairZsStr
+        ) of
+        (Just params, Just gamma, Just k, Just ck, Just nk, Just ledger, Just spent, Just cIn1, Just cIn2, Just cOut1, Just cOut2, Just nf1, Just nf2, Just in1ACommits, Just in1ANullifiers, Just in1ZMsgs, Just in1ZRands, Just in2ACommits, Just in2ANullifiers, Just in2ZMsgs, Just in2ZRands, Just balanceAs, Just balanceZs, Just out1Bits, Just out1Comps, Just out1AmountA, Just out1AmountZ, Just out1PairAs, Just out1PairZs, Just out2Bits, Just out2Comps, Just out2AmountA, Just out2AmountZ, Just out2PairAs, Just out2PairZs) ->
+            let root = ConfidentialTransaction.merkleLedgerRoot ledger
+             in case
+                    ( ConfidentialTransaction.merkleMembershipProve ledger cIn1
+                    , ConfidentialTransaction.merkleMembershipProve ledger cIn2
+                    ) of
+                    (Just in1Member, Just in2Member) ->
+                        let proof =
+                                ConfidentialTransaction.makeMerkleTransactionProof
+                                    in1Member
+                                    in2Member
+                                    (ConfidentialTransaction.makeNullifierProof in1ACommits in1ANullifiers in1ZMsgs in1ZRands)
+                                    (ConfidentialTransaction.makeNullifierProof in2ACommits in2ANullifiers in2ZMsgs in2ZRands)
+                                    (ConfidentialBalance.makeBalanceProof balanceAs balanceZs)
+                                    (ConfidentialRange.makeRangeProof out1Bits out1Comps out1AmountA out1AmountZ out1PairAs out1PairZs)
+                                    (ConfidentialRange.makeRangeProof out2Bits out2Comps out2AmountA out2AmountZ out2PairAs out2PairZs)
+                         in Right
+                                (\() ->
+                                    ConfidentialTransaction.transactionFsVerifyMerkle
+                                        params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
+                    _ -> Left "Expected Merkle membership proofs for both input commitments in the supplied ledger"
+        _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
+prepareCtVerifyMerkle _ =
+    Left "Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
 -- Command implementations
 
@@ -1219,10 +1297,96 @@ cmdCtProve format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, led
 cmdCtProve format _ =
     outputUsage format "Usage: ct-prove M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
 
+cmdCtProveMerkle :: OutputFormat -> [String] -> IO ()
+cmdCtProveMerkle format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1AmountStr, in1RandStr, in2AmountStr, in2RandStr, out1AmountStr, out1RandStr, out2AmountStr, out2RandStr, out1BitsStr, out1BitRandsStr, out1CompsStr, out1CompRandsStr, out2BitsStr, out2BitRandsStr, out2CompsStr, out2CompRandsStr, yIn1MsgsStr, yIn1RandsStr, yIn2MsgsStr, yIn2RandsStr, yBalanceStr, yOut1AmountsStr, yOut1PairssStr, yOut2AmountsStr, yOut2PairssStr] =
+    case
+        ( parseCbParams mStr n2Str qStr betaStr
+        , parseInt gammaStr
+        , parseInt kStr
+        , parseMat ckStr
+        , parseMat nkStr
+        , parseMat ledgerStr
+        , parseMat spentStr
+        , parseVec cIn1Str
+        , parseVec cIn2Str
+        , parseVec cOut1Str
+        , parseVec cOut2Str
+        , parseVec nf1Str
+        , parseVec nf2Str
+        , parseInt in1AmountStr
+        , parseVec in1RandStr
+        , parseInt in2AmountStr
+        , parseVec in2RandStr
+        , parseInt out1AmountStr
+        , parseVec out1RandStr
+        , parseInt out2AmountStr
+        , parseVec out2RandStr
+        , parseVec out1BitsStr
+        , parseMat out1BitRandsStr
+        , parseVec out1CompsStr
+        , parseMat out1CompRandsStr
+        , parseVec out2BitsStr
+        , parseMat out2BitRandsStr
+        , parseVec out2CompsStr
+        , parseMat out2CompRandsStr
+        , parseVec yIn1MsgsStr
+        , parseMat yIn1RandsStr
+        , parseVec yIn2MsgsStr
+        , parseMat yIn2RandsStr
+        , parseMat yBalanceStr
+        , parseMat yOut1AmountsStr
+        , parseCube yOut1PairssStr
+        , parseMat yOut2AmountsStr
+        , parseCube yOut2PairssStr
+        ) of
+        (Just params, Just gamma, Just k, Just ck, Just nk, Just ledger, Just spent, Just cIn1, Just cIn2, Just cOut1, Just cOut2, Just nf1, Just nf2, Just in1Amount, Just in1Rand, Just in2Amount, Just in2Rand, Just out1Amount, Just out1Rand, Just out2Amount, Just out2Rand, Just out1Bits, Just out1BitRands, Just out1Comps, Just out1CompRands, Just out2Bits, Just out2BitRands, Just out2Comps, Just out2CompRands, Just yIn1Msgs, Just yIn1Rands, Just yIn2Msgs, Just yIn2Rands, Just yBalance, Just yOut1Amounts, Just yOut1Pairss, Just yOut2Amounts, Just yOut2Pairss) ->
+            case ( makeScalarOpenings out1Bits out1BitRands
+                 , makeScalarOpenings out1Comps out1CompRands
+                 , makeScalarOpenings out2Bits out2BitRands
+                 , makeScalarOpenings out2Comps out2CompRands
+                 , makeScalarOpenings yIn1Msgs yIn1Rands
+                 , makeScalarOpenings yIn2Msgs yIn2Rands
+                 ) of
+                (Just out1BitOps, Just out1CompOps, Just out2BitOps, Just out2CompOps, Just yIn1Ops, Just yIn2Ops) ->
+                    case ConfidentialTransaction.transactionFsProveMerkle
+                            params gamma k ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2
+                            (makeScalarOpening in1Amount in1Rand)
+                            (makeScalarOpening in2Amount in2Rand)
+                            (makeScalarOpening out1Amount out1Rand)
+                            (makeScalarOpening out2Amount out2Rand)
+                            out1BitOps out1CompOps out2BitOps out2CompOps
+                            yIn1Ops
+                            yIn2Ops
+                            yBalance
+                            yOut1Amounts
+                            yOut1Pairss
+                            yOut2Amounts
+                            yOut2Pairss of
+                        Just proof ->
+                            case format of
+                                Human -> putStrLn $ "transaction_fs_merkle_proof = " ++ show proof
+                                Json -> putStrLn $ jsonCtMerkleTransactionProof proof
+                        Nothing ->
+                            case format of
+                                Human -> putStrLn "transaction_fs_merkle_proof = null"
+                                Json -> putStrLn "null"
+                _ -> outputError format "Bit/complement counts must match their randomness matrices"
+        _ -> outputError format "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors"
+cmdCtProveMerkle format _ =
+    outputUsage format "Usage: ct-prove-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
+
 cmdCtVerify :: OutputFormat -> [String] -> IO ()
 cmdCtVerify format args =
     case prepareCtVerify args of
         Right verify -> outputBoolResult format "transaction_fs_verify = " (verify ())
+        Left err
+            | take 5 err == "Usage" -> outputUsage format err
+            | otherwise -> outputError format err
+
+cmdCtVerifyMerkle :: OutputFormat -> [String] -> IO ()
+cmdCtVerifyMerkle format args =
+    case prepareCtVerifyMerkle args of
+        Right verify -> outputBoolResult format "transaction_fs_verify_merkle = " (verify ())
         Left err
             | take 5 err == "Usage" -> outputUsage format err
             | otherwise -> outputError format err

@@ -32,7 +32,9 @@ import {
   ctNullifierProve,
   ctNullifierVerify,
   ctProve,
+  ctProveMerkle,
   ctVerify,
+  ctVerifyMerkle,
   crAmountCommitment,
   crProve,
   listNullifierProof,
@@ -841,6 +843,142 @@ assert.equal(
 );
 logProgress('validate-ocaml: transaction verification passed');
 
+const ctMerkleLedgerRoot = sdk.ConfidentialTransaction.merkleLedgerRoot(ctLedger);
+const ctMerkleProof = sdk.ConfidentialTransaction.fsProveMerkle(
+  ctParamsExpected,
+  ctParamsCase.gamma,
+  ctOut1Bits.length,
+  ctCk,
+  ctNk,
+  ctLedger,
+  ctSpent,
+  ctCIn1,
+  ctCIn2,
+  ctCOut1,
+  ctCOut2,
+  ctNf1,
+  ctNf2,
+  ctOpIn1,
+  ctOpIn2,
+  ctOpOut1,
+  ctOpOut2,
+  ctOut1Bits,
+  ctOut1Comps,
+  ctOut2Bits,
+  ctOut2Comps,
+  ctYIn1Rounds,
+  ctYIn2Rounds,
+  ctYBalance,
+  ctYOut1,
+  ctYOut1Pairs,
+  ctYOut2,
+  ctYOut2Pairs
+);
+assert.ok(ctMerkleProof);
+const ctOut1BitValues = ctOut1Bits.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut1BitRands = ctOut1Bits.map((opening: { rand: number[] }) => opening.rand);
+const ctOut1CompValues = ctOut1Comps.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut1CompRands = ctOut1Comps.map((opening: { rand: number[] }) => opening.rand);
+const ctOut2BitValues = ctOut2Bits.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut2BitRands = ctOut2Bits.map((opening: { rand: number[] }) => opening.rand);
+const ctOut2CompValues = ctOut2Comps.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut2CompRands = ctOut2Comps.map((opening: { rand: number[] }) => opening.rand);
+const ctYIn1Msgs = ctYIn1Rounds.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctYIn1Rands = ctYIn1Rounds.map((opening: { rand: number[] }) => opening.rand);
+const ctYIn2Msgs = ctYIn2Rounds.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctYIn2Rands = ctYIn2Rounds.map((opening: { rand: number[] }) => opening.rand);
+assert.deepEqual(
+  ctProveMerkle(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctOpIn1.msg[0],
+    ctOpIn1.rand,
+    ctOpIn2.msg[0],
+    ctOpIn2.rand,
+    ctOpOut1.msg[0],
+    ctOpOut1.rand,
+    ctOpOut2.msg[0],
+    ctOpOut2.rand,
+    ctOut1BitValues,
+    ctOut1BitRands,
+    ctOut1CompValues,
+    ctOut1CompRands,
+    ctOut2BitValues,
+    ctOut2BitRands,
+    ctOut2CompValues,
+    ctOut2CompRands,
+    ctYIn1Msgs,
+    ctYIn1Rands,
+    ctYIn2Msgs,
+    ctYIn2Rands,
+    ctYBalance,
+    ctYOut1,
+    ctYOut1Pairs,
+    ctYOut2,
+    ctYOut2Pairs
+  ),
+  ctMerkleProof,
+  'ct-prove-merkle OCaml/TypeScript parity'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkle(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctMerkleLedgerRoot,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctMerkleProof!
+  ),
+  true,
+  'ct-verify-merkle SDK accepts generated proof'
+);
+assert.equal(
+  ctVerifyMerkle(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctMerkleProof!
+  ),
+  true,
+  'ct-verify-merkle OCaml/TypeScript parity'
+);
+logProgress('validate-ocaml: Merkle transaction CLI parity passed');
+
 console.log('validate-ocaml: confidential transaction proof verification passed');
 
 const ctIn1RangeProof = sdk.ConfidentialRange.fsProve(
@@ -873,4 +1011,4 @@ logProgress('validate-ocaml: verified input notes constructed');
 
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
-console.log('Validated the TypeScript SDK against the OCaml surface on 73 deterministic shared-surface cases.');
+console.log('Validated the TypeScript SDK against the OCaml surface on 76 deterministic shared-surface cases.');

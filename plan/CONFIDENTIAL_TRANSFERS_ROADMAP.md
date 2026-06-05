@@ -77,7 +77,9 @@ benchmarks are independently checked.
   `Confidential_Transaction.thy` also now has a Merkle-backed transaction
   proof record, verifier, and transaction-level same-path membership soundness
   lemmas. OCaml, Haskell, and TypeScript expose matching Merkle transaction
-  prover/verifier APIs; TypeScript has a focused test for root/path tampering.
+  prover/verifier APIs; the SDK-equivalence harnesses now cover native Merkle
+  transaction proving and verification for OCaml and Haskell, and TypeScript
+  has a focused test for root/path tampering.
 - `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
   contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
   asset IDs, version contexts, wallet proof generation, and failure semantics.
@@ -96,9 +98,9 @@ The formalization still needs these before production:
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.
 5. Make the Merkle-backed transaction verifier the default ledger-step path,
-   retire or quarantine the algebraic scaffold APIs, complete native CLI
-   conformance for Merkle transaction proofs, and broaden transaction-level
-   membership soundness beyond same-path uniqueness.
+   retire or quarantine the algebraic scaffold APIs, broaden native
+   transaction-level negative/fuzz conformance for Merkle proofs, and extend
+   transaction membership soundness beyond same-path uniqueness.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
 
@@ -175,7 +177,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.801917 ms median and verification had a 3.79125 ms median.
+  proving had a 3.831917 ms median and verification had a 3.647125 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -184,6 +186,6 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 3.194235 s proving time, a 3.193249833 s verification time, and a
+  a 731.867292 ms proving time, a 735.306042 ms verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.

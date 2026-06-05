@@ -980,17 +980,193 @@ const ctCliAcceptsSdkProof = tryParseResult<boolean>([
       JSON.stringify(listedCtBalance.zs),
       JSON.stringify(listedCtOut1Range.bits),
       JSON.stringify(listedCtOut1Range.comps),
-      JSON.stringify(listedCtOut1Range.amountAs),
-      JSON.stringify(listedCtOut1Range.amountZs),
+      JSON.stringify(listedCtOut1Range.amountsA),
+      JSON.stringify(listedCtOut1Range.amountsZ),
       JSON.stringify(listedCtOut1Range.pairAss),
       JSON.stringify(listedCtOut1Range.pairZss),
       JSON.stringify(listedCtOut2Range.bits),
       JSON.stringify(listedCtOut2Range.comps),
-      JSON.stringify(listedCtOut2Range.amountAs),
-      JSON.stringify(listedCtOut2Range.amountZs),
+      JSON.stringify(listedCtOut2Range.amountsA),
+      JSON.stringify(listedCtOut2Range.amountsZ),
       JSON.stringify(listedCtOut2Range.pairAss),
       JSON.stringify(listedCtOut2Range.pairZss),
     ]);
+assert.equal(ctCliAcceptsSdkProof, true, 'ct-verify Haskell CLI accepts SDK proofs');
+
+const ctMerkleRoot = sdk.ConfidentialTransaction.merkleLedgerRoot(ctLedger);
+const ctMerkleProof = sdk.ConfidentialTransaction.fsProveMerkle(
+  ctParamsExpected,
+  ctParamsCase.gamma,
+  ctOut1Bits.length,
+  ctCk,
+  ctNk,
+  ctLedger,
+  ctSpent,
+  ctCIn1,
+  ctCIn2,
+  ctCOut1,
+  ctCOut2,
+  ctNf1,
+  ctNf2,
+  ctOpIn1,
+  ctOpIn2,
+  ctOpOut1,
+  ctOpOut2,
+  ctOut1Bits,
+  ctOut1Comps,
+  ctOut2Bits,
+  ctOut2Comps,
+  ctYIn1Rounds,
+  ctYIn2Rounds,
+  ctYBalance,
+  ctYOut1,
+  ctYOut1Pairs,
+  ctYOut2,
+  ctYOut2Pairs
+);
+assert.ok(ctMerkleProof);
+const ctOut1BitValues = ctOut1Bits.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut1BitRands = ctOut1Bits.map((opening: { rand: number[] }) => opening.rand);
+const ctOut1CompValues = ctOut1Comps.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut1CompRands = ctOut1Comps.map((opening: { rand: number[] }) => opening.rand);
+const ctOut2BitValues = ctOut2Bits.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut2BitRands = ctOut2Bits.map((opening: { rand: number[] }) => opening.rand);
+const ctOut2CompValues = ctOut2Comps.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctOut2CompRands = ctOut2Comps.map((opening: { rand: number[] }) => opening.rand);
+const ctYIn1Msgs = ctYIn1Rounds.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctYIn1Rands = ctYIn1Rounds.map((opening: { rand: number[] }) => opening.rand);
+const ctYIn2Msgs = ctYIn2Rounds.map((opening: { msg: number[] }) => opening.msg[0]);
+const ctYIn2Rands = ctYIn2Rounds.map((opening: { rand: number[] }) => opening.rand);
+assert.deepEqual(
+  parseJson<unknown>(
+    runHaskell([
+      'ct-prove-merkle',
+      ctParamsCase.m.toString(),
+      ctParamsCase.n2.toString(),
+      ctParamsCase.q.toString(),
+      ctParamsCase.beta.toString(),
+      ctParamsCase.gamma.toString(),
+      ctOut1Bits.length.toString(),
+      JSON.stringify(ctCk),
+      JSON.stringify(ctNk),
+      JSON.stringify(ctLedger),
+      JSON.stringify(ctSpent),
+      JSON.stringify(ctCIn1),
+      JSON.stringify(ctCIn2),
+      JSON.stringify(ctCOut1),
+      JSON.stringify(ctCOut2),
+      JSON.stringify(ctNf1),
+      JSON.stringify(ctNf2),
+      ctOpIn1.msg[0].toString(),
+      JSON.stringify(ctOpIn1.rand),
+      ctOpIn2.msg[0].toString(),
+      JSON.stringify(ctOpIn2.rand),
+      ctOpOut1.msg[0].toString(),
+      JSON.stringify(ctOpOut1.rand),
+      ctOpOut2.msg[0].toString(),
+      JSON.stringify(ctOpOut2.rand),
+      JSON.stringify(ctOut1BitValues),
+      JSON.stringify(ctOut1BitRands),
+      JSON.stringify(ctOut1CompValues),
+      JSON.stringify(ctOut1CompRands),
+      JSON.stringify(ctOut2BitValues),
+      JSON.stringify(ctOut2BitRands),
+      JSON.stringify(ctOut2CompValues),
+      JSON.stringify(ctOut2CompRands),
+      JSON.stringify(ctYIn1Msgs),
+      JSON.stringify(ctYIn1Rands),
+      JSON.stringify(ctYIn2Msgs),
+      JSON.stringify(ctYIn2Rands),
+      JSON.stringify(ctYBalance),
+      JSON.stringify(ctYOut1),
+      JSON.stringify(ctYOut1Pairs),
+      JSON.stringify(ctYOut2),
+      JSON.stringify(ctYOut2Pairs),
+    ])
+  ),
+  ctMerkleProof,
+  'ct-prove-merkle Haskell/TypeScript parity'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkle(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctMerkleRoot,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctMerkleProof!
+  ),
+  true,
+  'ct-verify-merkle SDK accepts generated proof'
+);
+const listedCtMerkleProof = ctMerkleProof as {
+  in1Nullifier: unknown;
+  in2Nullifier: unknown;
+  balance: unknown;
+  out1Range: unknown;
+  out2Range: unknown;
+};
+const listedCtMerkleIn1Nullifier = listNullifierProof(listedCtMerkleProof.in1Nullifier);
+const listedCtMerkleIn2Nullifier = listNullifierProof(listedCtMerkleProof.in2Nullifier);
+const listedCtMerkleBalance = listBalanceProof(listedCtMerkleProof.balance);
+const listedCtMerkleOut1Range = listRangeProof(listedCtMerkleProof.out1Range);
+const listedCtMerkleOut2Range = listRangeProof(listedCtMerkleProof.out2Range);
+assert.equal(
+  parseResult<boolean>(
+    runHaskell([
+      'ct-verify-merkle',
+      ctParamsCase.m.toString(),
+      ctParamsCase.n2.toString(),
+      ctParamsCase.q.toString(),
+      ctParamsCase.beta.toString(),
+      ctParamsCase.gamma.toString(),
+      ctOut1Bits.length.toString(),
+      JSON.stringify(ctCk),
+      JSON.stringify(ctNk),
+      JSON.stringify(ctLedger),
+      JSON.stringify(ctSpent),
+      JSON.stringify(ctCIn1),
+      JSON.stringify(ctCIn2),
+      JSON.stringify(ctCOut1),
+      JSON.stringify(ctCOut2),
+      JSON.stringify(ctNf1),
+      JSON.stringify(ctNf2),
+      JSON.stringify(listedCtMerkleIn1Nullifier.aCommits),
+      JSON.stringify(listedCtMerkleIn1Nullifier.aNullifiers),
+      JSON.stringify(listedCtMerkleIn1Nullifier.zMsgs),
+      JSON.stringify(listedCtMerkleIn1Nullifier.zRands),
+      JSON.stringify(listedCtMerkleIn2Nullifier.aCommits),
+      JSON.stringify(listedCtMerkleIn2Nullifier.aNullifiers),
+      JSON.stringify(listedCtMerkleIn2Nullifier.zMsgs),
+      JSON.stringify(listedCtMerkleIn2Nullifier.zRands),
+      JSON.stringify(listedCtMerkleBalance.as),
+      JSON.stringify(listedCtMerkleBalance.zs),
+      JSON.stringify(listedCtMerkleOut1Range.bits),
+      JSON.stringify(listedCtMerkleOut1Range.comps),
+      JSON.stringify(listedCtMerkleOut1Range.amountsA),
+      JSON.stringify(listedCtMerkleOut1Range.amountsZ),
+      JSON.stringify(listedCtMerkleOut1Range.pairAss),
+      JSON.stringify(listedCtMerkleOut1Range.pairZss),
+      JSON.stringify(listedCtMerkleOut2Range.bits),
+      JSON.stringify(listedCtMerkleOut2Range.comps),
+      JSON.stringify(listedCtMerkleOut2Range.amountsA),
+      JSON.stringify(listedCtMerkleOut2Range.amountsZ),
+      JSON.stringify(listedCtMerkleOut2Range.pairAss),
+      JSON.stringify(listedCtMerkleOut2Range.pairZss),
+    ])
+  ),
+  true,
+  'ct-verify-merkle Haskell/TypeScript parity'
+);
+
 const ctIn1RangeProof = sdk.ConfidentialRange.fsProve(
   ctParamsExpected,
   ctParamsCase.gamma,
@@ -1021,5 +1197,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 73 deterministic shared-surface cases.'
+  'Validated Haskell CLI and SDK surfaces on 76 deterministic shared-surface cases.'
 );

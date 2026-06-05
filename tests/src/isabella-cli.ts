@@ -1099,6 +1099,16 @@ export interface TransactionProof {
   out2Range: RangeProofLike;
 }
 
+export interface MerkleTransactionProof {
+  in1Member: MerkleMembershipProof;
+  in2Member: MerkleMembershipProof;
+  in1Nullifier: NullifierProofLike;
+  in2Nullifier: NullifierProofLike;
+  balance: BalanceProofLike;
+  out1Range: RangeProofLike;
+  out2Range: RangeProofLike;
+}
+
 export function ctNullifier(
   m: number,
   n2: number,
@@ -1364,7 +1374,7 @@ export function ctProve(
   return output === 'null' ? null : parseCliResult<TransactionProof>(output);
 }
 
-export function ctVerify(
+export function ctProveMerkle(
   m: number,
   n2: number,
   q: number,
@@ -1381,7 +1391,98 @@ export function ctVerify(
   cOut2: number[],
   nf1: number[],
   nf2: number[],
-  proof: TransactionProof
+  in1Amount: number,
+  in1Rand: number[],
+  in2Amount: number,
+  in2Rand: number[],
+  out1Amount: number,
+  out1Rand: number[],
+  out2Amount: number,
+  out2Rand: number[],
+  out1Bits: number[],
+  out1BitRands: number[][],
+  out1Comps: number[],
+  out1CompRands: number[][],
+  out2Bits: number[],
+  out2BitRands: number[][],
+  out2Comps: number[],
+  out2CompRands: number[][],
+  yIn1Msgs: number[],
+  yIn1Rands: number[][],
+  yIn2Msgs: number[],
+  yIn2Rands: number[][],
+  yBalance: number[][],
+  yOut1: number[][],
+  yOut1Pairs: number[][][],
+  yOut2: number[][],
+  yOut2Pairs: number[][][]
+): MerkleTransactionProof | null {
+  const output = runCli([
+    'ct-prove-merkle',
+    m.toString(),
+    n2.toString(),
+    q.toString(),
+    beta.toString(),
+    gamma.toString(),
+    k.toString(),
+    JSON.stringify(ck),
+    JSON.stringify(nk),
+    JSON.stringify(ledger),
+    JSON.stringify(spent),
+    JSON.stringify(cIn1),
+    JSON.stringify(cIn2),
+    JSON.stringify(cOut1),
+    JSON.stringify(cOut2),
+    JSON.stringify(nf1),
+    JSON.stringify(nf2),
+    in1Amount.toString(),
+    JSON.stringify(in1Rand),
+    in2Amount.toString(),
+    JSON.stringify(in2Rand),
+    out1Amount.toString(),
+    JSON.stringify(out1Rand),
+    out2Amount.toString(),
+    JSON.stringify(out2Rand),
+    JSON.stringify(out1Bits),
+    JSON.stringify(out1BitRands),
+    JSON.stringify(out1Comps),
+    JSON.stringify(out1CompRands),
+    JSON.stringify(out2Bits),
+    JSON.stringify(out2BitRands),
+    JSON.stringify(out2Comps),
+    JSON.stringify(out2CompRands),
+    JSON.stringify(yIn1Msgs),
+    JSON.stringify(yIn1Rands),
+    JSON.stringify(yIn2Msgs),
+    JSON.stringify(yIn2Rands),
+    JSON.stringify(yBalance),
+    JSON.stringify(yOut1),
+    JSON.stringify(yOut1Pairs),
+    JSON.stringify(yOut2),
+    JSON.stringify(yOut2Pairs),
+  ]);
+  return output === 'null' ? null : parseCliResult<MerkleTransactionProof>(output);
+}
+
+function ctVerifyWithCommand(
+  command: string,
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[],
+  proof: TransactionProof | MerkleTransactionProof
 ): boolean {
   const listedBalance = listBalanceProof(proof.balance);
   const in1NullifierShape = nullifierProofShape(proof.in1Nullifier);
@@ -1405,7 +1506,7 @@ export function ctVerify(
   const legacyOut2Range =
     out2RangeShape === 'legacy' ? (proof.out2Range as LegacyRangeProof) : null;
   const output = runCli([
-    'ct-verify',
+    command,
     m.toString(),
     n2.toString(),
     q.toString(),
@@ -1474,4 +1575,86 @@ export function ctVerify(
     JSON.stringify(legacyOut2Range === null ? listedOut2Range!.pairZss : legacyOut2Range.pairZs),
   ]);
   return parseCliBool(output);
+}
+
+export function ctVerify(
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[],
+  proof: TransactionProof
+): boolean {
+  return ctVerifyWithCommand(
+    'ct-verify',
+    m,
+    n2,
+    q,
+    beta,
+    gamma,
+    k,
+    ck,
+    nk,
+    ledger,
+    spent,
+    cIn1,
+    cIn2,
+    cOut1,
+    cOut2,
+    nf1,
+    nf2,
+    proof
+  );
+}
+
+export function ctVerifyMerkle(
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[],
+  proof: MerkleTransactionProof
+): boolean {
+  return ctVerifyWithCommand(
+    'ct-verify-merkle',
+    m,
+    n2,
+    q,
+    beta,
+    gamma,
+    k,
+    ck,
+    nk,
+    ledger,
+    spent,
+    cIn1,
+    cIn2,
+    cOut1,
+    cOut2,
+    nf1,
+    nf2,
+    proof
+  );
 }
