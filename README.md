@@ -738,6 +738,7 @@ be serialized across Haskell, OCaml, wasm, and TypeScript.
 Current status and roadmap:
 - [Confidential transfer roadmap](plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md)
 - [Confidential transfer production-readiness ledger](plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md)
+- [Confidential transfer protocol specification](plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md)
 - The Fiat-Shamir layer now uses 128 domain-separated binary transcript rounds,
   and runtime backends use canonical transcript encoding with SHA3-256
   counter-mode challenge expansion. The HOL theory still treats Fiat-Shamir as
@@ -746,7 +747,8 @@ Current status and roadmap:
   the concrete proof slices; they are not yet full LaZer-grade proofs.
 - The executable ledger hash remains a scaffold and is explicitly marked
   non-production; `Canon/ZK/Authenticated_Merkle.thy` is the checked target
-  model for the cryptographic Merkle/hash replacement.
+  model for the cryptographic Merkle/hash replacement, with SHA3-256 encoding
+  vectors in `tests/fixtures/confidential-merkle-vectors.json`.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)

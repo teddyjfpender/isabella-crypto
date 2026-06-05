@@ -27,6 +27,9 @@ This is still not production confidential transfers.
 The production-readiness ledger for the eight launch blockers is maintained in
 `plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md`.
 
+The launch-scope protocol/product contract is maintained in
+`plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md`.
+
 ## Architecture Decision
 
 Keep the note/SIS path as the MVP. It is already wired through Isabelle,
@@ -67,7 +70,11 @@ benchmarks are independently checked.
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
   leaf, and internal-node encodings, an abstract Merkle hash, and same-path
-  membership soundness under collision resistance.
+  membership soundness under collision resistance. Runtime SHA3-256 Merkle
+  encoding vectors live in `tests/fixtures/confidential-merkle-vectors.json`.
+- `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
+  contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
+  asset IDs, version contexts, wallet proof generation, and failure semantics.
 
 ## Remaining Security Work
 
@@ -161,7 +168,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.9485 ms median and verification had a 3.855083 ms median.
+  proving had a 3.945917 ms median and verification had a 3.8645 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger

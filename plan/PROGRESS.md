@@ -121,6 +121,9 @@ benchmarks, and migration from the scaffold ledger to the cryptographic
 Merkle/hash target model. See
 `plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md`.
 
+Protocol/product status is tracked in
+`plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md`.
+
 ---
 
 ## Key Lemmas Checklist

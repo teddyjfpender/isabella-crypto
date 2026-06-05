@@ -28,6 +28,10 @@ definition merkle_node_tag :: int where
 definition merkle_empty_tag :: int where
   "merkle_empty_tag = 2"
 
+definition merkle_dst_encoding :: byte_string where
+  "merkle_dst_encoding =
+    [73, 83, 65, 66, 69, 76, 76, 65, 45, 67, 84, 45, 77, 69, 82, 75, 76, 69, 45, 118, 49]"
+
 definition encode_int_vec :: "int list \<Rightarrow> byte_string" where
   "encode_int_vec xs = int (length xs) # xs"
 
@@ -53,31 +57,31 @@ proof -
 qed
 
 definition merkle_leaf_encoding :: "commitment \<Rightarrow> byte_string" where
-  "merkle_leaf_encoding c = merkle_leaf_tag # encode_int_vec c"
+  "merkle_leaf_encoding c = merkle_dst_encoding @ merkle_leaf_tag # encode_int_vec c"
 
 definition merkle_node_encoding :: "digest \<Rightarrow> digest \<Rightarrow> byte_string" where
   "merkle_node_encoding left right =
-    merkle_node_tag # encode_int_vec left @ encode_int_vec right"
+    merkle_dst_encoding @ merkle_node_tag # encode_int_vec left @ encode_int_vec right"
 
 definition merkle_empty_encoding :: "nat \<Rightarrow> byte_string" where
-  "merkle_empty_encoding width = [merkle_empty_tag, int width]"
+  "merkle_empty_encoding width = merkle_dst_encoding @ [merkle_empty_tag, int width]"
 
 lemma merkle_leaf_node_encoding_neq:
   "merkle_leaf_encoding c \<noteq> merkle_node_encoding left right"
   unfolding merkle_leaf_encoding_def merkle_node_encoding_def
-            merkle_leaf_tag_def merkle_node_tag_def
+            merkle_dst_encoding_def merkle_leaf_tag_def merkle_node_tag_def
   by simp
 
 lemma merkle_leaf_empty_encoding_neq:
   "merkle_leaf_encoding c \<noteq> merkle_empty_encoding width"
   unfolding merkle_leaf_encoding_def merkle_empty_encoding_def
-            merkle_leaf_tag_def merkle_empty_tag_def
+            merkle_dst_encoding_def merkle_leaf_tag_def merkle_empty_tag_def
   by simp
 
 lemma merkle_node_empty_encoding_neq:
   "merkle_node_encoding left right \<noteq> merkle_empty_encoding width"
   unfolding merkle_node_encoding_def merkle_empty_encoding_def
-            merkle_node_tag_def merkle_empty_tag_def
+            merkle_dst_encoding_def merkle_node_tag_def merkle_empty_tag_def
   by simp
 
 lemma merkle_leaf_encoding_injective:
@@ -95,7 +99,7 @@ proof -
     "encode_int_vec left @ encode_int_vec right =
      encode_int_vec left' @ encode_int_vec right'"
     using assms
-    unfolding merkle_node_encoding_def merkle_node_tag_def
+    unfolding merkle_node_encoding_def merkle_dst_encoding_def merkle_node_tag_def
     by simp
   have left_eq: "left = left'"
     using encode_int_vec_append_injective[OF enc] by simp
