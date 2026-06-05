@@ -3,6 +3,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { buildMerkleTransactionFixture } from './confidential-fixtures.ts';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -103,5 +105,116 @@ describe('Confidential transaction context vectors', () => {
       .toThrow();
     expect(() => tx.transactionContextDigest({ ...entry.context, root: entry.context.root.toUpperCase() }))
       .toThrow();
+  });
+
+  it('verifies Merkle transaction envelopes only under the expected public context', async () => {
+    const {
+      sdk,
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      root,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof,
+    } = await buildMerkleTransactionFixture();
+    const tx = sdk.ConfidentialTransaction;
+    const context: TransactionContext = {
+      protocolVersion: 1,
+      networkId: 'isabella-local-devnet',
+      assetId: 7,
+      ledgerEpoch: 42,
+      root,
+      publicFee: 0,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+    };
+    const policy = {
+      networkId: context.networkId,
+      assetId: context.assetId,
+      ledgerEpoch: context.ledgerEpoch,
+      root: context.root,
+      publicFee: 0,
+    };
+    const envelope = {
+      context,
+      contextDigest: tx.transactionContextDigest(context),
+      proof,
+    };
+
+    expect(tx.fsVerifyMerkleEnvelope(params, gamma, k, ck, nk, spent, envelope, policy))
+      .toBe(true);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      { ...envelope, contextDigest: envelope.contextDigest.replace(/^./, '0') },
+      policy
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        context: { ...context, networkId: 'isabella-mainnet' },
+        contextDigest: tx.transactionContextDigest({ ...context, networkId: 'isabella-mainnet' }),
+      },
+      policy
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      envelope,
+      { ...policy, assetId: policy.assetId + 1 }
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        context: { ...context, publicFee: 1 },
+        contextDigest: tx.transactionContextDigest({ ...context, publicFee: 1 }),
+      },
+      { ...policy, publicFee: 1 }
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        proof: { ...proof, in2Member: proof.in1Member },
+      },
+      policy
+    )).toBe(false);
   });
 });

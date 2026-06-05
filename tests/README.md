@@ -104,6 +104,9 @@ The harnesses are repair-aware:
 - Snapshot well-formedness (`ledgerValid`) is treated separately from the
   semantic ledger-step verifier, exported on the TS SDK as
   `ConfidentialTransaction.semanticStepValid`.
+- The confidential transaction context vector pins public replay context
+  bytes, and the TS envelope verifier checks the context digest and expected
+  network/asset/root policy before delegating to the Merkle proof verifier.
 
 The harnesses compare the Haskell and OCaml CLIs against the built
 TypeScript SDK artifact in `isabella.ts/dist/`.

@@ -92,6 +92,11 @@ benchmarks are independently checked.
   `tests/fixtures/confidential-transaction-vectors.json`, and OCaml, Haskell,
   and TypeScript expose matching `ct-transaction-context` /
   `transactionContextDigest` surfaces checked by the SDK-equivalence harnesses.
+  TypeScript also exposes `fsVerifyMerkleEnvelope` so callers can verify the
+  canonical context digest, expected network/asset/root policy, and Merkle
+  transaction proof as one step. That envelope path intentionally rejects
+  nonzero public fees until the balance relation is extended to account for
+  fees.
 
 ## Remaining Security Work
 
@@ -115,6 +120,8 @@ The formalization still needs these before production:
 7. Extend the pinned public transaction context into full canonical
    transaction/proof serialization, wallet request serialization, and
    consensus/indexer API contracts with non-canonical encoding rejection.
+8. Extend the zero-balance relation to a fee-aware balance relation before
+   accepting nonzero public fees in verifier envelopes.
 
 ## Parameter Baseline
 
@@ -194,15 +201,17 @@ Important validation caveats:
   components.
 - `tests/src/confidential-transaction.test.ts` pins the canonical public
   transaction context preimage/digest and rejects malformed roots, negative
-  fees, unsafe integers, and non-ASCII replay-context fields. This is not full
-  transaction/proof serialization yet.
+  fees, unsafe integers, and non-ASCII replay-context fields. It also checks
+  that the TypeScript Merkle envelope verifier rejects stale context digests,
+  wrong network/asset policy, nonzero fees, and swapped proof components. This
+  is not full transaction/proof serialization yet.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, and transaction equivalence by default for
   both OCaml and Haskell.
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.731042 ms median and verification had a 3.616708 ms median.
+  proving had a 3.669166 ms median and verification had a 3.586291 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -211,7 +220,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 3.144791583 s proving time, a 3.27841275 s verification time, and a
+  a 3.23970925 s proving time, a 3.357564875 s verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.
 - `scripts/check_confidential_bench_budgets.mjs` enforces current CI ceilings

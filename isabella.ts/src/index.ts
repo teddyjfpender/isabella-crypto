@@ -208,6 +208,23 @@ export interface ConfidentialTransactionContext {
   nf2: IntVec;
 }
 
+/** Verifier-facing transaction envelope that binds a proof to public context bytes */
+export interface ConfidentialTransactionEnvelope {
+  context: ConfidentialTransactionContext;
+  contextDigest: MerkleDigest;
+  proof: MerkleTransactionProof;
+}
+
+/** Local policy expected by a verifier before accepting a transaction envelope */
+export interface ConfidentialTransactionContextPolicy {
+  protocolVersion?: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch?: number;
+  root?: MerkleDigest;
+  publicFee?: number;
+}
+
 /**
  * Raw Isabella module interface (from js_of_ocaml)
  * @internal
@@ -2024,6 +2041,29 @@ export namespace ConfidentialTransaction {
     return sha3Hex(transactionContextPreimage(context));
   }
 
+  export function transactionContextMatchesPolicy(
+    context: ConfidentialTransactionContext,
+    policy: ConfidentialTransactionContextPolicy
+  ): boolean {
+    try {
+      const protocolVersion = policy.protocolVersion ?? 1;
+      const publicFee = policy.publicFee ?? 0;
+      if (publicFee !== 0) {
+        return false;
+      }
+      return (
+        context.protocolVersion === protocolVersion &&
+        context.networkId === policy.networkId &&
+        context.assetId === policy.assetId &&
+        context.publicFee === publicFee &&
+        (policy.ledgerEpoch === undefined || context.ledgerEpoch === policy.ledgerEpoch) &&
+        (policy.root === undefined || context.root === policy.root)
+      );
+    } catch {
+      return false;
+    }
+  }
+
   export function nullifier(
     params: ScalarCommitParams,
     nk: IntMatrix,
@@ -2610,6 +2650,43 @@ export namespace ConfidentialTransaction {
       ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, proof.out1Range) &&
       ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, proof.out2Range)
     );
+  }
+
+  export function fsVerifyMerkleEnvelope(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    spent: IntMatrix,
+    envelope: ConfidentialTransactionEnvelope,
+    policy: ConfidentialTransactionContextPolicy
+  ): boolean {
+    try {
+      const contextDigest = transactionContextDigest(envelope.context);
+      return (
+        envelope.contextDigest === contextDigest &&
+        transactionContextMatchesPolicy(envelope.context, policy) &&
+        fsVerifyMerkle(
+          params,
+          gamma,
+          k,
+          ck,
+          nk,
+          envelope.context.root,
+          spent,
+          envelope.context.cIn1,
+          envelope.context.cIn2,
+          envelope.context.cOut1,
+          envelope.context.cOut2,
+          envelope.context.nf1,
+          envelope.context.nf2,
+          envelope.proof
+        )
+      );
+    } catch {
+      return false;
+    }
   }
 
   export function ledgerApplyNotes(
