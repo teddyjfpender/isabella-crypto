@@ -116,9 +116,9 @@
 | `ZK/LinearRelations.thy` | ⬜ | LaZer-style linear proofs |
 
 **Blockers**: Fiat-Shamir security-model connection, concrete
-extractors/simulators, external lattice-estimator pass, realistic proof
-benchmarks, cross-backend Merkle APIs, and migration from the scaffold ledger
-to the cryptographic Merkle/hash target model. See
+extractors/simulators, external lattice-estimator pass, full-protocol
+realistic benchmarks, cross-backend Merkle APIs, and migration from the
+scaffold ledger to the cryptographic Merkle/hash target model. See
 `plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md`.
 
 Protocol/product status is tracked in

@@ -66,6 +66,22 @@ node typescript-confidential-proving-bench.mjs \
   --json
 ```
 
+### Realistic-Dimension Confidential Balance Benchmark
+
+The production-facing confidential-transfer gate also records a deterministic
+1024x1024 balance-proof benchmark for the `ct_sis_note_mvp_v0` candidate:
+
+```bash
+make bench-confidential-realistic
+
+# or run it directly after building the TypeScript package
+node scripts/bench_confidential_balance_realistic.mjs
+```
+
+The output is written to `bench/data/confidential-balance-realistic.json` and
+includes proof-size metadata. The fixture uses a structured deterministic key;
+it is a runtime/proof-size benchmark, not a lattice security estimate.
+
 ### Function-Specific Examples
 
 **Quick benchmark (recommended):**

@@ -5,7 +5,8 @@
         test-validation test-vectors check-formalization \
         build-cool build-balanced build-fast build-export \
         test-sdk-equivalence test-confidential-production \
-        bench-typescript-confidential bench-confidential-verify
+        bench-typescript-confidential bench-confidential-verify \
+        bench-confidential-realistic
 
 # Default target: low-heat Canon build profile
 .DEFAULT_GOAL := build-cool
@@ -116,6 +117,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@cd tests && bun run audit-confidential
 	@$(MAKE) test-sdk-equivalence
 	@node scripts/bench_confidential_balance_128.mjs
+	@node scripts/bench_confidential_balance_realistic.mjs
 
 bench-typescript-confidential: typescript
 	@echo "Running deterministic TypeScript confidential proof benchmarks..."
@@ -124,6 +126,10 @@ bench-typescript-confidential: typescript
 bench-confidential-verify: typescript
 	@echo "Running deterministic confidential verifier comparison benchmarks..."
 	@node bench/confidential-verifier-compare.mjs
+
+bench-confidential-realistic: typescript
+	@echo "Running realistic-dimension confidential balance benchmark..."
+	@node scripts/bench_confidential_balance_realistic.mjs
 
 # Generate test vectors from noble-post-quantum
 test-vectors:
@@ -192,6 +198,7 @@ help:
 	@echo "  test-confidential-production Run production-facing confidential-transfer gates"
 	@echo "  bench-typescript-confidential Benchmark TypeScript confidential proof APIs"
 	@echo "  bench-confidential-verify   Compare JS and native confidential verifier hot paths"
+	@echo "  bench-confidential-realistic Benchmark 1024-dimensional confidential balance proof"
 	@echo "  test-vectors        Generate test vectors from noble-post-quantum"
 	@echo "  examples            Run examples in all languages"
 	@echo "  examples-haskell    Run Haskell examples"

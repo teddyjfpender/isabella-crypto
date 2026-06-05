@@ -141,12 +141,12 @@ Benchmark checks:
 ```bash
 make bench-typescript-confidential
 make bench-confidential-verify
+make bench-confidential-realistic
 ```
 
-The current benchmark harnesses still use deterministic fixtures rather than
-the full `ct_sis_note_mvp_v0` dimensions. The next benchmark milestone is to add
-a realistic-dimension mode that measures prover/verifier cost without silently
-falling back to toy vectors.
+The benchmark harnesses still use deterministic fixtures. The realistic balance
+benchmark now uses the full `ct_sis_note_mvp_v0` dimensions, but it uses a
+structured deterministic commitment key and is not a security estimate.
 
 ## Validation Results From This Pass
 
@@ -158,6 +158,7 @@ Completed:
 - `make test-sdk-equivalence`
 - `make test-validation`
 - `node scripts/bench_confidential_balance_128.mjs`
+- `node scripts/bench_confidential_balance_realistic.mjs`
 - `python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json`
 
 Important validation caveats:
@@ -170,9 +171,15 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.918666 ms median and verification had a 3.957666 ms median.
+  proving had a 3.791542 ms median and verification had a 3.653958 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
   security relations, but the executable proof paths now check only
   parameter/key dimensions.
+- `scripts/bench_confidential_balance_realistic.mjs` now writes
+  `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
+  run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
+  a 3.154990166 s proving time, a 3.136773916 s verification time, and a
+  972347-byte JSON proof object. This is a structured-key runtime benchmark,
+  not a production lattice security estimate.

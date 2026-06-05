@@ -1,0 +1,55 @@
+{
+  "benchmark": "confidential-balance-realistic",
+  "timestamp": "2026-06-05T20:17:55.080Z",
+  "warning": "Deterministic structured-key runtime benchmark for ct_sis_note_mvp_v0 dimensions. This is not a lattice security estimate or LaZer parameter report.",
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v26.0.0",
+    "cpu": "Apple M4 Max"
+  },
+  "config": {
+    "iterations": 1,
+    "warmup": 0,
+    "params": {
+      "m": 1024,
+      "n1": 1,
+      "n2": 1024,
+      "q": 8380417,
+      "beta": 65536
+    },
+    "gamma": 16777216,
+    "fsRounds": 128,
+    "fixture": {
+      "candidate": "ct_sis_note_mvp_v0",
+      "commitmentKey": "deterministic structured identity-plus-message-column matrix",
+      "witness": "periodic entries in {-1,0,1}",
+      "masks": "periodic entries in {-1,1}"
+    }
+  },
+  "proofSize": {
+    "json_bytes": 972347,
+    "a_rows": 128,
+    "a_row_width": 1024,
+    "z_rows": 128,
+    "z_row_width": 1024,
+    "response_entries": 131072,
+    "commitment_entries": 131072
+  },
+  "cases": {
+    "balance_fs_prove_realistic": {
+      "min_ms": 3154.990166,
+      "median_ms": 3154.990166,
+      "max_ms": 3154.990166,
+      "mean_ms": 3154.990166,
+      "stdev_ms": 0
+    },
+    "balance_fs_verify_realistic": {
+      "min_ms": 3136.773916,
+      "median_ms": 3136.773916,
+      "max_ms": 3136.773916,
+      "mean_ms": 3136.773916,
+      "stdev_ms": 0
+    }
+  }
+}

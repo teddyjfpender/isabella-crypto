@@ -750,6 +750,9 @@ Current status and roadmap:
   model for the cryptographic Merkle/hash replacement, with SHA3-256 encoding
   vectors in `tests/fixtures/confidential-merkle-vectors.json` and a
   TypeScript `ConfidentialMerkle` API for leaf/node/root/path checks.
+- `bench/data/confidential-balance-realistic.json` records a 1024x1024
+  `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
+  replacement for the external lattice-estimator and LaZer parameter gates.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)
