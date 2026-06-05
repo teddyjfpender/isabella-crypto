@@ -56,6 +56,7 @@ runCommand format cmd args = case cmd of
     "cr-verify" -> cmdCrVerify format args
     "cr-verify-bench" -> cmdCrVerifyBench format args
     "ct-nullifier" -> cmdCtNullifier format args
+    "ct-nullifier-canonical-challenge" -> cmdCtNullifierCanonicalChallenge format args
     "ct-nullifier-prove" -> cmdCtNullifierProve format args
     "ct-nullifier-verify" -> cmdCtNullifierVerify format args
     "ct-member-prove" -> cmdCtMemberProve format args
@@ -884,6 +885,24 @@ cmdCtNullifier format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =
         _ -> outputError format "Expected params, nullifier key, scalar amount, and randomness vector"
 cmdCtNullifier format _ =
     outputUsage format "Usage: ct-nullifier M N2 Q BETA \"[[nk]]\" AMOUNT \"[rand]\""
+
+cmdCtNullifierCanonicalChallenge :: OutputFormat -> [String] -> IO ()
+cmdCtNullifierCanonicalChallenge format [mStr, n2Str, qStr, betaStr, ckStr, nkStr, cStr, nfStr, aCommitStr, aNullifierStr] =
+    case
+        ( parseCbParams mStr n2Str qStr betaStr
+        , parseMat ckStr
+        , parseMat nkStr
+        , parseVec cStr
+        , parseVec nfStr
+        , parseVec aCommitStr
+        , parseVec aNullifierStr
+        ) of
+        (Just params, Just ck, Just nk, Just c, Just nf, Just aCommit, Just aNullifier) ->
+            outputIntResult format "canonical_nullifier_challenge = "
+                (ConfidentialTransaction.canonicalNullifierChallenge params ck nk c nf aCommit aNullifier)
+        _ -> outputError format "Expected params, keys, commitment, nullifier, commitment announcement, and nullifier announcement"
+cmdCtNullifierCanonicalChallenge format _ =
+    outputUsage format "Usage: ct-nullifier-canonical-challenge M N2 Q BETA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[aCommit]\" \"[aNullifier]\""
 
 cmdCtNullifierProve :: OutputFormat -> [String] -> IO ()
 cmdCtNullifierProve format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, nkStr, cStr, nfStr, amountStr, randStr, yMsgsStr, yRandsStr] =

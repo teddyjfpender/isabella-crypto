@@ -4,7 +4,8 @@
 .PHONY: all canon haskell ocaml typescript clean test examples help \
         test-validation test-vectors check-formalization \
         build-cool build-balanced build-fast build-export \
-        test-sdk-equivalence bench-typescript-confidential bench-confidential-verify
+        test-sdk-equivalence test-confidential-production \
+        bench-typescript-confidential bench-confidential-verify
 
 # Default target: low-heat Canon build profile
 .DEFAULT_GOAL := build-cool
@@ -67,9 +68,11 @@ typescript: ocaml
 	@echo "Building TypeScript library..."
 	@mkdir -p isabella.ts/dist
 	@cd isabella.ml && eval $$(opam env) && dune build src/js/isabella_js.bc.js
-	@rm -f isabella.ts/dist/isabella.js isabella.ts/dist/index.mjs
+	@rm -f isabella.ts/dist/isabella.js isabella.ts/dist/isabella.cjs isabella.ts/dist/index.mjs
 	@cp isabella.ml/_build/default/src/js/isabella_js.bc.js isabella.ts/dist/isabella.js
+	@cp isabella.ml/_build/default/src/js/isabella_js.bc.js isabella.ts/dist/isabella.cjs
 	@cp isabella.ts/src/runtime.cjs isabella.ts/dist/runtime.cjs
+	@cd isabella.ts && npm ci
 	@cd isabella.ts && npx tsc
 	@cd isabella.ts && node ./scripts/write-esm-wrapper.mjs
 	@echo "TypeScript library built successfully"
@@ -97,6 +100,18 @@ test-validation:
 test-sdk-equivalence:
 	@echo "Running cross-SDK equivalence harnesses..."
 	@cd tests && bun run validate-sdks
+
+test-confidential-production: check-formalization build-cool ocaml haskell typescript
+	@echo "Generating confidential transcript vectors..."
+	@node scripts/generate_confidential_transcript_vectors.mjs
+	@echo "Screening confidential transfer parameters..."
+	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
+	@echo "Running confidential transcript vector tests..."
+	@cd tests && bun test confidential-transcript
+	@echo "Running confidential transaction audit..."
+	@cd tests && bun run audit-confidential
+	@$(MAKE) test-sdk-equivalence
+	@node scripts/bench_confidential_balance_128.mjs
 
 bench-typescript-confidential: typescript
 	@echo "Running deterministic TypeScript confidential proof benchmarks..."
@@ -170,6 +185,7 @@ help:
 	@echo "  test-typescript     Run TypeScript tests"
 	@echo "  test-validation     Run cross-validation tests vs noble-post-quantum"
 	@echo "  test-sdk-equivalence Run Haskell/OCaml/TypeScript shared-surface checks"
+	@echo "  test-confidential-production Run production-facing confidential-transfer gates"
 	@echo "  bench-typescript-confidential Benchmark TypeScript confidential proof APIs"
 	@echo "  bench-confidential-verify   Compare JS and native confidential verifier hot paths"
 	@echo "  test-vectors        Generate test vectors from noble-post-quantum"

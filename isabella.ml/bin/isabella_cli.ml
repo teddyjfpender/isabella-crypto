@@ -972,6 +972,29 @@ let cmd_ct_nullifier args =
      | _ -> output_error "Expected params, nullifier key, scalar amount, and randomness vector")
   | _ -> output_error "Usage: ct-nullifier M N2 Q BETA \"[[nk]]\" AMOUNT \"[rand]\""
 
+let cmd_ct_nullifier_canonical_challenge args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; ck_str; nk_str; c_str; nf_str; a_commit_str; a_nullifier_str] ->
+    (match
+       make_cb_params m_str n2_str q_str beta_str,
+       parse_mat ck_str,
+       parse_mat nk_str,
+       parse_vec c_str,
+       parse_vec nf_str,
+       parse_vec a_commit_str,
+       parse_vec a_nullifier_str
+     with
+     | Some params, Some ck, Some nk, Some c, Some nf, Some a_commit, Some a_nullifier ->
+       let result =
+         Confidential_transaction.canonical_nullifier_challenge
+           params ck nk c nf a_commit a_nullifier
+       in
+       output_result "canonical_nullifier_challenge" (string_of_int result)
+     | _ ->
+       output_error "Expected params, keys, commitment, nullifier, commitment announcement, and nullifier announcement")
+  | _ ->
+    output_error "Usage: ct-nullifier-canonical-challenge M N2 Q BETA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[aCommit]\" \"[aNullifier]\""
+
 let cmd_ct_nullifier_prove args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; ck_str; nk_str; c_str; nf_str; amount_str; rand_str; y_msgs_str; y_rands_str] ->
@@ -1482,6 +1505,7 @@ let show_help () =
   print_endline "  cr-verify M N2 Q BETA G K CK C BITS COMPS AMOUNT_AS AMOUNT_ZS PAIR_ASS PAIR_ZSS  Verify deterministic range proof";
   print_endline "  cr-verify-bench I W ...  Benchmark deterministic range verification natively";
   print_endline "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier";
+  print_endline "  ct-nullifier-canonical-challenge M N2 Q BETA CK NK C NF ACOMMIT ANULLIFIER  Deterministic nullifier Fiat-Shamir challenge";
   print_endline "  ct-nullifier-prove M N2 Q BETA G CK NK C NF AMOUNT RAND YMSGS YRANDS  Build repeated-round deterministic nullifier proof";
   print_endline "  ct-nullifier-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify repeated-round deterministic nullifier proof";
   print_endline "  ct-member-prove M N2 Q BETA LEDGER C   Build explicit ledger membership proof";
@@ -1562,6 +1586,7 @@ let run_command cmd args =
   | "cr-verify" -> cmd_cr_verify args
   | "cr-verify-bench" -> cmd_cr_verify_bench args
   | "ct-nullifier" -> cmd_ct_nullifier args
+  | "ct-nullifier-canonical-challenge" -> cmd_ct_nullifier_canonical_challenge args
   | "ct-nullifier-prove" -> cmd_ct_nullifier_prove args
   | "ct-nullifier-verify" -> cmd_ct_nullifier_verify args
   | "ct-member-prove" -> cmd_ct_member_prove args

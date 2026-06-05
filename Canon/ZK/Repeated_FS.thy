@@ -6,12 +6,19 @@ text \<open>
   Domain-separated helpers for the fixed-round Fiat-Shamir slices used by the
   confidential-balance, range, and nullifier proofs.
 
-  The security-facing interpretation of the binary challenge function below is
-  a cryptographic hash-to-bit expansion from the transcript domain and encoded
-  public transcript fields. The arithmetic equation below is the executable
-  model used by the generated reference backends; production adapters must
-  instantiate the same interface with a collision-resistant/XOF transcript hash
-  such as SHAKE or SHA3.
+  The security-facing interpretation of the binary challenge function is a
+  cryptographic hash-to-bit expansion from the transcript domain and canonical
+  public transcript fields. The HOL equation below remains a deterministic
+  proof abstraction used only through the bit and length lemmas in this theory.
+
+  The runtime backends instantiate this interface with SHA3-256 counter-mode
+  expansion over:
+
+    \<open>"ISABELLA-CT-FS-v1" || domain_i64_le || round_i64_le ||
+      field_count_i64_le || fields_i64_le...\<close>
+
+  Backend parity for that byte encoding is pinned by
+  \<open>tests/fixtures/confidential-transcript-vectors.json\<close>.
 \<close>
 
 type_synonym transcript_domain = int

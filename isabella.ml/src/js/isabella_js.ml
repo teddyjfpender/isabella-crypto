@@ -764,6 +764,18 @@ let () =
            (cb_opening_of_js opening)
          |> list_to_js_array
 
+       (** Deterministic Fiat-Shamir challenge for nullifier proofs *)
+       method ctNullifierCanonicalChallenge params ck nk c nf aCommit aNullifier =
+         Confidential_transaction.canonical_nullifier_challenge
+           (cb_params_of_js params)
+           (js_matrix_to_list ck)
+           (js_matrix_to_list nk)
+           (js_array_to_list c)
+           (js_array_to_list nf)
+           (js_array_to_list aCommit)
+           (js_array_to_list aNullifier)
+         |> float_of_int |> Js.number_of_float
+
        (** Deterministic Fiat-Shamir nullifier proof construction *)
        method ctNullifierFsProve params gamma ck nk c nf opening ys =
          let result =

@@ -485,7 +485,22 @@ assert.deepEqual(
   sdk.ConfidentialBalance.balanceCommitment([8, 3], [4, 6], [5, 1], [7, 2], 17),
   'cb-balance-commitment shared surface'
 );
-assert.equal(cbExpectedChallenge, sdk.ConfidentialBalance.canonicalChallenge(cbParamsExpected, cbKey, cbCommitment, cbSigmaA), 'cb-canonical-challenge shared surface');
+assert.equal(
+  parseResult<number>(
+    runHaskell([
+      'cb-canonical-challenge',
+      '2',
+      '2',
+      '17',
+      '3',
+      JSON.stringify(cbKey),
+      JSON.stringify(cbCommitment),
+      JSON.stringify(cbSigmaA),
+    ])
+  ),
+  cbExpectedChallenge,
+  'cb-canonical-challenge shared surface'
+);
 assert.deepEqual(cbSigmaA, sdk.ConfidentialBalance.sigmaCommit(cbParamsExpected, cbKey, cbMask), 'cb-sigma-commit shared surface');
 assert.deepEqual(cbSigmaZ, sdk.ConfidentialBalance.sigmaRespond(cbWitness, cbMask, cbExpectedChallenge), 'cb-sigma-respond shared surface');
 assert.equal(
@@ -742,6 +757,35 @@ assert.ok(
   ['legacy', 'rounds', 'lists'].includes(nullifierProofShape(ctNullifierProof)),
   `unexpected nullifier proof shape: ${nullifierProofShape(ctNullifierProof)}`
 );
+const ctListedNullifierProof = listNullifierProof(ctNullifierProof);
+const ctExpectedNullifierChallenge = sdk.ConfidentialTransaction.canonicalNullifierChallenge(
+  ctParamsExpected,
+  ctCk,
+  ctNk,
+  ctCIn1,
+  ctNf1,
+  ctListedNullifierProof.aCommits[0],
+  ctListedNullifierProof.aNullifiers[0]
+);
+assert.equal(
+  parseResult<number>(
+    runHaskell([
+      'ct-nullifier-canonical-challenge',
+      '2',
+      '2',
+      '17',
+      '3',
+      JSON.stringify(ctCk),
+      JSON.stringify(ctNk),
+      JSON.stringify(ctCIn1),
+      JSON.stringify(ctNf1),
+      JSON.stringify(ctListedNullifierProof.aCommits[0]),
+      JSON.stringify(ctListedNullifierProof.aNullifiers[0]),
+    ])
+  ),
+  ctExpectedNullifierChallenge,
+  'ct-nullifier-canonical-challenge shared surface'
+);
 assert.equal(
   sdk.ConfidentialTransaction.nullifierFsVerify(
     ctParamsExpected,
@@ -755,7 +799,7 @@ assert.equal(
   true,
   'ct-nullifier-verify shared surface'
 );
-const listedCtNullifierProof = listNullifierProof(ctNullifierProof);
+const listedCtNullifierProof = ctListedNullifierProof;
 const ctCliAcceptsSdkNullifier = tryParseResult<boolean>([
       'ct-nullifier-verify',
       ctParamsCase.m.toString(),

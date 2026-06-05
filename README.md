@@ -737,9 +737,11 @@ be serialized across Haskell, OCaml, wasm, and TypeScript.
 
 Current status and roadmap:
 - [Confidential transfer roadmap](plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md)
+- [Confidential transfer production-readiness ledger](plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md)
 - The Fiat-Shamir layer now uses 128 domain-separated binary transcript rounds,
-  but the executable mixer is still a reference model until the runtime backends
-  instantiate SHAKE/SHA3 transcript hashing.
+  and runtime backends use canonical transcript encoding with SHA3-256
+  counter-mode challenge expansion. The HOL theory still treats Fiat-Shamir as
+  a proof abstraction until a full security model is connected.
 - Soundness and HVZK are stated as explicit extractor/simulator assumptions for
   the concrete proof slices; they are not yet full LaZer-grade proofs.
 - The ledger hash remains an execution scaffold and is explicitly marked

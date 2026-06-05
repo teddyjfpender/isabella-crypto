@@ -22,12 +22,14 @@ import {
   ctMemberProve,
   ctMemberVerify,
   ctNullifier,
+  ctNullifierCanonicalChallenge,
   ctNullifierProve,
   ctNullifierVerify,
   ctProve,
   ctVerify,
   crAmountCommitment,
   crProve,
+  listNullifierProof,
   rangeProofShape,
   crVerify,
   nullifierProofShape,
@@ -656,6 +658,32 @@ assert.ok(ctNullifierProof);
 assert.ok(
   ['legacy', 'rounds', 'lists'].includes(nullifierProofShape(ctNullifierProof)),
   `unexpected nullifier proof shape: ${nullifierProofShape(ctNullifierProof)}`
+);
+const ctListedNullifierProof = listNullifierProof(ctNullifierProof);
+const ctExpectedNullifierChallenge = sdk.ConfidentialTransaction.canonicalNullifierChallenge(
+  ctParamsExpected,
+  ctCk,
+  ctNk,
+  ctCIn1,
+  ctNf1,
+  ctListedNullifierProof.aCommits[0],
+  ctListedNullifierProof.aNullifiers[0]
+);
+assert.equal(
+  ctNullifierCanonicalChallenge(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctCk,
+    ctNk,
+    ctCIn1,
+    ctNf1,
+    ctListedNullifierProof.aCommits[0],
+    ctListedNullifierProof.aNullifiers[0]
+  ),
+  ctExpectedNullifierChallenge,
+  'ct-nullifier-canonical-challenge shared surface'
 );
 assert.equal(
   sdk.ConfidentialTransaction.nullifierFsVerify(

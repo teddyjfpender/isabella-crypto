@@ -68,6 +68,7 @@ showHelp = do
     putStrLn "  cr-verify M N2 Q BETA G K CK C BITS COMPS AMOUNT_AS AMOUNT_ZS PAIR_ASS PAIR_ZSS  Verify deterministic range proof"
     putStrLn "  cr-verify-bench I W ...  Benchmark deterministic range verification natively"
     putStrLn "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier"
+    putStrLn "  ct-nullifier-canonical-challenge M N2 Q BETA CK NK C NF ACOMMIT ANULLIFIER  Deterministic nullifier Fiat-Shamir challenge"
     putStrLn "  ct-nullifier-prove M N2 Q BETA G CK NK C NF AMOUNT RAND YMSGS YRANDS  Build repeated-round deterministic nullifier proof"
     putStrLn "  ct-nullifier-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify repeated-round deterministic nullifier proof"
     putStrLn "  ct-member-prove M N2 Q BETA LEDGER C   Build explicit ledger membership proof"

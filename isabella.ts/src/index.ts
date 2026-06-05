@@ -328,6 +328,15 @@ interface IsabellaRuntime {
     proof: RangeProofLike
   ): boolean;
   ctNullifier(params: ScalarCommitParams, nk: number[][], opening: CommitOpening): number[];
+  ctNullifierCanonicalChallenge(
+    params: ScalarCommitParams,
+    ck: number[][],
+    nk: number[][],
+    c: number[],
+    nf: number[],
+    aCommit: number[],
+    aNullifier: number[]
+  ): number;
   ctNullifierFsProve(
     params: ScalarCommitParams,
     gamma: number,
@@ -1600,6 +1609,18 @@ export namespace ConfidentialTransaction {
     opening: CommitOpening
   ): IntVec {
     return normalizeVec(Isabella.ctNullifier(params, nk, opening));
+  }
+
+  export function canonicalNullifierChallenge(
+    params: ScalarCommitParams,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    c: IntVec,
+    nf: IntVec,
+    aCommit: IntVec,
+    aNullifier: IntVec
+  ): number {
+    return Isabella.ctNullifierCanonicalChallenge(params, ck, nk, c, nf, aCommit, aNullifier);
   }
 
   export function nullifierFsProve(

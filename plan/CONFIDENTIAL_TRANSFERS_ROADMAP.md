@@ -22,6 +22,9 @@ The current confidential-transfer stack is an SIS note-commitment MVP:
 
 This is still not production confidential transfers.
 
+The production-readiness ledger for the eight launch blockers is maintained in
+`plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md`.
+
 ## Architecture Decision
 
 Keep the note/SIS path as the MVP. It is already wired through Isabelle,
@@ -45,10 +48,11 @@ benchmarks are independently checked.
 ## Limitations Addressed In This Pass
 
 - `Repeated_FS` no longer uses 8 rounds of `(seed + i) mod 2`. It now exposes a
-  domain-separated transcript interface with 128 binary rounds. The executable
-  mixer is still a deterministic reference model; production adapters must
-  instantiate the interface with a cryptographic transcript hash/XOF such as
-  SHAKE or SHA3.
+  domain-separated transcript interface with 128 binary rounds. OCaml, Haskell,
+  and TypeScript/js_of_ocaml runtime paths now instantiate the executable
+  challenge policy with canonical signed-64-bit little-endian transcript
+  encoding and SHA3-256 counter-mode low-bit expansion. Transcript vectors live
+  in `tests/fixtures/confidential-transcript-vectors.json`.
 - Balance, range, and nullifier proofs now have separate transcript domains and
   public transcript-field encoders.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
@@ -62,8 +66,9 @@ benchmarks are independently checked.
 
 The formalization still needs these before production:
 
-1. Instantiate `binary_fs_challenge` with a real cryptographic transcript hash
-   in generated/runtime backends, including byte encodings and domain tags.
+1. Replace the HOL proof abstraction for `binary_fs_challenge` with a
+   security model that connects the SHA3-256 transcript instantiation to the
+   Fiat-Shamir assumptions used by the proof system.
 2. Replace extractor-correctness assumptions with concrete extractors and
    soundness proofs for balance, range, and nullifier proof objects.
 3. Instantiate simulator assumptions with concrete simulators, rejection
@@ -107,6 +112,12 @@ make test-sdk-equivalence
 make test-validation
 ```
 
+Production-facing confidential-transfer gate:
+
+```bash
+make test-confidential-production
+```
+
 Benchmark checks:
 
 ```bash
@@ -140,9 +151,10 @@ Important validation caveats:
   Haskell.
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
-  with toy dimensions, 128-round balance proving had a 0.184 ms median and
-  verification had a 0.141 ms median. The earlier multi-minute behavior was an
-  executable-model bug: the prover/verifier hot paths repeatedly evaluated the
-  brute-force SIS key-separation predicate. That predicate remains part of the
-  stronger security relations, but the executable proof paths now check only
+  with toy dimensions and SHA3-256 transcript hashing, 128-round balance
+  proving had a 3.9485 ms median and verification had a 3.855083 ms median.
+  The earlier multi-minute behavior was an executable-model bug: the
+  prover/verifier hot paths repeatedly evaluated the brute-force SIS
+  key-separation predicate. That predicate remains part of the stronger
+  security relations, but the executable proof paths now check only
   parameter/key dimensions.
