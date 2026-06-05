@@ -937,6 +937,8 @@ const CT_TRANSACTION_DST = 'ISABELLA-CT-TX-v1';
 const CT_TRANSACTION_PROTOCOL_ID = 'ISABELLA-CT-SIS-NOTE';
 const CT_TRANSACTION_TAGS = {
   context: 0,
+  merkleProof: 1,
+  envelope: 2,
 } as const;
 
 function assertSafeI64(value: number, label: string): void {
@@ -967,6 +969,35 @@ function encodeIntVector(values: IntVec, label: string): Buffer {
   ]);
 }
 
+function encodeBoolVector(values: boolean[], label: string): Buffer {
+  assertNonNegativeSafeI64(values.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(values.length, `${label}.length`),
+    ...values.map((value, index) => {
+      if (typeof value !== 'boolean') {
+        throw new Error(`${label}[${index}] must be boolean`);
+      }
+      return encodeI64LE(value ? 1 : 0, `${label}[${index}]`);
+    }),
+  ]);
+}
+
+function encodeIntMatrix(rows: IntMatrix, label: string): Buffer {
+  assertNonNegativeSafeI64(rows.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(rows.length, `${label}.length`),
+    ...rows.map((row, index) => encodeIntVector(row, `${label}[${index}]`)),
+  ]);
+}
+
+function encodeIntMatrixArray(mats: IntMatrix[], label: string): Buffer {
+  assertNonNegativeSafeI64(mats.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(mats.length, `${label}.length`),
+    ...mats.map((mat, index) => encodeIntMatrix(mat, `${label}[${index}]`)),
+  ]);
+}
+
 function encodeAsciiString(value: string, label: string): Buffer {
   const bytes = [...value].map((char, index) => {
     const code = char.charCodeAt(0);
@@ -988,6 +1019,14 @@ function encodeDigest(digest: MerkleDigest, label: string): Buffer {
   return Buffer.concat([
     encodeI64LE(bytes.length, `${label}.length`),
     bytes,
+  ]);
+}
+
+function encodeDigestVector(digests: MerkleDigest[], label: string): Buffer {
+  assertNonNegativeSafeI64(digests.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(digests.length, `${label}.length`),
+    ...digests.map((digest, index) => encodeDigest(digest, `${label}[${index}]`)),
   ]);
 }
 
@@ -1067,6 +1106,143 @@ function transactionContextPreimage(context: ConfidentialTransactionContext): Bu
     encodeIntVector(context.nf1, 'nf1'),
     encodeIntVector(context.nf2, 'nf2'),
   ]);
+}
+
+function transactionTaggedPreimage(tag: number, body: Buffer): Buffer {
+  return Buffer.concat([
+    Buffer.from(CT_TRANSACTION_DST, 'ascii'),
+    encodeI64LE(tag, 'transaction tag'),
+    encodeAsciiString(CT_TRANSACTION_PROTOCOL_ID, 'protocolId'),
+    body,
+  ]);
+}
+
+function listedNullifierProof(proof: NullifierProofLike): ListedNullifierProof {
+  if ('rounds' in proof && Array.isArray(proof.rounds)) {
+    return {
+      aCommits: proof.rounds.map((round) => round.aCommit),
+      aNullifiers: proof.rounds.map((round) => round.aNullifier),
+      zMsgs: proof.rounds.map((round) => round.zMsg),
+      zRands: proof.rounds.map((round) => round.zRand),
+    };
+  }
+  if (
+    'aCommits' in proof &&
+    'aNullifiers' in proof &&
+    'zMsgs' in proof &&
+    'zRands' in proof
+  ) {
+    return proof;
+  }
+  const legacy = proof as NullifierProof;
+  return {
+    aCommits: [legacy.aCommit],
+    aNullifiers: [legacy.aNullifier],
+    zMsgs: [legacy.zMsg],
+    zRands: [legacy.zRand],
+  };
+}
+
+function listedRangeProof(proof: RangeProofLike): ListedRangeProof {
+  if ('rounds' in proof && Array.isArray(proof.rounds)) {
+    return {
+      bits: proof.bits,
+      comps: proof.comps,
+      amountAs: proof.rounds.map((round) => round.amountA),
+      amountZs: proof.rounds.map((round) => round.amountZ),
+      pairAss: proof.rounds.map((round) => round.pairAs),
+      pairZss: proof.rounds.map((round) => round.pairZs),
+    };
+  }
+  if ('amountAs' in proof && 'amountZs' in proof && 'pairAss' in proof && 'pairZss' in proof) {
+    return proof;
+  }
+  const legacy = proof as RangeProof;
+  return {
+    bits: legacy.bits,
+    comps: legacy.comps,
+    amountAs: [legacy.amountA],
+    amountZs: [legacy.amountZ],
+    pairAss: [legacy.pairAs],
+    pairZss: [legacy.pairZs],
+  };
+}
+
+function transactionMerkleMembershipPreimage(
+  proof: MerkleMembershipProof,
+  label: string
+): Buffer {
+  if (proof.siblings.length !== proof.directions.length) {
+    throw new Error(`${label}.siblings and ${label}.directions must have the same length`);
+  }
+  assertNonNegativeSafeI64(proof.index, `${label}.index`);
+  return Buffer.concat([
+    encodeI64LE(proof.index, `${label}.index`),
+    encodeDigest(proof.root, `${label}.root`),
+    encodeDigestVector(proof.siblings, `${label}.siblings`),
+    encodeBoolVector(proof.directions, `${label}.directions`),
+  ]);
+}
+
+function transactionNullifierProofPreimage(
+  proof: NullifierProofLike,
+  label: string
+): Buffer {
+  const listed = listedNullifierProof(proof);
+  return Buffer.concat([
+    encodeIntMatrix(listed.aCommits, `${label}.aCommits`),
+    encodeIntMatrix(listed.aNullifiers, `${label}.aNullifiers`),
+    encodeIntMatrix(listed.zMsgs, `${label}.zMsgs`),
+    encodeIntMatrix(listed.zRands, `${label}.zRands`),
+  ]);
+}
+
+function transactionBalanceProofPreimage(proof: BalanceProof, label: string): Buffer {
+  return Buffer.concat([
+    encodeIntMatrix(proof.as, `${label}.as`),
+    encodeIntMatrix(proof.zs, `${label}.zs`),
+  ]);
+}
+
+function transactionRangeProofPreimage(proof: RangeProofLike, label: string): Buffer {
+  const listed = listedRangeProof(proof);
+  return Buffer.concat([
+    encodeIntMatrix(listed.bits, `${label}.bits`),
+    encodeIntMatrix(listed.comps, `${label}.comps`),
+    encodeIntMatrix(listed.amountAs, `${label}.amountAs`),
+    encodeIntMatrix(listed.amountZs, `${label}.amountZs`),
+    encodeIntMatrixArray(listed.pairAss, `${label}.pairAss`),
+    encodeIntMatrixArray(listed.pairZss, `${label}.pairZss`),
+  ]);
+}
+
+function transactionMerkleProofPreimage(proof: MerkleTransactionProof): Buffer {
+  return transactionTaggedPreimage(
+    CT_TRANSACTION_TAGS.merkleProof,
+    Buffer.concat([
+      transactionMerkleMembershipPreimage(proof.in1Member, 'in1Member'),
+      transactionMerkleMembershipPreimage(proof.in2Member, 'in2Member'),
+      transactionNullifierProofPreimage(proof.in1Nullifier, 'in1Nullifier'),
+      transactionNullifierProofPreimage(proof.in2Nullifier, 'in2Nullifier'),
+      transactionBalanceProofPreimage(proof.balance, 'balance'),
+      transactionRangeProofPreimage(proof.out1Range, 'out1Range'),
+      transactionRangeProofPreimage(proof.out2Range, 'out2Range'),
+    ])
+  );
+}
+
+function transactionEnvelopePreimage(envelope: ConfidentialTransactionEnvelope): Buffer {
+  const contextDigest = sha3Hex(transactionContextPreimage(envelope.context));
+  if (envelope.contextDigest !== contextDigest) {
+    throw new Error('contextDigest does not match canonical transaction context');
+  }
+  return transactionTaggedPreimage(
+    CT_TRANSACTION_TAGS.envelope,
+    Buffer.concat([
+      encodeDigest(contextDigest, 'contextDigest'),
+      encodeDigest(sha3Hex(transactionMerkleProofPreimage(envelope.proof)), 'proofDigest'),
+    ])
+  );
 }
 
 function merkleCompressLevel(width: number, level: MerkleDigest[]): MerkleDigest[] {
@@ -2039,6 +2215,30 @@ export namespace ConfidentialTransaction {
     context: ConfidentialTransactionContext
   ): MerkleDigest {
     return sha3Hex(transactionContextPreimage(context));
+  }
+
+  export function transactionMerkleProofPreimageHex(
+    proof: MerkleTransactionProof
+  ): string {
+    return transactionMerkleProofPreimage(proof).toString('hex');
+  }
+
+  export function transactionMerkleProofDigest(
+    proof: MerkleTransactionProof
+  ): MerkleDigest {
+    return sha3Hex(transactionMerkleProofPreimage(proof));
+  }
+
+  export function transactionEnvelopePreimageHex(
+    envelope: ConfidentialTransactionEnvelope
+  ): string {
+    return transactionEnvelopePreimage(envelope).toString('hex');
+  }
+
+  export function transactionEnvelopeDigest(
+    envelope: ConfidentialTransactionEnvelope
+  ): MerkleDigest {
+    return sha3Hex(transactionEnvelopePreimage(envelope));
   }
 
   export function transactionContextMatchesPolicy(

@@ -2,18 +2,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const out = process.env.OUT ?? path.join(projectRoot, 'tests/fixtures/confidential-transaction-vectors.json');
 const merkleVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-merkle-vectors.json');
+const typeScriptEntry = path.join(projectRoot, 'isabella.ts/dist/index.mjs');
 
 const dst = Buffer.from('ISABELLA-CT-TX-v1', 'ascii');
 const protocolId = 'ISABELLA-CT-SIS-NOTE';
 const tags = {
   context: 0,
+  merkleProof: 1,
+  envelope: 2,
 };
 
 function i64le(value) {
@@ -80,6 +83,91 @@ function digestHex(buffer) {
   return createHash('sha3-256').update(buffer).digest('hex');
 }
 
+async function buildMerkleTransactionFixture() {
+  const sdk = await import(pathToFileURL(typeScriptEntry).href);
+  const params = sdk.ConfidentialBalance.makeParams(2, 2, 17, 6);
+  const ck = [
+    [1, 0, 0],
+    [0, 1, 0],
+  ];
+  const nk = [
+    [0, 1, 0],
+    [1, 0, 0],
+  ];
+  const gamma = 5;
+  const k = 1;
+  const rounds = sdk.ConfidentialBalance.fsRounds();
+  const opIn1 = { msg: [1], rand: [1, 0] };
+  const opIn2 = { msg: [1], rand: [0, 1] };
+  const opOut1 = { msg: [1], rand: [1, 1] };
+  const opOut2 = { msg: [1], rand: [0, 0] };
+  const bit1 = [{ msg: [1], rand: [1, 1] }];
+  const comp1 = [{ msg: [0], rand: [0, 0] }];
+  const bit2 = [{ msg: [1], rand: [0, 0] }];
+  const comp2 = [{ msg: [0], rand: [0, 0] }];
+  const yIn1 = Array.from({ length: rounds }, () => ({ msg: [0], rand: [1, 0] }));
+  const yIn2 = Array.from({ length: rounds }, () => ({ msg: [1], rand: [0, 1] }));
+  const yBalance = Array.from({ length: rounds }, () => [0, 1]);
+  const yOut1 = Array.from({ length: rounds }, () => [0, 1]);
+  const yOut1Pairs = Array.from({ length: rounds }, () => [[0, 0]]);
+  const yOut2 = Array.from({ length: rounds }, () => [1, 0]);
+  const yOut2Pairs = Array.from({ length: rounds }, () => [[0, 0]]);
+  const commitOf = (opening) =>
+    sdk.Zq.matVecMultMod(ck, sdk.Vec.concat(opening.msg, opening.rand), params.q);
+  const cIn1 = commitOf(opIn1);
+  const cIn2 = commitOf(opIn2);
+  const cOut1 = commitOf(opOut1);
+  const cOut2 = commitOf(opOut2);
+  const nf1 = sdk.ConfidentialTransaction.nullifier(params, nk, opIn1);
+  const nf2 = sdk.ConfidentialTransaction.nullifier(params, nk, opIn2);
+  const ledger = [cIn1, cIn2];
+  const spent = [];
+  const proof = sdk.ConfidentialTransaction.fsProveMerkle(
+    params,
+    gamma,
+    k,
+    ck,
+    nk,
+    ledger,
+    spent,
+    cIn1,
+    cIn2,
+    cOut1,
+    cOut2,
+    nf1,
+    nf2,
+    opIn1,
+    opIn2,
+    opOut1,
+    opOut2,
+    bit1,
+    comp1,
+    bit2,
+    comp2,
+    yIn1,
+    yIn2,
+    yBalance,
+    yOut1,
+    yOut1Pairs,
+    yOut2,
+    yOut2Pairs
+  );
+  if (proof === null) {
+    throw new Error('failed to build Merkle transaction fixture');
+  }
+  return {
+    sdk,
+    root: sdk.ConfidentialTransaction.merkleLedgerRoot(ledger),
+    cIn1,
+    cIn2,
+    cOut1,
+    cOut2,
+    nf1,
+    nf2,
+    proof,
+  };
+}
+
 const merkleVectors = JSON.parse(fs.readFileSync(merkleVectorsPath, 'utf8'));
 const [leaf0, leaf1] = merkleVectors.leaves;
 const baseContext = {
@@ -97,6 +185,32 @@ const baseContext = {
   nf2: [-3, -2, -1],
 };
 const basePreimage = contextPreimage(baseContext);
+const proofFixture = await buildMerkleTransactionFixture();
+const envelopeContext = {
+  protocolVersion: 1,
+  networkId: 'isabella-local-devnet',
+  assetId: 7,
+  ledgerEpoch: 42,
+  root: proofFixture.root,
+  publicFee: 0,
+  cIn1: proofFixture.cIn1,
+  cIn2: proofFixture.cIn2,
+  cOut1: proofFixture.cOut1,
+  cOut2: proofFixture.cOut2,
+  nf1: proofFixture.nf1,
+  nf2: proofFixture.nf2,
+};
+const tx = proofFixture.sdk.ConfidentialTransaction;
+const envelopeContextDigest = tx.transactionContextDigest(envelopeContext);
+const proofPreimageHex = tx.transactionMerkleProofPreimageHex(proofFixture.proof);
+const proofDigest = tx.transactionMerkleProofDigest(proofFixture.proof);
+const envelope = {
+  context: envelopeContext,
+  contextDigest: envelopeContextDigest,
+  proof: proofFixture.proof,
+};
+const envelopePreimageHex = tx.transactionEnvelopePreimageHex(envelope);
+const envelopeDigest = tx.transactionEnvelopeDigest(envelope);
 
 const vectors = {
   version: 1,
@@ -116,8 +230,45 @@ const vectors = {
       digest: digestHex(basePreimage),
     },
   ],
+  merkleProofCases: [
+    {
+      name: 'sis-note-merkle-proof-basic',
+      preimageHex: proofPreimageHex,
+      digest: proofDigest,
+    },
+  ],
+  envelopeCases: [
+    {
+      name: 'sis-note-envelope-basic',
+      context: envelopeContext,
+      contextDigest: envelopeContextDigest,
+      proofDigest,
+      preimageHex: envelopePreimageHex,
+      digest: envelopeDigest,
+    },
+  ],
 };
 
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(vectors, null, 2)}\n`);
-console.log(JSON.stringify(vectors, null, 2));
+console.log(JSON.stringify({
+  version: vectors.version,
+  algorithm: vectors.algorithm,
+  dst: vectors.dst,
+  tags: vectors.tags,
+  cases: vectors.cases.map((entry) => ({
+    name: entry.name,
+    digest: entry.digest,
+    preimageBytes: entry.preimageHex.length / 2,
+  })),
+  merkleProofCases: vectors.merkleProofCases.map((entry) => ({
+    name: entry.name,
+    digest: entry.digest,
+    preimageBytes: entry.preimageHex.length / 2,
+  })),
+  envelopeCases: vectors.envelopeCases.map((entry) => ({
+    name: entry.name,
+    digest: entry.digest,
+    preimageBytes: entry.preimageHex.length / 2,
+  })),
+}, null, 2));

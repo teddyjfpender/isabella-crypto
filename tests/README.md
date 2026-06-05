@@ -105,8 +105,9 @@ The harnesses are repair-aware:
   semantic ledger-step verifier, exported on the TS SDK as
   `ConfidentialTransaction.semanticStepValid`.
 - The confidential transaction context vector pins public replay context
-  bytes, and the TS envelope verifier checks the context digest and expected
-  network/asset/root policy before delegating to the Merkle proof verifier.
+  bytes plus TypeScript Merkle-proof and envelope preimage/digest bytes. The
+  TS envelope verifier checks the context digest and expected network/asset/root
+  policy before delegating to the Merkle proof verifier.
   The OCaml and Haskell CLIs expose `ct-verify-merkle-envelope`; the validators
   feed native context digests and native Merkle transaction proofs through that
   command and assert rejection for stale digests, wrong policy, nonzero public

@@ -33,6 +33,18 @@ type TransactionVector = {
   digest: string;
 };
 
+type DigestVector = {
+  name: string;
+  preimageHex: string;
+  digest: string;
+};
+
+type EnvelopeVector = DigestVector & {
+  context: TransactionContext;
+  contextDigest: string;
+  proofDigest: string;
+};
+
 type TransactionVectors = {
   version: number;
   algorithm: string;
@@ -42,8 +54,10 @@ type TransactionVectors = {
   stringEncoding: string;
   digestEncoding: string;
   vectorEncoding: string;
-  tags: { context: number };
+  tags: { context: number; merkleProof: number; envelope: number };
   cases: TransactionVector[];
+  merkleProofCases: DigestVector[];
+  envelopeCases: EnvelopeVector[];
 };
 
 function sha3Hex(preimageHex: string): string {
@@ -63,11 +77,20 @@ describe('Confidential transaction context vectors', () => {
     expect(vectors.stringEncoding).toBe('len_i64_le || printable_ascii_bytes');
     expect(vectors.digestEncoding).toBe('len_i64_le || 32 raw digest bytes');
     expect(vectors.vectorEncoding).toBe('len_i64_le || values_i64_le...');
-    expect(vectors.tags).toEqual({ context: 0 });
+    expect(vectors.tags).toEqual({ context: 0, merkleProof: 1, envelope: 2 });
   });
 
   it('hashes every pinned transaction context preimage to the recorded digest', () => {
     for (const entry of vectors.cases) {
+      expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
+    }
+  });
+
+  it('hashes every pinned Merkle proof and envelope preimage to the recorded digest', () => {
+    for (const entry of vectors.merkleProofCases) {
+      expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
+    }
+    for (const entry of vectors.envelopeCases) {
       expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
     }
   });
@@ -104,6 +127,57 @@ describe('Confidential transaction context vectors', () => {
     expect(() => tx.transactionContextDigest({ ...entry.context, networkId: 'isabella-\u2603' }))
       .toThrow();
     expect(() => tx.transactionContextDigest({ ...entry.context, root: entry.context.root.toUpperCase() }))
+      .toThrow();
+  });
+
+  it('matches the TypeScript Merkle proof and envelope serialization APIs', async () => {
+    const {
+      sdk,
+      root,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof,
+    } = await buildMerkleTransactionFixture();
+    const tx = sdk.ConfidentialTransaction;
+    const [proofVector] = vectors.merkleProofCases;
+    const [envelopeVector] = vectors.envelopeCases;
+    const context: TransactionContext = {
+      protocolVersion: 1,
+      networkId: 'isabella-local-devnet',
+      assetId: 7,
+      ledgerEpoch: 42,
+      root,
+      publicFee: 0,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+    };
+    const envelope = {
+      context,
+      contextDigest: tx.transactionContextDigest(context),
+      proof,
+    };
+
+    expect(tx.transactionMerkleProofPreimageHex(proof)).toBe(proofVector.preimageHex);
+    expect(tx.transactionMerkleProofDigest(proof)).toBe(proofVector.digest);
+    expect(tx.transactionEnvelopePreimageHex(envelope)).toBe(envelopeVector.preimageHex);
+    expect(tx.transactionEnvelopeDigest(envelope)).toBe(envelopeVector.digest);
+    expect(envelope.contextDigest).toBe(envelopeVector.contextDigest);
+    expect(tx.transactionMerkleProofDigest({ ...proof, in2Member: proof.in1Member }))
+      .not.toBe(proofVector.digest);
+    expect(tx.transactionEnvelopeDigest({
+      context: { ...context, networkId: 'isabella-mainnet' },
+      contextDigest: tx.transactionContextDigest({ ...context, networkId: 'isabella-mainnet' }),
+      proof,
+    })).not.toBe(envelopeVector.digest);
+    expect(() => tx.transactionEnvelopeDigest({ ...envelope, contextDigest: proofVector.digest }))
       .toThrow();
   });
 
