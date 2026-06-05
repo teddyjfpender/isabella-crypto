@@ -748,7 +748,8 @@ Current status and roadmap:
 - The executable ledger hash remains a scaffold and is explicitly marked
   non-production; `Canon/ZK/Authenticated_Merkle.thy` is the checked target
   model for the cryptographic Merkle/hash replacement, with SHA3-256 encoding
-  vectors in `tests/fixtures/confidential-merkle-vectors.json`.
+  vectors in `tests/fixtures/confidential-merkle-vectors.json` and a
+  TypeScript `ConfidentialMerkle` API for leaf/node/root/path checks.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)

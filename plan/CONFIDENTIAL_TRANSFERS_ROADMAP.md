@@ -71,7 +71,9 @@ benchmarks are independently checked.
   checked cryptographic target model for the replacement: canonical empty,
   leaf, and internal-node encodings, an abstract Merkle hash, and same-path
   membership soundness under collision resistance. Runtime SHA3-256 Merkle
-  encoding vectors live in `tests/fixtures/confidential-merkle-vectors.json`.
+  encoding vectors live in `tests/fixtures/confidential-merkle-vectors.json`,
+  and the TypeScript SDK exposes `ConfidentialMerkle` leaf/node/root/path APIs
+  tested against those vectors and tampered membership paths.
 - `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
   contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
   asset IDs, version contexts, wallet proof generation, and failure semantics.
@@ -168,7 +170,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.945917 ms median and verification had a 3.8645 ms median.
+  proving had a 3.918666 ms median and verification had a 3.957666 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger

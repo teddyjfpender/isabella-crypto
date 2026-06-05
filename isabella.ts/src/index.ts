@@ -11,6 +11,8 @@
  * Isabelle-exported OCaml Canon modules only.
  */
 
+import { createHash } from 'node:crypto';
+
 // Load the js_of_ocaml runtime (sets globalThis.Isabella)
 // This import is handled by the runtime loader
 import './runtime.cjs';
@@ -148,6 +150,17 @@ export interface MembershipProof {
   index: number;
   root: IntVec;
   siblings: IntMatrix;
+  directions: boolean[];
+}
+
+/** Hex-encoded SHA3-256 Merkle digest */
+export type MerkleDigest = string;
+
+/** Cryptographic Merkle membership proof over note commitment leaves */
+export interface MerkleMembershipProof {
+  index: number;
+  root: MerkleDigest;
+  siblings: MerkleDigest[];
   directions: boolean[];
 }
 
@@ -810,6 +823,132 @@ function normalizeTransactionProof(proof: TransactionProof | null): TransactionP
     out1Range,
     out2Range,
   };
+}
+
+const CT_MERKLE_DST = 'ISABELLA-CT-MERKLE-v1';
+const CT_MERKLE_TAGS = {
+  leaf: 0,
+  node: 1,
+  empty: 2,
+} as const;
+
+function assertSafeI64(value: number, label: string): void {
+  if (!Number.isSafeInteger(value)) {
+    throw new RangeError(`${label} must be a safe signed integer`);
+  }
+}
+
+function assertNonNegativeSafeI64(value: number, label: string): void {
+  assertSafeI64(value, label);
+  if (value < 0) {
+    throw new RangeError(`${label} must be non-negative`);
+  }
+}
+
+function encodeI64LE(value: number, label: string): Buffer {
+  assertSafeI64(value, label);
+  const out = Buffer.alloc(8);
+  out.writeBigInt64LE(BigInt(value), 0);
+  return out;
+}
+
+function encodeIntVector(values: IntVec, label: string): Buffer {
+  assertNonNegativeSafeI64(values.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(values.length, `${label}.length`),
+    ...values.map((value, index) => encodeI64LE(value, `${label}[${index}]`)),
+  ]);
+}
+
+function merklePreimage(tag: number, body: Buffer): Buffer {
+  return Buffer.concat([
+    Buffer.from(CT_MERKLE_DST, 'ascii'),
+    encodeI64LE(tag, 'merkle tag'),
+    body,
+  ]);
+}
+
+function sha3Hex(preimage: Buffer): MerkleDigest {
+  return createHash('sha3-256').update(preimage).digest('hex');
+}
+
+function assertDigestHex(digest: MerkleDigest, label: string): void {
+  if (!/^[0-9a-f]{64}$/.test(digest)) {
+    throw new Error(`${label} must be a canonical lowercase SHA3-256 digest`);
+  }
+}
+
+function digestToByteVector(digest: MerkleDigest, label: string): IntVec {
+  assertDigestHex(digest, label);
+  return [...Buffer.from(digest, 'hex')];
+}
+
+function merkleLeafPreimage(commitment: IntVec): Buffer {
+  return merklePreimage(CT_MERKLE_TAGS.leaf, encodeIntVector(commitment, 'commitment'));
+}
+
+function merkleEmptyPreimage(width: number): Buffer {
+  assertNonNegativeSafeI64(width, 'width');
+  return merklePreimage(CT_MERKLE_TAGS.empty, encodeI64LE(width, 'width'));
+}
+
+function merkleNodePreimage(left: MerkleDigest, right: MerkleDigest): Buffer {
+  return merklePreimage(
+    CT_MERKLE_TAGS.node,
+    Buffer.concat([
+      encodeIntVector(digestToByteVector(left, 'left'), 'left'),
+      encodeIntVector(digestToByteVector(right, 'right'), 'right'),
+    ])
+  );
+}
+
+function merkleHashLeaf(commitment: IntVec): MerkleDigest {
+  return sha3Hex(merkleLeafPreimage(commitment));
+}
+
+function merkleHashEmpty(width: number): MerkleDigest {
+  return sha3Hex(merkleEmptyPreimage(width));
+}
+
+function merkleHashNode(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
+  return sha3Hex(merkleNodePreimage(left, right));
+}
+
+function merkleCompressLevel(width: number, level: MerkleDigest[]): MerkleDigest[] {
+  if (level.length === 0) {
+    return [];
+  }
+  if (level.length === 1) {
+    return level.slice();
+  }
+  const out: MerkleDigest[] = [];
+  const empty = merkleHashEmpty(width);
+  for (let index = 0; index < level.length; index += 2) {
+    const left = level[index];
+    const right = index + 1 < level.length ? level[index + 1] : empty;
+    out.push(merkleHashNode(left, right));
+  }
+  return out;
+}
+
+function merkleIndexDirections(depth: number, index: number): boolean[] {
+  assertNonNegativeSafeI64(depth, 'depth');
+  assertNonNegativeSafeI64(index, 'index');
+  const directions: boolean[] = [];
+  let current = index;
+  for (let round = 0; round < depth; round += 1) {
+    directions.push(current % 2 === 1);
+    current = Math.floor(current / 2);
+  }
+  return directions;
+}
+
+function assertMerkleCommitmentWidths(commitments: IntMatrix, width: number): void {
+  for (let index = 0; index < commitments.length; index += 1) {
+    if (commitments[index].length !== width) {
+      throw new Error('Merkle commitments must all have the selected width');
+    }
+  }
 }
 
 /**
@@ -1592,6 +1731,134 @@ export namespace ConfidentialRange {
       return 'lists';
     }
     return 'legacy';
+  }
+}
+
+/**
+ * Cryptographic Merkle helpers for confidential note membership.
+ *
+ * This is the SHA3-256 runtime target for `Authenticated_Merkle.thy`. The
+ * current transaction verifier still uses the algebraic ledger scaffold, so
+ * these helpers are exposed separately until the formal transaction relation is
+ * migrated to cryptographic roots.
+ */
+export namespace ConfidentialMerkle {
+  export const dst = CT_MERKLE_DST;
+  export const tags = CT_MERKLE_TAGS;
+
+  export function encodeLeaf(commitment: IntVec): string {
+    return merkleLeafPreimage(commitment).toString('hex');
+  }
+
+  export function encodeEmpty(width: number): string {
+    return merkleEmptyPreimage(width).toString('hex');
+  }
+
+  export function encodeNode(left: MerkleDigest, right: MerkleDigest): string {
+    return merkleNodePreimage(left, right).toString('hex');
+  }
+
+  export function leaf(commitment: IntVec): MerkleDigest {
+    return merkleHashLeaf(commitment);
+  }
+
+  export function empty(width: number): MerkleDigest {
+    return merkleHashEmpty(width);
+  }
+
+  export function node(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
+    return merkleHashNode(left, right);
+  }
+
+  export function root(commitments: IntMatrix, emptyWidth?: number): MerkleDigest {
+    const width = emptyWidth ?? commitments[0]?.length ?? 0;
+    assertNonNegativeSafeI64(width, 'emptyWidth');
+    assertMerkleCommitmentWidths(commitments, width);
+    if (commitments.length === 0) {
+      return merkleHashEmpty(width);
+    }
+    let level = commitments.map(merkleHashLeaf);
+    while (level.length > 1) {
+      level = merkleCompressLevel(width, level);
+    }
+    return level[0];
+  }
+
+  export function pathRoot(
+    commitment: IntVec,
+    siblings: MerkleDigest[],
+    directions: boolean[]
+  ): MerkleDigest {
+    if (siblings.length !== directions.length) {
+      throw new Error('Merkle siblings and directions must have the same length');
+    }
+    let acc = merkleHashLeaf(commitment);
+    for (let index = 0; index < siblings.length; index += 1) {
+      const sibling = siblings[index];
+      acc = directions[index]
+        ? merkleHashNode(sibling, acc)
+        : merkleHashNode(acc, sibling);
+    }
+    return acc;
+  }
+
+  export function membershipProve(
+    commitments: IntMatrix,
+    commitment: IntVec
+  ): MerkleMembershipProof | null {
+    const index = commitments.findIndex((entry) => JSON.stringify(entry) === JSON.stringify(commitment));
+    if (index < 0) {
+      return null;
+    }
+
+    const width = commitments[0]?.length ?? commitment.length;
+    assertMerkleCommitmentWidths(commitments, width);
+    let level = commitments.map(merkleHashLeaf);
+    const siblings: MerkleDigest[] = [];
+    const directions: boolean[] = [];
+    let current = index;
+
+    while (level.length > 1) {
+      const isRight = current % 2 === 1;
+      directions.push(isRight);
+      siblings.push(
+        isRight
+          ? level[current - 1]
+          : current + 1 < level.length
+            ? level[current + 1]
+            : merkleHashEmpty(width)
+      );
+      level = merkleCompressLevel(width, level);
+      current = Math.floor(current / 2);
+    }
+
+    return {
+      index,
+      root: level[0],
+      siblings,
+      directions,
+    };
+  }
+
+  export function membershipVerify(
+    commitment: IntVec,
+    proof: MerkleMembershipProof
+  ): boolean {
+    try {
+      if (proof.siblings.length !== proof.directions.length) {
+        return false;
+      }
+      if (
+        JSON.stringify(proof.directions) !==
+        JSON.stringify(merkleIndexDirections(proof.siblings.length, proof.index))
+      ) {
+        return false;
+      }
+      assertDigestHex(proof.root, 'root');
+      return pathRoot(commitment, proof.siblings, proof.directions) === proof.root;
+    } catch {
+      return false;
+    }
   }
 }
 

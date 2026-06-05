@@ -70,9 +70,9 @@ function node(leftDigest, rightDigest) {
 
 const leaf0 = leaf([1, -2, 3]);
 const leaf1 = leaf([4, 5, -6]);
-const empty2 = empty(2);
+const emptyLeafWidth = empty(leaf0.commitment.length);
 const parent01 = node(leaf0.digest, leaf1.digest);
-const parent0Empty = node(leaf0.digest, empty2.digest);
+const parent0Empty = node(leaf0.digest, emptyLeafWidth.digest);
 const root = node(parent01.digest, parent0Empty.digest);
 
 const vectors = {
@@ -83,7 +83,7 @@ const vectors = {
   vectorEncoding: 'len_i64_le || values_i64_le...',
   tags,
   leaves: [leaf0, leaf1],
-  empty: [empty2],
+  empty: [emptyLeafWidth],
   nodes: [parent01, parent0Empty, root],
   sampleRoot: root.digest,
 };
