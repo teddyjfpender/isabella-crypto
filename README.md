@@ -744,8 +744,9 @@ Current status and roadmap:
   a proof abstraction until a full security model is connected.
 - Soundness and HVZK are stated as explicit extractor/simulator assumptions for
   the concrete proof slices; they are not yet full LaZer-grade proofs.
-- The ledger hash remains an execution scaffold and is explicitly marked
-  non-production in `Canon/ZK/Authenticated_Ledger.thy`.
+- The executable ledger hash remains a scaffold and is explicitly marked
+  non-production; `Canon/ZK/Authenticated_Merkle.thy` is the checked target
+  model for the cryptographic Merkle/hash replacement.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)

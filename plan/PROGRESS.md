@@ -110,13 +110,15 @@
 | `ZK/Confidential_Balance.thy` | 🔄 | SIS-note balance proof slice with domain-separated FS challenges and completeness |
 | `ZK/Confidential_Range.thy` | 🔄 | Bit/complement range proof slice with in-range theorem and completeness |
 | `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, membership, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link |
+| `ZK/Authenticated_Merkle.thy` | 🔄 | Cryptographic Merkle/hash target model with canonical encodings and same-path soundness under collision resistance |
 | `ZK/Authenticated_Ledger.thy` | 🔄 | Authenticated membership scaffold; ledger hash explicitly marked non-production |
 | `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness and abort analysis |
 | `ZK/LinearRelations.thy` | ⬜ | LaZer-style linear proofs |
 
 **Blockers**: Fiat-Shamir security-model connection, concrete
 extractors/simulators, external lattice-estimator pass, realistic proof
-benchmarks, and cryptographic Merkle/hash ledger model. See
+benchmarks, and migration from the scaffold ledger to the cryptographic
+Merkle/hash target model. See
 `plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md`.
 
 ---

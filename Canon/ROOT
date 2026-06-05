@@ -70,6 +70,7 @@ session Canon_ZK in "ZK" = Canon_Rings +
     Canon_Gadgets
   theories
     Sigma_Base
+    Authenticated_Merkle
     Confidential_Balance
     Confidential_Range
     Confidential_Transaction

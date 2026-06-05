@@ -18,6 +18,8 @@ The current confidential-transfer stack is an SIS note-commitment MVP:
   balance, range proofs, and semantic ledger-step preservation.
 - `Canon/ZK/Repeated_FS.thy`: shared 128-round, domain-separated binary
   Fiat-Shamir challenge policy.
+- `Canon/ZK/Authenticated_Merkle.thy`: production-target Merkle/hash model with
+  canonical encodings and collision-resistance membership soundness lemmas.
 - `Canon/ZK/Authenticated_Ledger.thy`: executable membership scaffold.
 
 This is still not production confidential transfers.
@@ -60,7 +62,10 @@ benchmarks are independently checked.
   assumptions for HVZK, and a theorem reducing verified opening collisions to
   SIS via `binding_implies_sis`.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
-  and explicitly not production-ready.
+  and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
+  checked cryptographic target model for the replacement: canonical empty,
+  leaf, and internal-node encodings, an abstract Merkle hash, and same-path
+  membership soundness under collision resistance.
 
 ## Remaining Security Work
 
@@ -75,8 +80,10 @@ The formalization still needs these before production:
    sampling/distribution bounds, and Fiat-Shamir-with-aborts analysis.
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.
-5. Replace the algebraic ledger hash with a cryptographic Merkle/hash
-   commitment and prove or assume collision-resistant membership soundness.
+5. Migrate the executable transaction ledger from the algebraic scaffold to the
+   `Authenticated_Merkle.thy` cryptographic Merkle/hash model, add runtime hash
+   vectors, and prove transaction-level membership soundness under collision
+   resistance.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
 
