@@ -611,11 +611,26 @@ definition commit_to_sis_params :: "commit_params \<Rightarrow> sis_params" wher
     sis_beta = 2 * cp_beta p
   \<rparr>"
 
+definition commit_to_sis_params_bound :: "commit_params \<Rightarrow> int \<Rightarrow> sis_params" where
+  "commit_to_sis_params_bound p B = \<lparr>
+    sis_n = cp_n1 p + cp_n2 p,
+    sis_m = cp_m p,
+    sis_q = cp_q p,
+    sis_beta = B
+  \<rparr>"
+
 lemma commit_to_sis_params_valid:
   assumes "valid_commit_params p"
   shows "valid_sis_params (commit_to_sis_params p)"
   unfolding commit_to_sis_params_def valid_sis_params_def
   using valid_commit_params_pos[OF assms] by simp
+
+lemma commit_to_sis_params_bound_valid:
+  assumes "valid_commit_params p"
+      and "B > 0"
+  shows "valid_sis_params (commit_to_sis_params_bound p B)"
+  unfolding commit_to_sis_params_bound_def valid_sis_params_def
+  using valid_commit_params_pos[OF assms(1)] assms(2) by simp
 
 text \<open>
   Helper: subtraction of bounded vectors is bounded by sum of bounds.
@@ -641,6 +656,59 @@ proof
     using \<open>abs (v1 ! i) \<le> B1\<close> \<open>abs (v2 ! i) \<le> B2\<close> by simp
   finally show "abs x \<le> B1 + B2"
     using x_eq by simp
+qed
+
+theorem commit_collision_yields_sis_bound:
+  assumes params_ok: "valid_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and len1: "length (opening_vec op1) = cp_n1 p + cp_n2 p"
+      and len2: "length (opening_vec op2) = cp_n1 p + cp_n2 p"
+      and bounded1: "all_bounded (opening_vec op1) B1"
+      and bounded2: "all_bounded (opening_vec op2) B2"
+      and collision: "commit ck op1 (cp_q p) = commit ck op2 (cp_q p)"
+      and different: "opening_vec op1 \<noteq> opening_vec op2"
+  shows "\<exists>z. valid_sis_instance (commit_to_sis_params_bound p (B1 + B2)) \<lparr> sis_A = ck \<rparr> \<and>
+             is_sis_solution (commit_to_sis_params_bound p (B1 + B2)) \<lparr> sis_A = ck \<rparr> z"
+proof -
+  let ?z = "vec_sub (opening_vec op1) (opening_vec op2)"
+  let ?q = "cp_q p"
+  have inst_valid:
+    "valid_sis_instance (commit_to_sis_params_bound p (B1 + B2)) \<lparr> sis_A = ck \<rparr>"
+    using key_ok
+    unfolding commit_to_sis_params_bound_def valid_sis_instance_def
+              valid_commit_key_def commit_total_dim_def
+    by simp
+  have q_pos: "?q > 0"
+    using valid_commit_params_pos[OF params_ok] by simp
+  have len_eq: "length (opening_vec op1) = length (opening_vec op2)"
+    using len1 len2 by simp
+  have diff_neq: "?z \<noteq> replicate (length (opening_vec op1)) 0"
+    using vec_neq_imp_sub_neq_zero[OF len_eq different] .
+  have len_z: "length ?z = cp_n1 p + cp_n2 p"
+    using len1 len2 by (simp add: vec_sub_length)
+  have nonzero: "\<not> is_zero_vec ?z"
+  proof -
+    have "?z \<noteq> replicate (length ?z) 0"
+      using diff_neq len_z len1 by simp
+    then show ?thesis
+      using neq_replicate_not_zero_vec by simp
+  qed
+  have bounded: "all_bounded ?z (B1 + B2)"
+    using vec_sub_bounded[OF bounded1 bounded2] .
+  have raw_collision:
+    "vec_mod (mat_vec_mult ck (opening_vec op1)) ?q =
+     vec_mod (mat_vec_mult ck (opening_vec op2)) ?q"
+    using collision unfolding commit_def by simp
+  have kernel:
+    "is_zero_vec (vec_mod (mat_vec_mult ck ?z) ?q)"
+    using collision_to_sis_kernel[OF len1 len2 raw_collision nonzero q_pos] .
+  have sol:
+    "is_sis_solution (commit_to_sis_params_bound p (B1 + B2)) \<lparr> sis_A = ck \<rparr> ?z"
+    unfolding is_sis_solution_def commit_to_sis_params_bound_def valid_vec_def
+    using len_z nonzero bounded kernel
+    by simp
+  show ?thesis
+    using inst_valid sol by blast
 qed
 
 theorem binding_implies_sis:

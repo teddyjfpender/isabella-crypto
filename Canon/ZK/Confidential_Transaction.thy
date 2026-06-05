@@ -2094,6 +2094,20 @@ proof -
     using binding_implies_sis[OF params_ok key_ok break] .
 qed
 
+theorem bounded_opening_collision_yields_sis:
+  assumes params_ok: "valid_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and len1: "length (opening_vec op1) = cp_n1 p + cp_n2 p"
+      and len2: "length (opening_vec op2) = cp_n1 p + cp_n2 p"
+      and bounded1: "all_bounded (opening_vec op1) B1"
+      and bounded2: "all_bounded (opening_vec op2) B2"
+      and collision: "commit ck op1 (cp_q p) = commit ck op2 (cp_q p)"
+      and diff: "opening_vec op1 \<noteq> opening_vec op2"
+  shows "\<exists>z. valid_sis_instance (commit_to_sis_params_bound p (B1 + B2)) \<lparr> sis_A = ck \<rparr> \<and>
+             is_sis_solution (commit_to_sis_params_bound p (B1 + B2)) \<lparr> sis_A = ck \<rparr> z"
+  using commit_collision_yields_sis_bound[
+    OF params_ok key_ok len1 len2 bounded1 bounded2 collision diff] .
+
 export_code
   nullifier
   valid_nullifier_mask
