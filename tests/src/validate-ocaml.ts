@@ -26,6 +26,8 @@ import {
   ctMerkleMemberProve,
   ctMerkleMemberVerify,
   ctMerkleNode,
+  ctMerkleEnvelopeDigest,
+  ctMerkleProofDigest,
   ctMerkleRoot,
   ctNullifier,
   ctNullifierCanonicalChallenge,
@@ -781,6 +783,8 @@ const transactionVectors = JSON.parse(
   fs.readFileSync(path.join(projectRoot, 'tests/fixtures/confidential-transaction-vectors.json'), 'utf8')
 );
 const [transactionContextVector] = transactionVectors.cases;
+const [transactionMerkleProofVector] = transactionVectors.merkleProofCases;
+const [transactionEnvelopeVector] = transactionVectors.envelopeCases;
 const transactionContext = transactionContextVector.context;
 assert.equal(
   ctTransactionContext(
@@ -1009,6 +1013,36 @@ assert.equal(
   ),
   true,
   'ct-verify-merkle OCaml/TypeScript parity'
+);
+const ocamlMerkleProofDigest = ctMerkleProofDigest(ctMerkleProof!);
+assert.equal(
+  ocamlMerkleProofDigest,
+  sdk.ConfidentialTransaction.transactionMerkleProofDigest(ctMerkleProof!),
+  'ct-merkle-proof-digest OCaml/TypeScript parity'
+);
+assert.equal(
+  ocamlMerkleProofDigest,
+  transactionMerkleProofVector.digest,
+  'ct-merkle-proof-digest vector'
+);
+const ocamlVectorEnvelopeDigest = ctMerkleEnvelopeDigest(
+  transactionEnvelopeVector.contextDigest,
+  transactionEnvelopeVector.context,
+  ctMerkleProof!
+);
+assert.equal(
+  ocamlVectorEnvelopeDigest,
+  sdk.ConfidentialTransaction.transactionEnvelopeDigest({
+    context: transactionEnvelopeVector.context,
+    contextDigest: transactionEnvelopeVector.contextDigest,
+    proof: ctMerkleProof!,
+  }),
+  'ct-merkle-envelope-digest OCaml/TypeScript parity'
+);
+assert.equal(
+  ocamlVectorEnvelopeDigest,
+  transactionEnvelopeVector.digest,
+  'ct-merkle-envelope-digest vector'
 );
 const ocamlEnvelopeContext = {
   protocolVersion: 1,

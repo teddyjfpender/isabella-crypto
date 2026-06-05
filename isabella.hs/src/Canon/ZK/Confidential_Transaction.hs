@@ -20,8 +20,14 @@ module Canon.ZK.Confidential_Transaction
   , transactionDst
   , transactionProtocolId
   , transactionContextTag
+  , transactionMerkleProofTag
+  , transactionEnvelopeTag
   , transactionContextPreimageHex
   , transactionContextDigest
+  , transactionMerkleProofPreimageHex
+  , transactionMerkleProofDigest
+  , transactionEnvelopePreimageHex
+  , transactionEnvelopeDigest
   , nullifier
   , validNullifierMask
   , validNullifierResponse
@@ -173,6 +179,12 @@ transactionProtocolId = "ISABELLA-CT-SIS-NOTE"
 transactionContextTag :: Int
 transactionContextTag = 0
 
+transactionMerkleProofTag :: Int
+transactionMerkleProofTag = 1
+
+transactionEnvelopeTag :: Int
+transactionEnvelopeTag = 2
+
 transactionWord64LeBytes :: Word64 -> [Word8]
 transactionWord64LeBytes value =
   [ fromIntegral ((value `shiftR` (8 * i)) .&. 0xff)
@@ -201,6 +213,22 @@ encodeTransactionInt label value
 encodeTransactionVec :: [Int] -> [Word8]
 encodeTransactionVec values =
   transactionInt64LeBytes (length values) ++ concatMap transactionInt64LeBytes values
+
+encodeTransactionBoolVec :: [Bool] -> [Word8]
+encodeTransactionBoolVec values =
+  transactionInt64LeBytes (length values) ++
+  concatMap (transactionInt64LeBytes . boolInt) values
+ where
+  boolInt True = 1
+  boolInt False = 0
+
+encodeTransactionMat :: [[Int]] -> [Word8]
+encodeTransactionMat rows =
+  transactionInt64LeBytes (length rows) ++ concatMap encodeTransactionVec rows
+
+encodeTransactionMatArray :: [[[Int]]] -> [Word8]
+encodeTransactionMatArray mats =
+  transactionInt64LeBytes (length mats) ++ concatMap encodeTransactionMat mats
 
 transactionHexByte :: Word8 -> String
 transactionHexByte byte =
@@ -237,6 +265,14 @@ encodeTransactionDigest label digest =
   case transactionHexToBytes digest of
     Just bytes -> transactionInt64LeBytes (length bytes) ++ bytes
     Nothing -> error (label ++ " must be a canonical lowercase SHA3-256 digest")
+
+encodeTransactionDigestVector :: String -> [String] -> [Word8]
+encodeTransactionDigestVector label digests =
+  transactionInt64LeBytes (length digests) ++
+  concat
+    [ encodeTransactionDigest (label ++ "[" ++ show index ++ "]") digest
+    | (index, digest) <- zip [0 :: Int ..] digests
+    ]
 
 transactionContextPreimage ::
   Int ->
@@ -301,6 +337,129 @@ transactionContextDigest protocolVersion networkId assetId ledgerEpoch rt public
       (transactionContextPreimage
         protocolVersion networkId assetId ledgerEpoch rt publicFee
         cIn1 cIn2 cOut1 cOut2 nf1 nf2))
+
+transactionTaggedPreimage :: Int -> [Word8] -> [Word8]
+transactionTaggedPreimage tag body =
+  map (fromIntegral . ord) transactionDst ++
+  transactionInt64LeBytes tag ++
+  encodeTransactionAscii "protocolId" transactionProtocolId ++
+  body
+
+transactionMerkleMembershipPreimage :: MerkleMembershipProof -> [Word8]
+transactionMerkleMembershipPreimage proof
+  | length (ConfidentialMerkle.merkle_siblings proof) /=
+      length (ConfidentialMerkle.merkle_directions proof) =
+      error "Merkle proof siblings and directions must have the same length"
+  | otherwise =
+      encodeTransactionInt "member.index" (ConfidentialMerkle.merkle_index proof) ++
+      encodeTransactionDigest "member.root" (ConfidentialMerkle.merkle_root proof) ++
+      encodeTransactionDigestVector "member.siblings" (ConfidentialMerkle.merkle_siblings proof) ++
+      encodeTransactionBoolVec (ConfidentialMerkle.merkle_directions proof)
+
+transactionNullifierProofPreimage :: NullifierProof -> [Word8]
+transactionNullifierProofPreimage proof =
+  encodeTransactionMat (nullifier_a_commits proof) ++
+  encodeTransactionMat (nullifier_a_nullifiers proof) ++
+  encodeTransactionMat (nullifier_z_msgs proof) ++
+  encodeTransactionMat (nullifier_z_rands proof)
+
+transactionBalanceProofPreimage :: ConfidentialBalance.BalanceProof -> [Word8]
+transactionBalanceProofPreimage proof =
+  encodeTransactionMat (ConfidentialBalance.balance_as proof) ++
+  encodeTransactionMat (ConfidentialBalance.balance_zs proof)
+
+transactionRangeProofPreimage :: ConfidentialRange.RangeProof -> [Word8]
+transactionRangeProofPreimage proof =
+  encodeTransactionMat (ConfidentialRange.range_bits proof) ++
+  encodeTransactionMat (ConfidentialRange.range_comps proof) ++
+  encodeTransactionMat (ConfidentialRange.range_amount_as proof) ++
+  encodeTransactionMat (ConfidentialRange.range_amount_zs proof) ++
+  encodeTransactionMatArray (ConfidentialRange.range_pair_ass proof) ++
+  encodeTransactionMatArray (ConfidentialRange.range_pair_zss proof)
+
+transactionMerkleProofPreimage :: MerkleTransactionProof -> [Word8]
+transactionMerkleProofPreimage proof =
+  transactionTaggedPreimage transactionMerkleProofTag $
+    transactionMerkleMembershipPreimage (tx_merkle_in1_member proof) ++
+    transactionMerkleMembershipPreimage (tx_merkle_in2_member proof) ++
+    transactionNullifierProofPreimage (tx_merkle_in1_nullifier proof) ++
+    transactionNullifierProofPreimage (tx_merkle_in2_nullifier proof) ++
+    transactionBalanceProofPreimage (tx_merkle_balance proof) ++
+    transactionRangeProofPreimage (tx_merkle_out1_range proof) ++
+    transactionRangeProofPreimage (tx_merkle_out2_range proof)
+
+transactionMerkleProofPreimageHex :: MerkleTransactionProof -> String
+transactionMerkleProofPreimageHex =
+  transactionDigestHex . transactionMerkleProofPreimage
+
+transactionMerkleProofDigest :: MerkleTransactionProof -> String
+transactionMerkleProofDigest =
+  transactionDigestHex . RepeatedFS.sha3_256 . transactionMerkleProofPreimage
+
+transactionEnvelopePreimage ::
+  String ->
+  Int ->
+  String ->
+  Int ->
+  Int ->
+  String ->
+  Int ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  [Word8]
+transactionEnvelopePreimage
+  contextDigest
+  protocolVersion
+  networkId
+  assetId
+  ledgerEpoch
+  rt
+  publicFee
+  cIn1
+  cIn2
+  cOut1
+  cOut2
+  nf1
+  nf2
+  proof =
+  let computedDigest =
+        transactionContextDigest
+          protocolVersion networkId assetId ledgerEpoch rt publicFee
+          cIn1 cIn2 cOut1 cOut2 nf1 nf2
+   in if contextDigest /= computedDigest
+        then error "contextDigest does not match canonical transaction context"
+        else
+          transactionTaggedPreimage transactionEnvelopeTag $
+            encodeTransactionDigest "contextDigest" computedDigest ++
+            encodeTransactionDigest "proofDigest" (transactionMerkleProofDigest proof)
+
+transactionEnvelopePreimageHex ::
+  String -> Int -> String -> Int -> Int -> String -> Int ->
+  [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
+  MerkleTransactionProof -> String
+transactionEnvelopePreimageHex contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
+  transactionDigestHex .
+    transactionEnvelopePreimage
+      contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2
+
+transactionEnvelopeDigest ::
+  String -> Int -> String -> Int -> Int -> String -> Int ->
+  [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
+  MerkleTransactionProof -> String
+transactionEnvelopeDigest contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
+  transactionDigestHex .
+    RepeatedFS.sha3_256 .
+    transactionEnvelopePreimage
+      contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2
 
 validCommitment :: Commit.CommitParams -> [Int] -> Bool
 validCommitment p = Listvec.valid_vec (Commit.cp_m p)

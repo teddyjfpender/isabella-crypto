@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   balanceProofShape,
+  ctMerkleProofDigestArgs,
   ctVerifyMerkleEnvelopeArgs,
   listBalanceProof,
   listNullifierProof,
@@ -876,6 +877,8 @@ const transactionVectors = JSON.parse(
   fs.readFileSync(path.join(projectRoot, 'tests/fixtures/confidential-transaction-vectors.json'), 'utf8')
 );
 const [transactionContextVector] = transactionVectors.cases;
+const [transactionMerkleProofVector] = transactionVectors.merkleProofCases;
+const [transactionEnvelopeVector] = transactionVectors.envelopeCases;
 const transactionContext = transactionContextVector.context;
 assert.equal(
   parseResult<string>(
@@ -1141,6 +1144,53 @@ assert.equal(
   ),
   true,
   'ct-verify-merkle SDK accepts generated proof'
+);
+const haskellMerkleProofDigest = parseResult<string>(
+  runHaskell(['ct-merkle-proof-digest', ...ctMerkleProofDigestArgs(ctMerkleProof!)])
+);
+assert.equal(
+  haskellMerkleProofDigest,
+  sdk.ConfidentialTransaction.transactionMerkleProofDigest(ctMerkleProof!),
+  'ct-merkle-proof-digest Haskell/TypeScript parity'
+);
+assert.equal(
+  haskellMerkleProofDigest,
+  transactionMerkleProofVector.digest,
+  'ct-merkle-proof-digest vector'
+);
+const haskellVectorEnvelopeContext = transactionEnvelopeVector.context;
+const haskellVectorEnvelopeDigest = parseResult<string>(
+  runHaskell([
+    'ct-merkle-envelope-digest',
+    transactionEnvelopeVector.contextDigest,
+    haskellVectorEnvelopeContext.protocolVersion.toString(),
+    haskellVectorEnvelopeContext.networkId,
+    haskellVectorEnvelopeContext.assetId.toString(),
+    haskellVectorEnvelopeContext.ledgerEpoch.toString(),
+    haskellVectorEnvelopeContext.root,
+    haskellVectorEnvelopeContext.publicFee.toString(),
+    JSON.stringify(haskellVectorEnvelopeContext.cIn1),
+    JSON.stringify(haskellVectorEnvelopeContext.cIn2),
+    JSON.stringify(haskellVectorEnvelopeContext.cOut1),
+    JSON.stringify(haskellVectorEnvelopeContext.cOut2),
+    JSON.stringify(haskellVectorEnvelopeContext.nf1),
+    JSON.stringify(haskellVectorEnvelopeContext.nf2),
+    ...ctMerkleProofDigestArgs(ctMerkleProof!),
+  ])
+);
+assert.equal(
+  haskellVectorEnvelopeDigest,
+  sdk.ConfidentialTransaction.transactionEnvelopeDigest({
+    context: haskellVectorEnvelopeContext,
+    contextDigest: transactionEnvelopeVector.contextDigest,
+    proof: ctMerkleProof!,
+  }),
+  'ct-merkle-envelope-digest Haskell/TypeScript parity'
+);
+assert.equal(
+  haskellVectorEnvelopeDigest,
+  transactionEnvelopeVector.digest,
+  'ct-merkle-envelope-digest vector'
 );
 const listedCtMerkleProof = ctMerkleProof as {
   in1Nullifier: unknown;

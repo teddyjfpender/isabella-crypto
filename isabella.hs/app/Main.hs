@@ -74,6 +74,8 @@ showHelp = do
     putStrLn "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof"
     putStrLn "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof"
     putStrLn "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2"
+    putStrLn "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes"
+    putStrLn "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes"
     putStrLn "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier"
     putStrLn "  ct-nullifier-canonical-challenge M N2 Q BETA CK NK C NF ACOMMIT ANULLIFIER  Deterministic nullifier Fiat-Shamir challenge"
     putStrLn "  ct-nullifier-prove M N2 Q BETA G CK NK C NF AMOUNT RAND YMSGS YRANDS  Build repeated-round deterministic nullifier proof"

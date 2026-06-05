@@ -63,6 +63,8 @@ runCommand format cmd args = case cmd of
     "ct-merkle-member-prove" -> cmdCtMerkleMemberProve format args
     "ct-merkle-member-verify" -> cmdCtMerkleMemberVerify format args
     "ct-transaction-context" -> cmdCtTransactionContext format args
+    "ct-merkle-proof-digest" -> cmdCtMerkleProofDigest format args
+    "ct-merkle-envelope-digest" -> cmdCtMerkleEnvelopeDigest format args
     "ct-nullifier" -> cmdCtNullifier format args
     "ct-nullifier-canonical-challenge" -> cmdCtNullifierCanonicalChallenge format args
     "ct-nullifier-prove" -> cmdCtNullifierProve format args
@@ -102,6 +104,17 @@ parseBool "true" = Just True
 parseBool "False" = Just False
 parseBool "True" = Just True
 parseBool _ = Nothing
+
+parseBoolVec01 :: String -> Maybe [Bool]
+parseBoolVec01 s =
+    parseVec s >>= traverse toBool
+  where
+    toBool 0 = Just False
+    toBool 1 = Just True
+    toBool _ = Nothing
+
+parseStringList :: String -> Maybe [String]
+parseStringList = readMaybe
 
 jsonString :: String -> String
 jsonString = show
@@ -329,6 +342,94 @@ jsonCtMerkleTransactionProof proof =
         , ("out1Range", jsonCrProof (ConfidentialTransaction.tx_merkle_out1_range proof))
         , ("out2Range", jsonCrProof (ConfidentialTransaction.tx_merkle_out2_range proof))
         ]
+
+parseCtMerkleMembershipProof :: String -> String -> String -> String -> Maybe ConfidentialTransaction.MerkleMembershipProof
+parseCtMerkleMembershipProof indexStr rootDigest siblingsStr directionsStr =
+    case (parseInt indexStr, parseStringList siblingsStr, parseBoolVec01 directionsStr) of
+        (Just index, Just siblings, Just directions) ->
+            Just (ConfidentialTransaction.makeMerkleMembershipProof index rootDigest siblings directions)
+        _ -> Nothing
+
+ctMerkleProofDigestUsage :: String
+ctMerkleProofDigestUsage =
+    "Usage: ct-merkle-proof-digest IN1_INDEX IN1_ROOT IN1_SIBLINGS IN1_DIRECTIONS IN2_INDEX IN2_ROOT IN2_SIBLINGS IN2_DIRECTIONS IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+parseCtMerkleProofDigestArgs :: [String] -> Either String ConfidentialTransaction.MerkleTransactionProof
+parseCtMerkleProofDigestArgs
+    [ in1IndexStr, in1Root, in1SiblingsStr, in1DirectionsStr
+    , in2IndexStr, in2Root, in2SiblingsStr, in2DirectionsStr
+    , in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr
+    , in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr
+    , balanceAStr, balanceZsStr
+    , out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr
+    , out1PairAsStr, out1PairZsStr
+    , out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr
+    , out2PairAsStr, out2PairZsStr
+    ] =
+        case
+            ( parseCtMerkleMembershipProof in1IndexStr in1Root in1SiblingsStr in1DirectionsStr
+            , parseCtMerkleMembershipProof in2IndexStr in2Root in2SiblingsStr in2DirectionsStr
+            , parseMat in1ACommitsStr
+            , parseMat in1ANullifiersStr
+            , parseMat in1ZMsgsStr
+            , parseMat in1ZRandsStr
+            , parseMat in2ACommitsStr
+            , parseMat in2ANullifiersStr
+            , parseMat in2ZMsgsStr
+            , parseMat in2ZRandsStr
+            , parseMat balanceAStr
+            , parseMat balanceZsStr
+            , parseMat out1BitsStr
+            , parseMat out1CompsStr
+            , parseMat out1AmountAStr
+            , parseMat out1AmountZStr
+            , parseCube out1PairAsStr
+            , parseCube out1PairZsStr
+            , parseMat out2BitsStr
+            , parseMat out2CompsStr
+            , parseMat out2AmountAStr
+            , parseMat out2AmountZStr
+            , parseCube out2PairAsStr
+            , parseCube out2PairZsStr
+            )
+        of
+            ( Just in1Member
+              , Just in2Member
+              , Just in1ACommits
+              , Just in1ANullifiers
+              , Just in1ZMsgs
+              , Just in1ZRands
+              , Just in2ACommits
+              , Just in2ANullifiers
+              , Just in2ZMsgs
+              , Just in2ZRands
+              , Just balanceAs
+              , Just balanceZs
+              , Just out1Bits
+              , Just out1Comps
+              , Just out1AmountA
+              , Just out1AmountZ
+              , Just out1PairAs
+              , Just out1PairZs
+              , Just out2Bits
+              , Just out2Comps
+              , Just out2AmountA
+              , Just out2AmountZ
+              , Just out2PairAs
+              , Just out2PairZs
+              ) ->
+                Right $
+                    ConfidentialTransaction.makeMerkleTransactionProof
+                        in1Member
+                        in2Member
+                        (ConfidentialTransaction.makeNullifierProof in1ACommits in1ANullifiers in1ZMsgs in1ZRands)
+                        (ConfidentialTransaction.makeNullifierProof in2ACommits in2ANullifiers in2ZMsgs in2ZRands)
+                        (ConfidentialBalance.makeBalanceProof balanceAs balanceZs)
+                        (ConfidentialRange.makeRangeProof out1Bits out1Comps out1AmountA out1AmountZ out1PairAs out1PairZs)
+                        (ConfidentialRange.makeRangeProof out2Bits out2Comps out2AmountA out2AmountZ out2PairAs out2PairZs)
+            _ -> Left "Expected Merkle membership and transaction-proof fields"
+parseCtMerkleProofDigestArgs _ =
+    Left ctMerkleProofDigestUsage
 
 parseCbParams :: String -> String -> String -> String -> Maybe Commit.CommitParams
 parseCbParams mStr n2Str qStr betaStr =
@@ -1098,6 +1199,68 @@ cmdCtTransactionContext format
         _ -> outputError format "Expected transaction context fields"
 cmdCtTransactionContext format _ =
     outputUsage format "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
+
+cmdCtMerkleProofDigest :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleProofDigest format args =
+    case parseCtMerkleProofDigestArgs args of
+        Right proof ->
+            outputStringResult format "ct_merkle_proof_digest = " $
+                ConfidentialTransaction.transactionMerkleProofDigest proof
+        Left err
+            | take 5 err == "Usage" -> outputUsage format err
+            | otherwise -> outputError format err
+
+cmdCtMerkleEnvelopeDigest :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleEnvelopeDigest format
+    ( contextDigest : protocolVersionStr : networkId : assetIdStr : ledgerEpochStr
+      : rootDigest : publicFeeStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
+      : nf1Str : nf2Str : proofArgs
+    ) =
+        case
+            ( parseInt protocolVersionStr
+            , parseInt assetIdStr
+            , parseInt ledgerEpochStr
+            , parseInt publicFeeStr
+            , parseVec cIn1Str
+            , parseVec cIn2Str
+            , parseVec cOut1Str
+            , parseVec cOut2Str
+            , parseVec nf1Str
+            , parseVec nf2Str
+            , parseCtMerkleProofDigestArgs proofArgs
+            )
+        of
+            ( Just protocolVersion
+              , Just assetId
+              , Just ledgerEpoch
+              , Just publicFee
+              , Just cIn1
+              , Just cIn2
+              , Just cOut1
+              , Just cOut2
+              , Just nf1
+              , Just nf2
+              , Right proof
+              ) ->
+                outputStringResult format "ct_merkle_envelope_digest = " $
+                    ConfidentialTransaction.transactionEnvelopeDigest
+                        contextDigest
+                        protocolVersion
+                        networkId
+                        assetId
+                        ledgerEpoch
+                        rootDigest
+                        publicFee
+                        cIn1
+                        cIn2
+                        cOut1
+                        cOut2
+                        nf1
+                        nf2
+                        proof
+            _ -> outputError format "Expected context digest, context fields, and Merkle proof fields"
+cmdCtMerkleEnvelopeDigest format _ =
+    outputUsage format "Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ..."
 
 cmdCtNullifier :: OutputFormat -> [String] -> IO ()
 cmdCtNullifier format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =

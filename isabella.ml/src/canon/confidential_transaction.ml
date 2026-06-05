@@ -101,6 +101,8 @@ let make_merkle_transaction_proof
 let transaction_dst = "ISABELLA-CT-TX-v1"
 let transaction_protocol_id = "ISABELLA-CT-SIS-NOTE"
 let transaction_context_tag = 0
+let transaction_merkle_proof_tag = 1
+let transaction_envelope_tag = 2
 
 let require_nonnegative label value =
   if value < 0 then invalid_arg (label ^ " must be non-negative")
@@ -122,11 +124,33 @@ let encode_transaction_vec values =
   Repeated_fs.int64_le_bytes (Int64.of_int (List.length values))
   @ List.concat (List.map (fun value -> Repeated_fs.int64_le_bytes (Int64.of_int value)) values)
 
+let encode_transaction_bool_vec values =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length values))
+  @ List.concat
+      (List.map
+         (fun value -> Repeated_fs.int64_le_bytes (Int64.of_int (if value then 1 else 0)))
+         values)
+
+let encode_transaction_mat rows =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length rows))
+  @ List.concat (List.map encode_transaction_vec rows)
+
+let encode_transaction_cube mats =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length mats))
+  @ List.concat (List.map encode_transaction_mat mats)
+
 let encode_transaction_digest label digest =
   match Confidential_merkle.hex_to_bytes digest with
   | Some bytes ->
       Repeated_fs.int64_le_bytes (Int64.of_int (List.length bytes)) @ bytes
   | None -> invalid_arg (label ^ " must be a canonical lowercase SHA3-256 digest")
+
+let encode_transaction_digest_vec label digests =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length digests))
+  @ List.concat
+      (List.mapi
+         (fun index digest -> encode_transaction_digest (Printf.sprintf "%s[%d]" label index) digest)
+         digests)
 
 let transaction_context_preimage
     protocol_version
@@ -156,6 +180,100 @@ let transaction_context_preimage
   @ encode_transaction_vec c_out2
   @ encode_transaction_vec nf1
   @ encode_transaction_vec nf2
+
+let transaction_tagged_preimage tag body =
+  Repeated_fs.string_bytes transaction_dst
+  @ Repeated_fs.int64_le_bytes (Int64.of_int tag)
+  @ encode_ascii "protocolId" transaction_protocol_id
+  @ body
+
+let transaction_merkle_membership_preimage proof =
+  if List.length proof.Confidential_merkle.merkle_siblings <>
+     List.length proof.Confidential_merkle.merkle_directions
+  then invalid_arg "Merkle proof siblings and directions must have the same length";
+  encode_transaction_int "member.index" proof.Confidential_merkle.merkle_index
+  @ encode_transaction_digest "member.root" proof.Confidential_merkle.merkle_root
+  @ encode_transaction_digest_vec "member.siblings" proof.Confidential_merkle.merkle_siblings
+  @ encode_transaction_bool_vec proof.Confidential_merkle.merkle_directions
+
+let transaction_nullifier_proof_preimage proof =
+  encode_transaction_mat proof.nullifier_a_commits
+  @ encode_transaction_mat proof.nullifier_a_nullifiers
+  @ encode_transaction_mat proof.nullifier_z_msgs
+  @ encode_transaction_mat proof.nullifier_z_rands
+
+let transaction_balance_proof_preimage proof =
+  encode_transaction_mat proof.Confidential_balance.balance_as
+  @ encode_transaction_mat proof.Confidential_balance.balance_zs
+
+let transaction_range_proof_preimage proof =
+  encode_transaction_mat proof.Confidential_range.range_bits
+  @ encode_transaction_mat proof.Confidential_range.range_comps
+  @ encode_transaction_mat proof.Confidential_range.range_amount_as
+  @ encode_transaction_mat proof.Confidential_range.range_amount_zs
+  @ encode_transaction_cube proof.Confidential_range.range_pair_ass
+  @ encode_transaction_cube proof.Confidential_range.range_pair_zss
+
+let transaction_merkle_proof_preimage proof =
+  transaction_tagged_preimage
+    transaction_merkle_proof_tag
+    (transaction_merkle_membership_preimage proof.tx_merkle_in1_member
+     @ transaction_merkle_membership_preimage proof.tx_merkle_in2_member
+     @ transaction_nullifier_proof_preimage proof.tx_merkle_in1_nullifier
+     @ transaction_nullifier_proof_preimage proof.tx_merkle_in2_nullifier
+     @ transaction_balance_proof_preimage proof.tx_merkle_balance
+     @ transaction_range_proof_preimage proof.tx_merkle_out1_range
+     @ transaction_range_proof_preimage proof.tx_merkle_out2_range)
+
+let transaction_merkle_proof_preimage_hex proof =
+  transaction_merkle_proof_preimage proof |> Confidential_merkle.digest_hex
+
+let transaction_merkle_proof_digest proof =
+  transaction_merkle_proof_preimage proof |> Confidential_merkle.digest
+
+let transaction_envelope_preimage
+    context_digest
+    protocol_version
+    network_id
+    asset_id
+    ledger_epoch
+    root
+    public_fee
+    c_in1
+    c_in2
+    c_out1
+    c_out2
+    nf1
+    nf2
+    proof =
+  let computed_digest =
+    transaction_context_preimage
+      protocol_version network_id asset_id ledger_epoch root public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+    |> Confidential_merkle.digest
+  in
+  if context_digest <> computed_digest then
+    invalid_arg "contextDigest does not match canonical transaction context";
+  transaction_tagged_preimage
+    transaction_envelope_tag
+    (encode_transaction_digest "contextDigest" computed_digest
+     @ encode_transaction_digest "proofDigest" (transaction_merkle_proof_digest proof))
+
+let transaction_envelope_preimage_hex
+    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
+  transaction_envelope_preimage
+    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
+  |> Confidential_merkle.digest_hex
+
+let transaction_envelope_digest
+    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
+  transaction_envelope_preimage
+    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
+  |> Confidential_merkle.digest
 
 let transaction_context_preimage_hex
     protocol_version network_id asset_id ledger_epoch root public_fee

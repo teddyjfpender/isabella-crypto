@@ -1520,63 +1520,36 @@ export function ctProveMerkle(
   return output === 'null' ? null : parseCliResult<MerkleTransactionProof>(output);
 }
 
-export function ctVerifyMerkleArgs(
-  m: number,
-  n2: number,
-  q: number,
-  beta: number,
-  gamma: number,
-  k: number,
-  ck: number[][],
-  nk: number[][],
-  ledger: number[][],
-  spent: number[][],
-  cIn1: number[],
-  cIn2: number[],
-  cOut1: number[],
-  cOut2: number[],
-  nf1: number[],
-  nf2: number[],
-  proof: TransactionProof | MerkleTransactionProof
+function ctTransactionProofArgs(
+  proof: TransactionProof | MerkleTransactionProof,
+  options: { forceListed?: boolean } = {}
 ): string[] {
   const listedBalance = listBalanceProof(proof.balance);
   const in1NullifierShape = nullifierProofShape(proof.in1Nullifier);
   const in2NullifierShape = nullifierProofShape(proof.in2Nullifier);
   const out1RangeShape = rangeProofShape(proof.out1Range);
   const out2RangeShape = rangeProofShape(proof.out2Range);
+  const useLegacyIn1Nullifier = !options.forceListed && in1NullifierShape === 'legacy';
+  const useLegacyIn2Nullifier = !options.forceListed && in2NullifierShape === 'legacy';
+  const useLegacyOut1Range = !options.forceListed && out1RangeShape === 'legacy';
+  const useLegacyOut2Range = !options.forceListed && out2RangeShape === 'legacy';
   const listedIn1Nullifier =
-    in1NullifierShape === 'legacy' ? null : listNullifierProof(proof.in1Nullifier);
+    useLegacyIn1Nullifier ? null : listNullifierProof(proof.in1Nullifier);
   const listedIn2Nullifier =
-    in2NullifierShape === 'legacy' ? null : listNullifierProof(proof.in2Nullifier);
+    useLegacyIn2Nullifier ? null : listNullifierProof(proof.in2Nullifier);
   const listedOut1Range =
-    out1RangeShape === 'legacy' ? null : listRangeProof(proof.out1Range);
+    useLegacyOut1Range ? null : listRangeProof(proof.out1Range);
   const listedOut2Range =
-    out2RangeShape === 'legacy' ? null : listRangeProof(proof.out2Range);
+    useLegacyOut2Range ? null : listRangeProof(proof.out2Range);
   const legacyIn1Nullifier =
-    in1NullifierShape === 'legacy' ? (proof.in1Nullifier as LegacyNullifierProof) : null;
+    useLegacyIn1Nullifier ? (proof.in1Nullifier as LegacyNullifierProof) : null;
   const legacyIn2Nullifier =
-    in2NullifierShape === 'legacy' ? (proof.in2Nullifier as LegacyNullifierProof) : null;
+    useLegacyIn2Nullifier ? (proof.in2Nullifier as LegacyNullifierProof) : null;
   const legacyOut1Range =
-    out1RangeShape === 'legacy' ? (proof.out1Range as LegacyRangeProof) : null;
+    useLegacyOut1Range ? (proof.out1Range as LegacyRangeProof) : null;
   const legacyOut2Range =
-    out2RangeShape === 'legacy' ? (proof.out2Range as LegacyRangeProof) : null;
+    useLegacyOut2Range ? (proof.out2Range as LegacyRangeProof) : null;
   return [
-    m.toString(),
-    n2.toString(),
-    q.toString(),
-    beta.toString(),
-    gamma.toString(),
-    k.toString(),
-    JSON.stringify(ck),
-    JSON.stringify(nk),
-    JSON.stringify(ledger),
-    JSON.stringify(spent),
-    JSON.stringify(cIn1),
-    JSON.stringify(cIn2),
-    JSON.stringify(cOut1),
-    JSON.stringify(cOut2),
-    JSON.stringify(nf1),
-    JSON.stringify(nf2),
     JSON.stringify(
       legacyIn1Nullifier === null ? listedIn1Nullifier!.aCommits : legacyIn1Nullifier.aCommit
     ),
@@ -1627,6 +1600,93 @@ export function ctVerifyMerkleArgs(
     ),
     JSON.stringify(legacyOut2Range === null ? listedOut2Range!.pairAss : legacyOut2Range.pairAs),
     JSON.stringify(legacyOut2Range === null ? listedOut2Range!.pairZss : legacyOut2Range.pairZs),
+  ];
+}
+
+function ctMerkleMembershipDigestArgs(proof: MerkleMembershipProof): string[] {
+  return [
+    proof.index.toString(),
+    proof.root,
+    JSON.stringify(proof.siblings),
+    JSON.stringify(proof.directions.map((direction) => (direction ? 1 : 0))),
+  ];
+}
+
+export function ctMerkleProofDigestArgs(proof: MerkleTransactionProof): string[] {
+  return [
+    ...ctMerkleMembershipDigestArgs(proof.in1Member),
+    ...ctMerkleMembershipDigestArgs(proof.in2Member),
+    ...ctTransactionProofArgs(proof, { forceListed: true }),
+  ];
+}
+
+export function ctMerkleProofDigest(proof: MerkleTransactionProof): string {
+  const output = runCli(['ct-merkle-proof-digest', ...ctMerkleProofDigestArgs(proof)]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctMerkleEnvelopeDigest(
+  contextDigest: string,
+  context: TransactionContext,
+  proof: MerkleTransactionProof
+): string {
+  const output = runCli([
+    'ct-merkle-envelope-digest',
+    contextDigest,
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root,
+    context.publicFee.toString(),
+    JSON.stringify(context.cIn1),
+    JSON.stringify(context.cIn2),
+    JSON.stringify(context.cOut1),
+    JSON.stringify(context.cOut2),
+    JSON.stringify(context.nf1),
+    JSON.stringify(context.nf2),
+    ...ctMerkleProofDigestArgs(proof),
+  ]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctVerifyMerkleArgs(
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[],
+  proof: TransactionProof | MerkleTransactionProof
+): string[] {
+  return [
+    m.toString(),
+    n2.toString(),
+    q.toString(),
+    beta.toString(),
+    gamma.toString(),
+    k.toString(),
+    JSON.stringify(ck),
+    JSON.stringify(nk),
+    JSON.stringify(ledger),
+    JSON.stringify(spent),
+    JSON.stringify(cIn1),
+    JSON.stringify(cIn2),
+    JSON.stringify(cOut1),
+    JSON.stringify(cOut2),
+    JSON.stringify(nf1),
+    JSON.stringify(nf2),
+    ...ctTransactionProofArgs(proof),
   ];
 }
 

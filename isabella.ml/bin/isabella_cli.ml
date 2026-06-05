@@ -54,6 +54,30 @@ let parse_vec s =
   try Some (List.map (fun p -> int_of_string (String.trim p)) parts)
   with Failure _ -> None
 
+let parse_string_list s =
+  let trim_quotes s =
+    let s = String.trim s in
+    let len = String.length s in
+    if len >= 2 && s.[0] = '"' && s.[len - 1] = '"'
+    then String.sub s 1 (len - 2)
+    else s
+  in
+  let inner = strip_outer_brackets s in
+  if String.trim inner = "" then Some []
+  else Some (List.map trim_quotes (split_top_level inner))
+
+let parse_bool_vec01 s =
+  match parse_vec s with
+  | Some values ->
+    let rec loop acc = function
+      | [] -> Some (List.rev acc)
+      | 0 :: rest -> loop (false :: acc) rest
+      | 1 :: rest -> loop (true :: acc) rest
+      | _ -> None
+    in
+    loop [] values
+  | None -> None
+
 let string_of_vec v =
   "[" ^ String.concat ", " (List.map string_of_int v) ^ "]"
 
@@ -201,6 +225,72 @@ let json_of_ct_merkle_transaction_proof proof =
     (json_of_cb_proof proof.Confidential_transaction.tx_merkle_balance)
     (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out1_range)
     (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out2_range)
+
+let parse_ct_merkle_membership_proof index_str root siblings_str directions_str =
+  match parse_int index_str, parse_string_list siblings_str, parse_bool_vec01 directions_str with
+  | Some index, Some siblings, Some directions ->
+    Some (Confidential_transaction.make_merkle_membership_proof index root siblings directions)
+  | _ -> None
+
+let ct_merkle_proof_digest_usage =
+  "Usage: ct-merkle-proof-digest IN1_INDEX IN1_ROOT IN1_SIBLINGS IN1_DIRECTIONS IN2_INDEX IN2_ROOT IN2_SIBLINGS IN2_DIRECTIONS IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+let parse_ct_merkle_proof_digest_args args =
+  match args with
+  | [in1_index_str; in1_root; in1_siblings_str; in1_directions_str;
+     in2_index_str; in2_root; in2_siblings_str; in2_directions_str;
+     in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str;
+     in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str;
+     balance_as_str; balance_zs_str;
+     out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str;
+     out1_pair_as_str; out1_pair_zs_str;
+     out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str;
+     out2_pair_as_str; out2_pair_zs_str] ->
+    (match
+       parse_ct_merkle_membership_proof in1_index_str in1_root in1_siblings_str in1_directions_str,
+       parse_ct_merkle_membership_proof in2_index_str in2_root in2_siblings_str in2_directions_str,
+       parse_mat in1_a_commits_str,
+       parse_mat in1_a_nullifiers_str,
+       parse_mat in1_z_msgs_str,
+       parse_mat in1_z_rands_str,
+       parse_mat in2_a_commits_str,
+       parse_mat in2_a_nullifiers_str,
+       parse_mat in2_z_msgs_str,
+       parse_mat in2_z_rands_str,
+       parse_mat balance_as_str,
+       parse_mat balance_zs_str,
+       parse_mat out1_bits_str,
+       parse_mat out1_comps_str,
+       parse_mat out1_amount_a_str,
+       parse_mat out1_amount_z_str,
+       parse_cube out1_pair_as_str,
+       parse_cube out1_pair_zs_str,
+       parse_mat out2_bits_str,
+       parse_mat out2_comps_str,
+       parse_mat out2_amount_a_str,
+       parse_mat out2_amount_z_str,
+       parse_cube out2_pair_as_str,
+       parse_cube out2_pair_zs_str
+     with
+     | Some in1_member, Some in2_member,
+       Some in1_a_commits, Some in1_a_nullifiers, Some in1_z_msgs, Some in1_z_rands,
+       Some in2_a_commits, Some in2_a_nullifiers, Some in2_z_msgs, Some in2_z_rands,
+       Some balance_as, Some balance_zs,
+       Some out1_bits, Some out1_comps, Some out1_amount_a, Some out1_amount_z,
+       Some out1_pair_as, Some out1_pair_zs,
+       Some out2_bits, Some out2_comps, Some out2_amount_a, Some out2_amount_z,
+       Some out2_pair_as, Some out2_pair_zs ->
+       Ok
+         (Confidential_transaction.make_merkle_transaction_proof
+            in1_member
+            in2_member
+            (Confidential_transaction.make_nullifier_proof in1_a_commits in1_a_nullifiers in1_z_msgs in1_z_rands)
+            (Confidential_transaction.make_nullifier_proof in2_a_commits in2_a_nullifiers in2_z_msgs in2_z_rands)
+            (Confidential_balance.make_balance_proof balance_as balance_zs)
+            (Confidential_range.make_range_proof out1_bits out1_comps out1_amount_a out1_amount_z out1_pair_as out1_pair_zs)
+            (Confidential_range.make_range_proof out2_bits out2_comps out2_amount_a out2_amount_z out2_pair_as out2_pair_zs))
+     | _ -> Error "Expected Merkle membership and transaction-proof fields")
+  | _ -> Error ct_merkle_proof_digest_usage
 
 (** JSON output helpers *)
 let[@warning "-32"] output_result key value =
@@ -1092,6 +1182,48 @@ let cmd_ct_transaction_context args =
   | _ ->
     output_error "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
 
+let cmd_ct_merkle_proof_digest args =
+  match parse_ct_merkle_proof_digest_args args with
+  | Ok proof ->
+    (try
+       output_string_result
+         "ct_merkle_proof_digest"
+         (Confidential_transaction.transaction_merkle_proof_digest proof)
+     with Invalid_argument msg -> output_error msg)
+  | Error msg -> output_error msg
+
+let cmd_ct_merkle_envelope_digest args =
+  match args with
+  | context_digest :: protocol_version_str :: network_id :: asset_id_str :: ledger_epoch_str ::
+    root :: public_fee_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
+    nf1_str :: nf2_str :: proof_args ->
+    (match
+       parse_int protocol_version_str,
+       parse_int asset_id_str,
+       parse_int ledger_epoch_str,
+       parse_int public_fee_str,
+       parse_vec c_in1_str,
+       parse_vec c_in2_str,
+       parse_vec c_out1_str,
+       parse_vec c_out2_str,
+       parse_vec nf1_str,
+       parse_vec nf2_str,
+       parse_ct_merkle_proof_digest_args proof_args
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
+       Ok proof ->
+       (try
+          output_string_result
+            "ct_merkle_envelope_digest"
+            (Confidential_transaction.transaction_envelope_digest
+               context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected context digest, context fields, and Merkle proof fields")
+  | _ ->
+    output_error ("Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ String.sub ct_merkle_proof_digest_usage 29 (String.length ct_merkle_proof_digest_usage - 29))
+
 (** {1 Confidential Transaction Commands} *)
 
 let cmd_ct_nullifier args =
@@ -1882,6 +2014,8 @@ let show_help () =
   print_endline "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof";
   print_endline "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof";
   print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2";
+  print_endline "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes";
+  print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
   print_endline "";
   print_endline "Confidential Transaction Commands:";
   print_endline "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier";
@@ -1975,6 +2109,8 @@ let run_command cmd args =
   | "ct-merkle-member-prove" -> cmd_ct_merkle_member_prove args
   | "ct-merkle-member-verify" -> cmd_ct_merkle_member_verify args
   | "ct-transaction-context" -> cmd_ct_transaction_context args
+  | "ct-merkle-proof-digest" -> cmd_ct_merkle_proof_digest args
+  | "ct-merkle-envelope-digest" -> cmd_ct_merkle_envelope_digest args
   | "ct-nullifier" -> cmd_ct_nullifier args
   | "ct-nullifier-canonical-challenge" -> cmd_ct_nullifier_canonical_challenge args
   | "ct-nullifier-prove" -> cmd_ct_nullifier_prove args

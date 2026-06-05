@@ -92,18 +92,19 @@ benchmarks are independently checked.
   `tests/fixtures/confidential-transaction-vectors.json`, and OCaml, Haskell,
   and TypeScript expose matching `ct-transaction-context` /
   `transactionContextDigest` surfaces checked by the SDK-equivalence harnesses.
-  That fixture also pins TypeScript canonical Merkle-proof and envelope
-  preimage/digest bytes under separate `merkleProof` and `envelope` transaction
-  tags. TypeScript exposes `fsVerifyMerkleEnvelope` plus proof/envelope digest
-  APIs so callers can verify the canonical context digest, expected
-  network/asset/root policy, and Merkle transaction proof as one step. OCaml
-  and Haskell now expose a matching `ct-verify-merkle-envelope` command. The
-  SDK-equivalence validators exercise the TS and native envelope gates with
-  native `ct-transaction-context` digests and native Merkle transaction proofs,
-  including stale-digest, wrong-policy, nonzero-fee, context-root/proof-root
-  mismatch, and mutated-proof rejection. The envelope path intentionally
-  rejects nonzero public fees until the balance relation is extended to account
-  for fees.
+  That fixture also pins canonical Merkle-proof and envelope preimage/digest
+  bytes under separate `merkleProof` and `envelope` transaction tags. TypeScript,
+  OCaml, and Haskell expose proof/envelope digest APIs, and the native
+  SDK-equivalence validators check those digests against the pinned vectors.
+  TypeScript exposes `fsVerifyMerkleEnvelope`, and OCaml/Haskell expose a
+  matching `ct-verify-merkle-envelope` command, so callers can verify the
+  canonical context digest, expected network/asset/root policy, and Merkle
+  transaction proof as one step. The SDK-equivalence validators exercise the TS
+  and native envelope gates with native `ct-transaction-context` digests and
+  native Merkle transaction proofs, including stale-digest, wrong-policy,
+  nonzero-fee, context-root/proof-root mismatch, and mutated-proof rejection.
+  The envelope path intentionally rejects nonzero public fees until the balance
+  relation is extended to account for fees.
 
 ## Remaining Security Work
 
@@ -126,9 +127,9 @@ The formalization still needs these before production:
    beyond same-path uniqueness.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
-7. Extend the TS-pinned context/proof/envelope serialization into native
-   proof/envelope digest parity, wallet request serialization, and
-   consensus/indexer API contracts with non-canonical encoding rejection.
+7. Extend the pinned context/proof/envelope serialization into wallet request
+   serialization and consensus/indexer API contracts with non-canonical
+   encoding rejection.
 8. Extend the zero-balance relation to a fee-aware balance relation before
    accepting nonzero public fees in verifier envelopes.
 
@@ -215,8 +216,9 @@ Important validation caveats:
   replay-context fields, and checks that proof/envelope digests change under
   proof or public-context mutation. It also checks that the TypeScript Merkle
   envelope verifier rejects stale context digests, wrong network/asset policy,
-  nonzero fees, and swapped proof components. Native proof/envelope digest
-  parity and wallet/consensus serialization remain open.
+  nonzero fees, and swapped proof components. OCaml/Haskell SDK-equivalence
+  validation now checks native proof/envelope digest parity against the pinned
+  vectors; wallet/consensus serialization remains open.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
   acceptance/rejection against native context digests and Merkle proofs through
@@ -224,7 +226,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.985208 ms median and verification had a 3.848667 ms median.
+  proving had a 4.001 ms median and verification had a 3.950209 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -233,7 +235,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 3.316775292 s proving time, a 3.2124335 s verification time, and a
+  a 0.771455667 s proving time, a 0.724763333 s verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.
 - `scripts/check_confidential_bench_budgets.mjs` enforces current CI ceilings
