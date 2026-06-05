@@ -21,6 +21,100 @@
       "capacity_minus_opening_bits": 6125.55,
       "balance_response_volume_bits": 25622.9,
       "fiat_shamir_soundness_bits": 128,
+      "formal_proof_margins": {
+        "applicable": true,
+        "formal_sources": [
+          "Canon/ZK/Confidential_Balance.thy: balance_sigma_extract_distinct_binary_bound",
+          "Canon/ZK/Confidential_Range.thy: range_amount_sigma_extract_distinct_binary_bound",
+          "Canon/ZK/Confidential_Range.thy: range_pair_sigma_extract_distinct_binary_bound",
+          "Canon/ZK/Confidential_Transaction.thy: nullifier_sigma_extract_distinct_binary_bound",
+          "Canon/Crypto/Commit_SIS.thy: commit_collision_yields_sis_bound"
+        ],
+        "extracted_response_bounds": {
+          "balance": 33816576,
+          "range_amount": 1208925819614629208260608,
+          "range_pair": 33685504,
+          "nullifier": 33619968
+        },
+        "honest_witness_bounds": {
+          "balance": 262144,
+          "range_amount": 1208925819614629174706176,
+          "range_pair": 131072,
+          "nullifier": 65536
+        },
+        "sis_comparison_bounds": {
+          "balance_zero_opening_vs_honest": 34078720,
+          "range_amount_residual_vs_honest": 2417851639229258382966784,
+          "range_pair_residual_vs_honest": 33816576,
+          "nullifier_opening_vs_honest": 33685504
+        },
+        "volume_bits": {
+          "balance_extracted_response": 26635.5,
+          "range_amount_extracted_response": 82944.0,
+          "range_pair_extracted_response": 26629.76,
+          "nullifier_extracted_opening": 26652.89
+        },
+        "modulus_checks": {
+          "balance_extracted_response": {
+            "bound": 33816576,
+            "log2_bound": 25.01,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 4.03519
+          },
+          "range_amount_extracted_response": {
+            "bound": 1208925819614629208260608,
+            "log2_bound": 80.0,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 1.442560459240428e+17
+          },
+          "range_pair_extracted_response": {
+            "bound": 33685504,
+            "log2_bound": 25.01,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 4.01955
+          },
+          "nullifier_extracted_opening": {
+            "bound": 33619968,
+            "log2_bound": 25.0,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 4.01173
+          },
+          "sis_balance_zero_opening_vs_honest": {
+            "bound": 34078720,
+            "log2_bound": 25.02,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 4.066471
+          },
+          "sis_range_amount_residual_vs_honest": {
+            "bound": 2417851639229258382966784,
+            "log2_bound": 81.0,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 2.885120918480856e+17
+          },
+          "sis_range_pair_residual_vs_honest": {
+            "bound": 33816576,
+            "log2_bound": 25.01,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 4.03519
+          },
+          "sis_nullifier_opening_vs_honest": {
+            "bound": 33685504,
+            "log2_bound": 25.01,
+            "less_than_modulus": false,
+            "bound_to_modulus_ratio": 4.01955
+          }
+        },
+        "warnings": [
+          "balance_extracted_response",
+          "range_amount_extracted_response",
+          "range_pair_extracted_response",
+          "nullifier_extracted_opening",
+          "sis_balance_zero_opening_vs_honest",
+          "sis_range_amount_residual_vs_honest",
+          "sis_range_pair_residual_vs_honest",
+          "sis_nullifier_opening_vs_honest"
+        ]
+      },
       "screening_status": "screen_only"
     },
     {
@@ -41,6 +135,16 @@
       "capacity_minus_opening_bits": 12268.09,
       "balance_response_volume_bits": 51245.81,
       "fiat_shamir_soundness_bits": 128,
+      "formal_proof_margins": {
+        "applicable": false,
+        "reason": "Current formal extraction/SIS-margin theorems apply to the SIS note/nullifier MVP. The RLWE/AHE layer needs separate EncryptValid, SamePlaintext, TransferValid, and NoiseBoundValid relations before analogous proof margins can be computed.",
+        "required_relations": [
+          "EncryptValid",
+          "SamePlaintext",
+          "TransferValid",
+          "NoiseBoundValid"
+        ]
+      },
       "screening_status": "screen_only"
     }
   ]

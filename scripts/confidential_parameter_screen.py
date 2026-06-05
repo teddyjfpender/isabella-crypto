@@ -36,6 +36,109 @@ def log2(x: float) -> float:
     return math.log(x, 2)
 
 
+def volume_bits(dimension: int, bound: int) -> float:
+    return dimension * log2(2 * bound + 1)
+
+
+def bound_check(q: int, bound: int) -> dict[str, Any]:
+    return {
+        "bound": bound,
+        "log2_bound": round(log2(bound), 2) if bound > 0 else None,
+        "less_than_modulus": bound < q,
+        "bound_to_modulus_ratio": round(bound / q, 6),
+    }
+
+
+def proof_margins(candidate: Candidate) -> dict[str, Any]:
+    if "SIS note" not in candidate.architecture:
+        return {
+            "applicable": False,
+            "reason": (
+                "Current formal extraction/SIS-margin theorems apply to the SIS "
+                "note/nullifier MVP. The RLWE/AHE layer needs separate EncryptValid, "
+                "SamePlaintext, TransferValid, and NoiseBoundValid relations before "
+                "analogous proof margins can be computed."
+            ),
+            "required_relations": [
+                "EncryptValid",
+                "SamePlaintext",
+                "TransferValid",
+                "NoiseBoundValid",
+            ],
+        }
+
+    beta = candidate.beta
+    gamma = candidate.gamma
+    k = candidate.range_bits
+
+    balance_witness = 4 * beta
+    balance_extracted = 2 * gamma + balance_witness
+    range_amount_witness = (2**k) * beta
+    range_amount_extracted = 2 * gamma + range_amount_witness
+    range_pair_witness = 2 * beta
+    range_pair_extracted = 2 * gamma + range_pair_witness
+    nullifier_witness = beta
+    nullifier_extracted = 2 * gamma + nullifier_witness
+
+    sis_comparison_bounds = {
+        "balance_zero_opening_vs_honest": balance_extracted + balance_witness,
+        "range_amount_residual_vs_honest": range_amount_extracted + range_amount_witness,
+        "range_pair_residual_vs_honest": range_pair_extracted + range_pair_witness,
+        "nullifier_opening_vs_honest": nullifier_extracted + nullifier_witness,
+    }
+
+    checks = {
+        "balance_extracted_response": bound_check(candidate.q, balance_extracted),
+        "range_amount_extracted_response": bound_check(candidate.q, range_amount_extracted),
+        "range_pair_extracted_response": bound_check(candidate.q, range_pair_extracted),
+        "nullifier_extracted_opening": bound_check(candidate.q, nullifier_extracted),
+        **{
+            f"sis_{name}": bound_check(candidate.q, bound)
+            for name, bound in sis_comparison_bounds.items()
+        },
+    }
+
+    warnings = [
+        name
+        for name, check in checks.items()
+        if not check["less_than_modulus"]
+    ]
+
+    return {
+        "applicable": True,
+        "formal_sources": [
+            "Canon/ZK/Confidential_Balance.thy: balance_sigma_extract_distinct_binary_bound",
+            "Canon/ZK/Confidential_Range.thy: range_amount_sigma_extract_distinct_binary_bound",
+            "Canon/ZK/Confidential_Range.thy: range_pair_sigma_extract_distinct_binary_bound",
+            "Canon/ZK/Confidential_Transaction.thy: nullifier_sigma_extract_distinct_binary_bound",
+            "Canon/Crypto/Commit_SIS.thy: commit_collision_yields_sis_bound",
+        ],
+        "extracted_response_bounds": {
+            "balance": balance_extracted,
+            "range_amount": range_amount_extracted,
+            "range_pair": range_pair_extracted,
+            "nullifier": nullifier_extracted,
+        },
+        "honest_witness_bounds": {
+            "balance": balance_witness,
+            "range_amount": range_amount_witness,
+            "range_pair": range_pair_witness,
+            "nullifier": nullifier_witness,
+        },
+        "sis_comparison_bounds": sis_comparison_bounds,
+        "volume_bits": {
+            "balance_extracted_response": round(volume_bits(candidate.n2, balance_extracted), 2),
+            "range_amount_extracted_response": round(volume_bits(candidate.n2, range_amount_extracted), 2),
+            "range_pair_extracted_response": round(volume_bits(candidate.n2, range_pair_extracted), 2),
+            "nullifier_extracted_opening": round(
+                volume_bits(candidate.n1 + candidate.n2, nullifier_extracted), 2
+            ),
+        },
+        "modulus_checks": checks,
+        "warnings": warnings,
+    }
+
+
 def screen(candidate: Candidate) -> dict[str, Any]:
     total_dim = candidate.n1 + candidate.n2
     syndrome_bits = candidate.m * log2(candidate.q)
@@ -49,6 +152,7 @@ def screen(candidate: Candidate) -> dict[str, Any]:
         "capacity_minus_opening_bits": round(syndrome_bits - opening_bits, 2),
         "balance_response_volume_bits": round(response_bits, 2),
         "fiat_shamir_soundness_bits": candidate.fs_rounds,
+        "formal_proof_margins": proof_margins(candidate),
         "screening_status": "screen_only",
     }
 
