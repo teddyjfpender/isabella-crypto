@@ -435,6 +435,44 @@ next
   qed
 qed
 
+lemma vec_mod_sub_add_cancel_left:
+  assumes len_eq: "length a = length c"
+      and q_pos: "q > 0"
+      and c_canonical: "vec_mod c q = c"
+  shows "vec_mod (vec_sub (vec_mod (vec_add a c) q) (vec_mod a q)) q = c"
+proof (intro nth_equalityI)
+  show "length (vec_mod (vec_sub (vec_mod (vec_add a c) q) (vec_mod a q)) q) =
+        length c"
+    using len_eq by (simp add: vec_add_length vec_sub_length vec_mod_length)
+next
+  fix i
+  assume i_lt: "i < length (vec_mod (vec_sub (vec_mod (vec_add a c) q) (vec_mod a q)) q)"
+  have i_a: "i < length a"
+    using i_lt len_eq by (simp add: vec_add_length vec_sub_length vec_mod_length)
+  have i_c: "i < length c"
+    using i_a len_eq by simp
+  have c_i_mod: "c ! i mod q = c ! i"
+  proof -
+    have "(vec_mod c q) ! i = c ! i"
+      using c_canonical by simp
+    then show ?thesis
+      using i_c by (simp add: vec_mod_nth)
+  qed
+  have mod_cancel:
+    "((a ! i + c ! i) mod q - a ! i mod q) mod q = c ! i"
+  proof -
+    have "((a ! i + c ! i) mod q - a ! i mod q) mod q =
+          ((a ! i + c ! i) - a ! i) mod q"
+      by (simp add: mod_diff_eq [symmetric])
+    also have "... = c ! i"
+      using c_i_mod by simp
+    finally show ?thesis .
+  qed
+  show "vec_mod (vec_sub (vec_mod (vec_add a c) q) (vec_mod a q)) q ! i = c ! i"
+    using i_a i_c q_pos mod_cancel
+    by (simp add: vec_add_def vec_sub_def vec_mod_nth)
+qed
+
 lemma scalar_mult_bounded:
   assumes "all_bounded v B"
   shows "all_bounded (scalar_mult c v) (abs c * B)"
@@ -527,6 +565,18 @@ next
       using lhs rhs assms by (simp add: mod_mult_right_eq)
   qed
 qed
+
+lemma scalar_mult_one:
+  "scalar_mult 1 v = v"
+  unfolding scalar_mult_def
+  by (induction v) simp_all
+
+lemma vec_add_scalar_zero_right:
+  assumes len_eq: "length a = length c"
+  shows "vec_add a (scalar_mult 0 c) = a"
+  using len_eq
+  unfolding vec_add_def scalar_mult_def
+  by (induction a c rule: list_induct2) simp_all
 
 lemma canonical_balance_challenge_valid:
   assumes "valid_scalar_commit_params p"
@@ -674,6 +724,202 @@ proof -
     using vec_mod_scalar_eq[OF q_pos, of e "mat_vec_mult (rand_commit_key p ck) r"]
     unfolding rand_commit_def by simp
   finally show ?thesis .
+qed
+
+definition balance_sigma_extract ::
+  "int \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> int_vec option" where
+  "balance_sigma_extract e1 z1 e2 z2 =
+    (if e1 = 1 \<and> e2 = 0 then Some (vec_sub z1 z2)
+     else if e1 = 0 \<and> e2 = 1 then Some (vec_sub z2 z1)
+     else None)"
+
+lemma balance_sigma_extract_some_if_distinct_binary:
+  assumes e1_ok: "valid_balance_challenge p e1"
+      and e2_ok: "valid_balance_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+  shows "\<exists>r. balance_sigma_extract e1 z1 e2 z2 = Some r"
+  using valid_balance_challenge_binary[OF e1_ok]
+        valid_balance_challenge_binary[OF e2_ok]
+        distinct
+  unfolding balance_sigma_extract_def
+  by auto
+
+lemma balance_sigma_extract_response_bound:
+  assumes z1_ok: "valid_balance_response p gamma e1 z1"
+      and z2_ok: "valid_balance_response p gamma e2 z2"
+      and ext: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "valid_vec r (cp_n2 p) \<and>
+         all_bounded r (balance_response_bound p gamma e1 +
+                        balance_response_bound p gamma e2)"
+proof -
+  have len1: "length z1 = cp_n2 p"
+    using z1_ok unfolding valid_balance_response_def valid_vec_def by simp
+  have len2: "length z2 = cp_n2 p"
+    using z2_ok unfolding valid_balance_response_def valid_vec_def by simp
+  have b1: "all_bounded z1 (balance_response_bound p gamma e1)"
+    using z1_ok unfolding valid_balance_response_def by simp
+  have b2: "all_bounded z2 (balance_response_bound p gamma e2)"
+    using z2_ok unfolding valid_balance_response_def by simp
+  show ?thesis
+  proof (cases "e1 = 1 \<and> e2 = 0")
+    case True
+    then have r_eq: "r = vec_sub z1 z2"
+      using ext unfolding balance_sigma_extract_def by simp
+    have len_r: "length r = cp_n2 p"
+      using r_eq len1 len2 by (simp add: vec_sub_length)
+    have bound_r:
+      "all_bounded r (balance_response_bound p gamma e1 +
+                      balance_response_bound p gamma e2)"
+      using vec_sub_bounded[OF b1 b2] r_eq by simp
+    show ?thesis
+      using len_r bound_r unfolding valid_vec_def by simp
+  next
+    case False
+    then have alt: "e1 = 0 \<and> e2 = 1"
+      using ext unfolding balance_sigma_extract_def by (auto split: if_splits)
+    then have r_eq: "r = vec_sub z2 z1"
+      using ext False unfolding balance_sigma_extract_def by simp
+    have len_r: "length r = cp_n2 p"
+      using r_eq len1 len2 by (simp add: vec_sub_length)
+    have bound_r:
+      "all_bounded r (balance_response_bound p gamma e1 +
+                      balance_response_bound p gamma e2)"
+    proof -
+      have "all_bounded r (balance_response_bound p gamma e2 +
+                           balance_response_bound p gamma e1)"
+        using vec_sub_bounded[OF b2 b1] r_eq by simp
+      also have "... = all_bounded r (balance_response_bound p gamma e1 +
+                                      balance_response_bound p gamma e2)"
+        by (simp add: add.commute)
+      finally show ?thesis .
+    qed
+    show ?thesis
+      using len_r bound_r unfolding valid_vec_def by simp
+  qed
+qed
+
+lemma balance_sigma_extract_distinct_binary_bound:
+  assumes e1_ok: "valid_balance_challenge p e1"
+      and e2_ok: "valid_balance_challenge p e2"
+      and distinct: "e1 \<noteq> e2"
+      and z1_ok: "valid_balance_response p gamma e1 z1"
+      and z2_ok: "valid_balance_response p gamma e2 z2"
+      and ext: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "valid_vec r (cp_n2 p) \<and> all_bounded r (2 * gamma + 4 * cp_beta p)"
+proof -
+  have extracted:
+    "valid_vec r (cp_n2 p) \<and>
+     all_bounded r (balance_response_bound p gamma e1 +
+                    balance_response_bound p gamma e2)"
+    using balance_sigma_extract_response_bound[OF z1_ok z2_ok ext] .
+  have "balance_response_bound p gamma e1 +
+        balance_response_bound p gamma e2 = 2 * gamma + 4 * cp_beta p"
+    using valid_balance_challenge_binary[OF e1_ok]
+          valid_balance_challenge_binary[OF e2_ok]
+          distinct
+    unfolding balance_response_bound_def
+    by auto
+  then show ?thesis
+    using extracted by simp
+qed
+
+lemma balance_sigma_extract_sub_opening:
+  assumes key_ok: "valid_commit_key p ck"
+      and q_pos: "cp_q p > 0"
+      and len_z_hi: "length z_hi = cp_n2 p"
+      and len_z_lo: "length z_lo = cp_n2 p"
+      and hi_eq: "rand_commit p ck z_hi = vec_mod (vec_add a c) (cp_q p)"
+      and lo_eq: "rand_commit p ck z_lo = vec_mod a (cp_q p)"
+      and len_a: "length a = length c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+  shows "rand_commit p ck (vec_sub z_hi z_lo) = c"
+proof -
+  have "rand_commit p ck (vec_sub z_hi z_lo) =
+        vec_mod (vec_sub (rand_commit p ck z_hi) (rand_commit p ck z_lo)) (cp_q p)"
+    using rand_commit_sub_hom[OF key_ok len_z_hi len_z_lo q_pos] .
+  also have "... =
+        vec_mod (vec_sub (vec_mod (vec_add a c) (cp_q p)) (vec_mod a (cp_q p))) (cp_q p)"
+    using hi_eq lo_eq by simp
+  also have "... = c"
+    using vec_mod_sub_add_cancel_left[OF len_a q_pos c_canonical] .
+  finally show ?thesis .
+qed
+
+lemma balance_sigma_extract_algebraic_opening:
+  assumes t1: "balance_sigma_verify p gamma ck c a e1 z1"
+      and t2: "balance_sigma_verify p gamma ck c a e2 z2"
+      and c_valid: "valid_commitment p c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and ext: "balance_sigma_extract e1 z1 e2 z2 = Some r"
+  shows "rand_commit p ck r = c"
+proof -
+  have params_ok: "valid_scalar_commit_params p"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have key_ok: "valid_commit_key p ck"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have a_valid: "valid_commitment p a"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have e1_ok: "valid_balance_challenge p e1"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have z1_ok: "valid_balance_response p gamma e1 z1"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have eq1:
+    "rand_commit p ck z1 =
+      vec_mod (vec_add a (scalar_mult e1 c)) (cp_q p)"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have e2_ok: "valid_balance_challenge p e2"
+    using t2 unfolding balance_sigma_verify_def by simp
+  have z2_ok: "valid_balance_response p gamma e2 z2"
+    using t2 unfolding balance_sigma_verify_def by simp
+  have eq2:
+    "rand_commit p ck z2 =
+      vec_mod (vec_add a (scalar_mult e2 c)) (cp_q p)"
+    using t2 unfolding balance_sigma_verify_def by simp
+  have q_pos: "cp_q p > 0"
+    using valid_scalar_commit_params_props(5)[OF params_ok] by linarith
+  have len_z1: "length z1 = cp_n2 p"
+    using z1_ok unfolding valid_balance_response_def valid_vec_def by simp
+  have len_z2: "length z2 = cp_n2 p"
+    using z2_ok unfolding valid_balance_response_def valid_vec_def by simp
+  have len_a: "length a = cp_m p"
+    using a_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_c: "length c = cp_m p"
+    using c_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_a_c: "length a = length c"
+    using len_a len_c by simp
+  show ?thesis
+    using ext
+  proof (cases "e1 = 1 \<and> e2 = 0")
+    case True
+    then have e_vals: "e1 = 1" "e2 = 0"
+      by auto
+    have r_eq: "r = vec_sub z1 z2"
+      using ext True unfolding balance_sigma_extract_def by simp
+    have hi_eq: "rand_commit p ck z1 = vec_mod (vec_add a c) (cp_q p)"
+      using eq1 e_vals len_a_c by (simp add: scalar_mult_one)
+    have lo_eq: "rand_commit p ck z2 = vec_mod a (cp_q p)"
+      using eq2 e_vals len_a_c by (simp add: vec_add_scalar_zero_right)
+    show ?thesis
+      using balance_sigma_extract_sub_opening[
+        OF key_ok q_pos len_z1 len_z2 hi_eq lo_eq len_a_c c_canonical]
+      by (simp add: r_eq)
+  next
+    case False
+    have alt: "e1 = 0 \<and> e2 = 1"
+      using ext False unfolding balance_sigma_extract_def by (auto split: if_splits)
+    then have e_vals: "e1 = 0" "e2 = 1"
+      by auto
+    have r_eq: "r = vec_sub z2 z1"
+      using ext False alt unfolding balance_sigma_extract_def by simp
+    have hi_eq: "rand_commit p ck z2 = vec_mod (vec_add a c) (cp_q p)"
+      using eq2 e_vals len_a_c by (simp add: scalar_mult_one)
+    have lo_eq: "rand_commit p ck z1 = vec_mod a (cp_q p)"
+      using eq1 e_vals len_a_c by (simp add: vec_add_scalar_zero_right)
+    show ?thesis
+      using balance_sigma_extract_sub_opening[
+        OF key_ok q_pos len_z2 len_z1 hi_eq lo_eq len_a_c c_canonical]
+      by (simp add: r_eq)
+  qed
 qed
 
 lemma amount_of_opening_eq_hd:
