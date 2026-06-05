@@ -1009,6 +1009,148 @@ assert.equal(
   true,
   'ct-verify-merkle OCaml/TypeScript parity'
 );
+const ocamlEnvelopeContext = {
+  protocolVersion: 1,
+  networkId: 'isabella-ocaml-conformance',
+  assetId: 7,
+  ledgerEpoch: 42,
+  root: ctMerkleLedgerRoot,
+  publicFee: 0,
+  cIn1: ctCIn1,
+  cIn2: ctCIn2,
+  cOut1: ctCOut1,
+  cOut2: ctCOut2,
+  nf1: ctNf1,
+  nf2: ctNf2,
+};
+const ocamlEnvelopePolicy = {
+  networkId: ocamlEnvelopeContext.networkId,
+  assetId: ocamlEnvelopeContext.assetId,
+  ledgerEpoch: ocamlEnvelopeContext.ledgerEpoch,
+  root: ocamlEnvelopeContext.root,
+  publicFee: 0,
+};
+const ocamlEnvelopeContextDigest = ctTransactionContext(
+  ocamlEnvelopeContext.protocolVersion,
+  ocamlEnvelopeContext.networkId,
+  ocamlEnvelopeContext.assetId,
+  ocamlEnvelopeContext.ledgerEpoch,
+  ocamlEnvelopeContext.root,
+  ocamlEnvelopeContext.publicFee,
+  ocamlEnvelopeContext.cIn1,
+  ocamlEnvelopeContext.cIn2,
+  ocamlEnvelopeContext.cOut1,
+  ocamlEnvelopeContext.cOut2,
+  ocamlEnvelopeContext.nf1,
+  ocamlEnvelopeContext.nf2
+);
+assert.equal(
+  ocamlEnvelopeContextDigest,
+  sdk.ConfidentialTransaction.transactionContextDigest(ocamlEnvelopeContext),
+  'ct-merkle-envelope context digest OCaml/TypeScript parity'
+);
+const ocamlEnvelope = {
+  context: ocamlEnvelopeContext,
+  contextDigest: ocamlEnvelopeContextDigest,
+  proof: ctMerkleProof!,
+};
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    ocamlEnvelope,
+    ocamlEnvelopePolicy
+  ),
+  true,
+  'ct-merkle-envelope accepts OCaml context digest and Merkle proof'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    { ...ocamlEnvelope, contextDigest: ocamlEnvelopeContextDigest.replace(/^./, '0') },
+    ocamlEnvelopePolicy
+  ),
+  false,
+  'ct-merkle-envelope rejects stale OCaml context digest'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    ocamlEnvelope,
+    { ...ocamlEnvelopePolicy, assetId: ocamlEnvelopePolicy.assetId + 1 }
+  ),
+  false,
+  'ct-merkle-envelope rejects wrong verifier policy'
+);
+const ocamlFeeEnvelopeContext = { ...ocamlEnvelopeContext, publicFee: 1 };
+const ocamlFeeEnvelopeContextDigest = ctTransactionContext(
+  ocamlFeeEnvelopeContext.protocolVersion,
+  ocamlFeeEnvelopeContext.networkId,
+  ocamlFeeEnvelopeContext.assetId,
+  ocamlFeeEnvelopeContext.ledgerEpoch,
+  ocamlFeeEnvelopeContext.root,
+  ocamlFeeEnvelopeContext.publicFee,
+  ocamlFeeEnvelopeContext.cIn1,
+  ocamlFeeEnvelopeContext.cIn2,
+  ocamlFeeEnvelopeContext.cOut1,
+  ocamlFeeEnvelopeContext.cOut2,
+  ocamlFeeEnvelopeContext.nf1,
+  ocamlFeeEnvelopeContext.nf2
+);
+assert.equal(
+  ocamlFeeEnvelopeContextDigest,
+  sdk.ConfidentialTransaction.transactionContextDigest(ocamlFeeEnvelopeContext),
+  'ct-merkle-envelope fee context digest OCaml/TypeScript parity'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    {
+      context: ocamlFeeEnvelopeContext,
+      contextDigest: ocamlFeeEnvelopeContextDigest,
+      proof: ctMerkleProof!,
+    },
+    { ...ocamlEnvelopePolicy, publicFee: 1 }
+  ),
+  false,
+  'ct-merkle-envelope rejects nonzero public fees until the balance relation is fee-aware'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    {
+      ...ocamlEnvelope,
+      proof: { ...ctMerkleProof!, in2Member: ctMerkleProof!.in1Member },
+    },
+    ocamlEnvelopePolicy
+  ),
+  false,
+  'ct-merkle-envelope rejects mutated Merkle proof components'
+);
 logProgress('validate-ocaml: Merkle transaction CLI parity passed');
 
 console.log('validate-ocaml: confidential transaction proof verification passed');

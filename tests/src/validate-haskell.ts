@@ -1200,6 +1200,154 @@ assert.equal(
   true,
   'ct-verify-merkle Haskell/TypeScript parity'
 );
+const haskellEnvelopeContext = {
+  protocolVersion: 1,
+  networkId: 'isabella-haskell-conformance',
+  assetId: 7,
+  ledgerEpoch: 42,
+  root: ctMerkleRoot,
+  publicFee: 0,
+  cIn1: ctCIn1,
+  cIn2: ctCIn2,
+  cOut1: ctCOut1,
+  cOut2: ctCOut2,
+  nf1: ctNf1,
+  nf2: ctNf2,
+};
+const haskellEnvelopePolicy = {
+  networkId: haskellEnvelopeContext.networkId,
+  assetId: haskellEnvelopeContext.assetId,
+  ledgerEpoch: haskellEnvelopeContext.ledgerEpoch,
+  root: haskellEnvelopeContext.root,
+  publicFee: 0,
+};
+const haskellEnvelopeContextDigest = parseResult<string>(
+  runHaskell([
+    'ct-transaction-context',
+    haskellEnvelopeContext.protocolVersion.toString(),
+    haskellEnvelopeContext.networkId,
+    haskellEnvelopeContext.assetId.toString(),
+    haskellEnvelopeContext.ledgerEpoch.toString(),
+    haskellEnvelopeContext.root,
+    haskellEnvelopeContext.publicFee.toString(),
+    JSON.stringify(haskellEnvelopeContext.cIn1),
+    JSON.stringify(haskellEnvelopeContext.cIn2),
+    JSON.stringify(haskellEnvelopeContext.cOut1),
+    JSON.stringify(haskellEnvelopeContext.cOut2),
+    JSON.stringify(haskellEnvelopeContext.nf1),
+    JSON.stringify(haskellEnvelopeContext.nf2),
+  ])
+);
+assert.equal(
+  haskellEnvelopeContextDigest,
+  sdk.ConfidentialTransaction.transactionContextDigest(haskellEnvelopeContext),
+  'ct-merkle-envelope context digest Haskell/TypeScript parity'
+);
+const haskellEnvelope = {
+  context: haskellEnvelopeContext,
+  contextDigest: haskellEnvelopeContextDigest,
+  proof: ctMerkleProof!,
+};
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    haskellEnvelope,
+    haskellEnvelopePolicy
+  ),
+  true,
+  'ct-merkle-envelope accepts Haskell context digest and Merkle proof'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    { ...haskellEnvelope, contextDigest: haskellEnvelopeContextDigest.replace(/^./, '0') },
+    haskellEnvelopePolicy
+  ),
+  false,
+  'ct-merkle-envelope rejects stale Haskell context digest'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    haskellEnvelope,
+    { ...haskellEnvelopePolicy, assetId: haskellEnvelopePolicy.assetId + 1 }
+  ),
+  false,
+  'ct-merkle-envelope rejects wrong verifier policy'
+);
+const haskellFeeEnvelopeContext = { ...haskellEnvelopeContext, publicFee: 1 };
+const haskellFeeEnvelopeContextDigest = parseResult<string>(
+  runHaskell([
+    'ct-transaction-context',
+    haskellFeeEnvelopeContext.protocolVersion.toString(),
+    haskellFeeEnvelopeContext.networkId,
+    haskellFeeEnvelopeContext.assetId.toString(),
+    haskellFeeEnvelopeContext.ledgerEpoch.toString(),
+    haskellFeeEnvelopeContext.root,
+    haskellFeeEnvelopeContext.publicFee.toString(),
+    JSON.stringify(haskellFeeEnvelopeContext.cIn1),
+    JSON.stringify(haskellFeeEnvelopeContext.cIn2),
+    JSON.stringify(haskellFeeEnvelopeContext.cOut1),
+    JSON.stringify(haskellFeeEnvelopeContext.cOut2),
+    JSON.stringify(haskellFeeEnvelopeContext.nf1),
+    JSON.stringify(haskellFeeEnvelopeContext.nf2),
+  ])
+);
+assert.equal(
+  haskellFeeEnvelopeContextDigest,
+  sdk.ConfidentialTransaction.transactionContextDigest(haskellFeeEnvelopeContext),
+  'ct-merkle-envelope fee context digest Haskell/TypeScript parity'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    {
+      context: haskellFeeEnvelopeContext,
+      contextDigest: haskellFeeEnvelopeContextDigest,
+      proof: ctMerkleProof!,
+    },
+    { ...haskellEnvelopePolicy, publicFee: 1 }
+  ),
+  false,
+  'ct-merkle-envelope rejects nonzero public fees until the balance relation is fee-aware'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+    ctParamsExpected,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctSpent,
+    {
+      ...haskellEnvelope,
+      proof: { ...ctMerkleProof!, in2Member: ctMerkleProof!.in1Member },
+    },
+    haskellEnvelopePolicy
+  ),
+  false,
+  'ct-merkle-envelope rejects mutated Merkle proof components'
+);
 
 const ctIn1RangeProof = sdk.ConfidentialRange.fsProve(
   ctParamsExpected,
