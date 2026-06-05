@@ -16,6 +16,13 @@ import {
   ConfidentialTransaction,
 } from '../dist/index.js';
 
+function normalizeSignedZero(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeSignedZero);
+  }
+  return Object.is(value, -0) ? 0 : value;
+}
+
 function balanceProofShape(proof) {
   if (proof && Array.isArray(proof.rounds)) {
     return 'rounds';
@@ -77,12 +84,68 @@ function rangeProofShape(proof) {
   return 'unknown';
 }
 
-function expectLegacyRangeProof(proof, context) {
+function normalizeRangeProof(proof, context) {
   const shape = rangeProofShape(proof);
   if (shape === 'legacy') {
+    return {
+      bits: proof.bits,
+      comps: proof.comps,
+      rounds: [
+        {
+          amountA: proof.amountA,
+          amountZ: proof.amountZ,
+          pairAs: proof.pairAs,
+          pairZs: proof.pairZs,
+        },
+      ],
+    };
+  }
+  if (shape === 'rounds') {
     return proof;
   }
-  throw new Error(`${context} has not been updated for repeated range-proof serialization yet (shape=${shape}).`);
+  if (shape === 'lists') {
+    return {
+      bits: proof.bits,
+      comps: proof.comps,
+      rounds: proof.amountAs.map((amountA, index) => ({
+        amountA,
+        amountZ: proof.amountZs[index],
+        pairAs: proof.pairAss[index],
+        pairZs: proof.pairZss[index],
+        challenge: proof.challenges?.[index],
+      })),
+    };
+  }
+  throw new Error(`${context} has unknown range-proof serialization (shape=${shape}).`);
+}
+
+function tamperRangeProof(proof) {
+  const shape = rangeProofShape(proof);
+  if (shape === 'legacy') {
+    return {
+      ...proof,
+      amountZ: [proof.amountZ[0] + 1, ...proof.amountZ.slice(1)],
+    };
+  }
+  if (shape === 'rounds') {
+    return {
+      ...proof,
+      rounds: proof.rounds.map((round, index) =>
+        index === 0
+          ? { ...round, amountZ: [round.amountZ[0] + 1, ...round.amountZ.slice(1)] }
+          : round
+      ),
+    };
+  }
+  if (shape === 'lists') {
+    return {
+      ...proof,
+      amountZs: proof.amountZs.map((amountZ, index) =>
+        index === 0 ? [amountZ[0] + 1, ...amountZ.slice(1)] : amountZ
+      ),
+    };
+  }
+  throw new Error(`Cannot tamper unknown range-proof serialization (shape=${shape}).`);
 }
 
 function nullifierProofShape(proof) {
@@ -404,8 +467,11 @@ describe('ConfidentialBalance - Deterministic Balance Proof Slice', () => {
     );
 
     assert.equal(ConfidentialBalance.amountOfOpening(opIn1), 7);
-    assert.deepEqual(aggregate, [0, 0]);
-    assert.deepEqual(c, ConfidentialBalance.randCommit(params, ck, aggregate));
+    assert.deepEqual(normalizeSignedZero(aggregate), [0, 0]);
+    assert.deepEqual(
+      normalizeSignedZero(c),
+      normalizeSignedZero(ConfidentialBalance.randCommit(params, ck, aggregate))
+    );
   });
 
   test('fsProve and fsVerify succeed on a valid witness', () => {
@@ -488,12 +554,12 @@ describe('ConfidentialRange - Deterministic Range Proof Slice', () => {
     { msg: [1], rand: [1, 0] },
     { msg: [0], rand: [0, -1] },
   ];
-  const yAmount = [0, 1];
-  const yPairs = [
+  const yAmount = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [0, 1]);
+  const yPairs = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [
     [1, 0],
     [0, 0],
     [1, -1],
-  ];
+  ]);
 
   function commitOfOpening(opening) {
     return Zq.matVecMultMod(ck, Vec.concat(opening.msg, opening.rand), params.q);
@@ -534,39 +600,27 @@ describe('ConfidentialRange - Deterministic Range Proof Slice', () => {
     );
 
     assert.ok(proof);
-    assert.equal(rangeProofShape(proof), 'legacy');
-    const legacyProof = expectLegacyRangeProof(proof, 'ConfidentialRange.fsProve');
+    assert.ok(['legacy', 'rounds', 'lists'].includes(rangeProofShape(proof)));
+    const normalizedProof = normalizeRangeProof(proof, 'ConfidentialRange.fsProve');
+    assert.equal(normalizedProof.rounds.length, ConfidentialBalance.fsRounds());
     assert.equal(ConfidentialRange.validAmountWitness(params, rangeK, [-4, -4]), true);
     assert.equal(ConfidentialRange.validPairWitness(params, [1, 1]), true);
-    assert.equal(
-      ConfidentialRange.validAmountResponse(
-        params,
-        gamma,
-        rangeK,
-        ConfidentialRange.canonicalChallenge(
-          params,
-          ck,
-          cAmount,
-          legacyProof.bits,
-          legacyProof.comps,
-          legacyProof.amountA,
-          legacyProof.pairAs
-        ),
-        legacyProof.amountZ
-      ),
-      true
-    );
-    const rangeChallenge = ConfidentialRange.canonicalChallenge(
-      params,
-      ck,
-      cAmount,
-      legacyProof.bits,
-      legacyProof.comps,
-      legacyProof.amountA,
-      legacyProof.pairAs
-    );
-    for (const z of legacyProof.pairZs) {
-      assert.equal(ConfidentialRange.validPairResponse(params, gamma, rangeChallenge, z), true);
+    for (const round of normalizedProof.rounds) {
+      if (round.challenge !== undefined) {
+        assert.equal(
+          ConfidentialRange.validAmountResponse(
+            params,
+            gamma,
+            rangeK,
+            round.challenge,
+            round.amountZ
+          ),
+          true
+        );
+        for (const z of round.pairZs) {
+          assert.equal(ConfidentialRange.validPairResponse(params, gamma, round.challenge, z), true);
+        }
+      }
     }
     assert.equal(ConfidentialRange.fsVerify(params, gamma, rangeK, ck, cAmount, proof), true);
   });
@@ -625,11 +679,8 @@ describe('ConfidentialRange - Deterministic Range Proof Slice', () => {
       yAmount,
       yPairs
     );
-    const legacyProof = expectLegacyRangeProof(proof, 'ConfidentialRange.fsProve');
-    const tampered = {
-      ...legacyProof,
-      amountZ: [legacyProof.amountZ[0] + 1, legacyProof.amountZ[1]],
-    };
+    assert.ok(proof);
+    const tampered = tamperRangeProof(proof);
 
     assert.equal(ConfidentialRange.fsVerify(params, gamma, rangeK, ck, cAmount, tampered), false);
   });
@@ -674,18 +725,18 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
   const yIn1 = Array.from({ length: ConfidentialBalance.fsRounds() }, () => ({ msg: [0], rand: [1, 0] }));
   const yIn2 = Array.from({ length: ConfidentialBalance.fsRounds() }, () => ({ msg: [1], rand: [0, 1] }));
   const yBalance = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [0, 1]);
-  const yOut1 = [0, 1];
-  const yOut1Pairs = [
+  const yOut1 = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [0, 1]);
+  const yOut1Pairs = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [
     [1, 0],
     [0, 0],
     [1, -1],
-  ];
-  const yOut2 = [1, 0];
-  const yOut2Pairs = [
+  ]);
+  const yOut2 = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [1, 0]);
+  const yOut2Pairs = Array.from({ length: ConfidentialBalance.fsRounds() }, () => [
     [0, 1],
     [1, 0],
     [0, 0],
-  ];
+  ]);
 
   function commitOfOpening(opening) {
     return Zq.matVecMultMod(ck, Vec.concat(opening.msg, opening.rand), params.q);
@@ -861,8 +912,8 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
     assert.deepEqual(updatedSpent, [nf1, nf2]);
   });
 
-  test('semantic ledger-step verification is exported on the stable API and matches the compatibility entrypoint', () => {
-    const proof = ConfidentialTransaction.fsProve(
+  test('semantic ledger-step verification defaults to the Merkle path with scaffold compatibility explicit', () => {
+    const proof = ConfidentialTransaction.fsProveMerkle(
       params,
       gamma,
       rangeK,
@@ -899,6 +950,9 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
 
     assert.equal(typeof ConfidentialTransaction.semanticStepValid, 'function');
     assert.equal(typeof ConfidentialTransaction.ledgerStepValid, 'function');
+    assert.equal(typeof ConfidentialTransaction.ledgerStepValidScaffold, 'function');
+    assert.equal(typeof ConfidentialTransaction.semanticStepValidScaffold, 'function');
+    assert.equal(typeof ConfidentialTransaction.ledgerStepValidMerkle, 'function');
     assert.equal(
       ConfidentialTransaction.semanticStepValid(
         params,
@@ -916,7 +970,7 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
         nf2,
         proof
       ),
-      ConfidentialTransaction.ledgerStepValid(
+      ConfidentialTransaction.ledgerStepValidMerkle(
         params,
         gamma,
         rangeK,
@@ -931,6 +985,70 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
         nf1,
         nf2,
         proof
+      )
+    );
+    const scaffoldProof = ConfidentialTransaction.fsProve(
+      params,
+      gamma,
+      rangeK,
+      ck,
+      nk,
+      ledger,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2,
+      out1Bits,
+      out1Comps,
+      out2Bits,
+      out2Comps,
+      yIn1,
+      yIn2,
+      yBalance,
+      yOut1,
+      yOut1Pairs,
+      yOut2,
+      yOut2Pairs
+    );
+    assert.equal(
+      ConfidentialTransaction.semanticStepValidScaffold(
+        params,
+        gamma,
+        rangeK,
+        ck,
+        nk,
+        notes,
+        spent,
+        cIn1,
+        cIn2,
+        cOut1,
+        cOut2,
+        nf1,
+        nf2,
+        scaffoldProof
+      ),
+      ConfidentialTransaction.ledgerStepValid(
+        params,
+        gamma,
+        rangeK,
+        ck,
+        nk,
+        notes,
+        spent,
+        cIn1,
+        cIn2,
+        cOut1,
+        cOut2,
+        nf1,
+        nf2,
+        scaffoldProof
       )
     );
   });

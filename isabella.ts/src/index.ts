@@ -2102,13 +2102,7 @@ export namespace ConfidentialTransaction {
     );
   }
 
-  /**
-   * Stable alias for semantic ledger-step validation.
-   *
-   * This keeps the public SDK naming explicit while preserving the original
-   * generated `ledgerStepValid` entrypoint for compatibility.
-   */
-  export function semanticStepValid(
+  export function ledgerStepValidScaffold(
     params: ScalarCommitParams,
     gamma: number,
     k: number,
@@ -2125,6 +2119,82 @@ export namespace ConfidentialTransaction {
     proof: TransactionProof
   ): boolean {
     return ledgerStepValid(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      notes,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    );
+  }
+
+  export function semanticStepValidScaffold(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    notes: VerifiedNote[],
+    spent: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    proof: TransactionProof
+  ): boolean {
+    return ledgerStepValidScaffold(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      notes,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    );
+  }
+
+  /**
+   * Stable semantic ledger-step validation.
+   *
+   * The semantic default is the cryptographic Merkle-root path. The generated
+   * `ledgerStepValid` scaffold remains available for compatibility, with
+   * `ledgerStepValidScaffold` / `semanticStepValidScaffold` naming that makes
+   * the non-production boundary explicit.
+   */
+  export function semanticStepValid(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    notes: VerifiedNote[],
+    spent: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    proof: MerkleTransactionProof
+  ): boolean {
+    return ledgerStepValidMerkle(
       params,
       gamma,
       k,

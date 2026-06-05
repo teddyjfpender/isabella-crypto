@@ -77,9 +77,24 @@ type MembershipProof = {
   siblings: IntMatrix;
   directions: boolean[];
 };
+type MerkleMembershipProof = {
+  index: number;
+  root: string;
+  siblings: string[];
+  directions: boolean[];
+};
 type TransactionProof = {
   in1Member: MembershipProof;
   in2Member: MembershipProof;
+  in1Nullifier: NullifierProofLike;
+  in2Nullifier: NullifierProofLike;
+  balance: BalanceProofLike;
+  out1Range: RangeProofLike;
+  out2Range: RangeProofLike;
+};
+type MerkleTransactionProof = {
+  in1Member: MerkleMembershipProof;
+  in2Member: MerkleMembershipProof;
   in1Nullifier: NullifierProofLike;
   in2Nullifier: NullifierProofLike;
   balance: BalanceProofLike;
@@ -151,6 +166,23 @@ function tamperMembershipProof(proof: MembershipProof): MembershipProof {
 }
 
 function tamperMembershipPath(proof: MembershipProof): MembershipProof {
+  const tampered = cloneJson(proof);
+  if (tampered.directions.length > 0) {
+    tampered.directions[0] = !tampered.directions[0];
+  } else {
+    tampered.index = tampered.index + 1;
+  }
+  return tampered;
+}
+
+function tamperMerkleMembershipProof(proof: MerkleMembershipProof): MerkleMembershipProof {
+  const tampered = cloneJson(proof);
+  const replacement = tampered.root[0] === '0' ? '1' : '0';
+  tampered.root = `${replacement}${tampered.root.slice(1)}`;
+  return tampered;
+}
+
+function tamperMerkleMembershipPath(proof: MerkleMembershipProof): MerkleMembershipProof {
   const tampered = cloneJson(proof);
   if (tampered.directions.length > 0) {
     tampered.directions[0] = !tampered.directions[0];
@@ -630,7 +662,7 @@ async function main(): Promise<void> {
   const semanticCOut2 = commitOfOpening(semanticOpOut2);
   const semanticSpent: IntMatrix = [];
   const semanticLedger = [semanticCIn1, semanticCIn2];
-  const semanticLedgerRoot = sdk.ConfidentialTransaction.ledgerRoot(params, semanticLedger);
+  const semanticMerkleLedgerRoot = sdk.ConfidentialTransaction.merkleLedgerRoot(semanticLedger);
   const semanticNf1 = sdk.ConfidentialTransaction.nullifier(params, semanticNk, semanticOpIn1);
   const semanticNf2 = sdk.ConfidentialTransaction.nullifier(params, semanticNk, semanticOpIn2);
   const semanticIn1RangeProof = safeNullable(() =>
@@ -669,7 +701,7 @@ async function main(): Promise<void> {
         ]
       : null;
   const semanticTransactionProof = safeNullable(() =>
-    sdk.ConfidentialTransaction.fsProve(
+    sdk.ConfidentialTransaction.fsProveMerkle(
       params,
       gamma,
       semanticRangeK,
@@ -863,15 +895,15 @@ async function main(): Promise<void> {
       } = semanticTransactionProof === null || semanticNotes === null
       ? { checked: false, reason: 'no honest semantic transaction proof fixture was constructed' }
       : (() => {
-          const verifyTransactionProof = (proof: TransactionProof): boolean =>
+          const verifyTransactionProof = (proof: MerkleTransactionProof): boolean =>
             safeBool(() =>
-              sdk.ConfidentialTransaction.fsVerify(
+              sdk.ConfidentialTransaction.fsVerifyMerkle(
                 params,
                 gamma,
                 semanticRangeK,
                 ck,
                 semanticNk,
-                semanticLedgerRoot,
+                semanticMerkleLedgerRoot,
                 semanticSpent,
                 semanticCIn1,
                 semanticCIn2,
@@ -905,25 +937,25 @@ async function main(): Promise<void> {
                 proof
               )
             );
-          const tamperedMembershipTransaction: TransactionProof = {
+          const tamperedMembershipTransaction: MerkleTransactionProof = {
             ...semanticTransactionProof,
-            in1Member: tamperMembershipProof(semanticTransactionProof.in1Member),
+            in1Member: tamperMerkleMembershipProof(semanticTransactionProof.in1Member),
           };
-          const tamperedMembershipPathTransaction: TransactionProof = {
+          const tamperedMembershipPathTransaction: MerkleTransactionProof = {
             ...semanticTransactionProof,
-            in1Member: tamperMembershipPath(semanticTransactionProof.in1Member),
+            in1Member: tamperMerkleMembershipPath(semanticTransactionProof.in1Member),
           };
-          const swappedMembershipTransaction: TransactionProof = {
+          const swappedMembershipTransaction: MerkleTransactionProof = {
             ...semanticTransactionProof,
             in1Member: semanticTransactionProof.in2Member,
             in2Member: semanticTransactionProof.in1Member,
           };
-          const swappedNullifierTransaction: TransactionProof = {
+          const swappedNullifierTransaction: MerkleTransactionProof = {
             ...semanticTransactionProof,
             in1Nullifier: semanticTransactionProof.in2Nullifier,
             in2Nullifier: semanticTransactionProof.in1Nullifier,
           };
-          const swappedOutputRangeTransaction: TransactionProof = {
+          const swappedOutputRangeTransaction: MerkleTransactionProof = {
             ...semanticTransactionProof,
             out1Range: semanticTransactionProof.out2Range,
             out2Range: semanticTransactionProof.out1Range,

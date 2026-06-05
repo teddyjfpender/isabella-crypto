@@ -752,8 +752,9 @@ Current status and roadmap:
   TypeScript/OCaml/Haskell Merkle APIs for leaf/node/root/path checks plus a
   separate Merkle-backed transaction verifier path. Native OCaml/Haskell CLI
   conformance now covers Merkle transaction proving and verification against
-  the TypeScript SDK. The scaffold API remains for compatibility until callers
-  are migrated.
+  the TypeScript SDK. The stable semantic ledger-step API now defaults to the
+  Merkle-backed verifier; scaffold ledger-step calls remain available only as
+  explicit compatibility APIs until they are retired.
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.
@@ -782,8 +783,9 @@ Validation note:
   them silently.
 - Snapshot well-formedness (`ledgerValid`) is tracked separately from the
   semantic ledger-step verifier, exported on the stable TypeScript surface as
-  `ConfidentialTransaction.semanticStepValid` with `ledgerStepValid` retained as
-  a compatibility alias.
+  Merkle-backed `ConfidentialTransaction.semanticStepValid`. The algebraic
+  scaffold path remains available as `ledgerStepValid`,
+  `ledgerStepValidScaffold`, and `semanticStepValidScaffold` for compatibility.
 
 ```typescript
 const params = ConfidentialBalance.makeParams(2, 2, 17, 3);

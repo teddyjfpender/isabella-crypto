@@ -39,7 +39,9 @@ module Canon.ZK.Confidential_Transaction
   , ledgerValid
   , ledgerValidMerkle
   , ledgerStepValid
+  , ledgerStepValidScaffold
   , semanticStepValid
+  , semanticStepValidScaffold
   , ledgerStepValidMerkle
   , semanticStepValidMerkle
   , transactionRelation
@@ -506,7 +508,7 @@ ledgerStepValid p gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof 
       transactionFsVerify p gamma k ck nk preRoot spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof &&
       ledgerValid p gamma k ck postRoot updatedNotes updatedSpent
 
-semanticStepValid ::
+ledgerStepValidScaffold ::
   Commit.CommitParams ->
   Int ->
   Int ->
@@ -522,7 +524,25 @@ semanticStepValid ::
   [Int] ->
   TransactionProof ->
   Bool
-semanticStepValid = ledgerStepValid
+ledgerStepValidScaffold = ledgerStepValid
+
+semanticStepValidScaffold ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  [VerifiedNote] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  TransactionProof ->
+  Bool
+semanticStepValidScaffold = ledgerStepValidScaffold
 
 ledgerStepValidMerkle ::
   Commit.CommitParams ->
@@ -566,6 +586,24 @@ semanticStepValidMerkle ::
   MerkleTransactionProof ->
   Bool
 semanticStepValidMerkle = ledgerStepValidMerkle
+
+semanticStepValid ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  [VerifiedNote] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  Bool
+semanticStepValid = ledgerStepValidMerkle
 
 transactionRelation ::
   Commit.CommitParams ->

@@ -776,8 +776,11 @@ assert.equal(
   'ct-merkle-member-verify OCaml accepts generated path'
 );
 logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
-assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'ct-ledger-step alias exported');
-assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'ct-ledger-step compatibility export');
+assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
+assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
+assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'scaffold ledger-step compatibility export');
+assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValidScaffold, 'function', 'explicit scaffold ledger-step export');
+assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidScaffold, 'function', 'explicit scaffold semantic-step export');
 
 console.log('validate-ocaml: confidential nullifier and membership shared surfaces passed');
 
@@ -1011,4 +1014,4 @@ logProgress('validate-ocaml: verified input notes constructed');
 
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
-console.log('Validated the TypeScript SDK against the OCaml surface on 76 deterministic shared-surface cases.');
+console.log('Validated the TypeScript SDK against the OCaml surface on 79 deterministic shared-surface cases.');

@@ -871,8 +871,11 @@ assert.equal(
   true,
   'ct-merkle-member-verify Haskell accepts generated path'
 );
-assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'ct-ledger-step alias exported');
-assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'ct-ledger-step compatibility export');
+assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
+assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
+assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'scaffold ledger-step compatibility export');
+assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValidScaffold, 'function', 'explicit scaffold ledger-step export');
+assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidScaffold, 'function', 'explicit scaffold semantic-step export');
 
 console.log('validate-haskell: confidential nullifier and membership shared surfaces passed');
 
@@ -1197,5 +1200,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 76 deterministic shared-surface cases.'
+  'Validated Haskell CLI and SDK surfaces on 79 deterministic shared-surface cases.'
 );
