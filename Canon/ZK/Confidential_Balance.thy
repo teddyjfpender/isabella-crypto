@@ -463,14 +463,18 @@ next
   proof -
     have "((a ! i + c ! i) mod q - a ! i mod q) mod q =
           ((a ! i + c ! i) - a ! i) mod q"
-      by (simp add: mod_diff_eq [symmetric])
+      by (rule mod_diff_eq)
     also have "... = c ! i"
       using c_i_mod by simp
     finally show ?thesis .
   qed
+  have nth_eq:
+    "vec_mod (vec_sub (vec_mod (vec_add a c) q) (vec_mod a q)) q ! i =
+      ((a ! i + c ! i) mod q - a ! i mod q) mod q"
+    using i_a i_c
+    by (simp add: vec_add_def vec_sub_def vec_mod_def)
   show "vec_mod (vec_sub (vec_mod (vec_add a c) q) (vec_mod a q)) q ! i = c ! i"
-    using i_a i_c q_pos mod_cancel
-    by (simp add: vec_add_def vec_sub_def vec_mod_nth)
+    using nth_eq mod_cancel by simp
 qed
 
 lemma scalar_mult_bounded:
@@ -785,13 +789,16 @@ proof -
       "all_bounded r (balance_response_bound p gamma e1 +
                       balance_response_bound p gamma e2)"
     proof -
-      have "all_bounded r (balance_response_bound p gamma e2 +
-                           balance_response_bound p gamma e1)"
+      have raw_bound:
+        "all_bounded r (balance_response_bound p gamma e2 +
+                        balance_response_bound p gamma e1)"
         using vec_sub_bounded[OF b2 b1] r_eq by simp
-      also have "... = all_bounded r (balance_response_bound p gamma e1 +
-                                      balance_response_bound p gamma e2)"
-        by (simp add: add.commute)
-      finally show ?thesis .
+      have sum_comm:
+        "balance_response_bound p gamma e2 + balance_response_bound p gamma e1 =
+         balance_response_bound p gamma e1 + balance_response_bound p gamma e2"
+        by simp
+      show ?thesis
+        using raw_bound sum_comm by simp
     qed
     show ?thesis
       using len_r bound_r unfolding valid_vec_def by simp
