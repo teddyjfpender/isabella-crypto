@@ -107,10 +107,10 @@ The harnesses are repair-aware:
 - The confidential transaction context vector pins public replay context
   bytes, and the TS envelope verifier checks the context digest and expected
   network/asset/root policy before delegating to the Merkle proof verifier.
-  The OCaml and Haskell validators feed native context digests and native
-  Merkle transaction proofs through that envelope gate and assert rejection for
-  stale digests, wrong policy, nonzero public fees, and mutated Merkle proof
-  components.
+  The OCaml and Haskell CLIs expose `ct-verify-merkle-envelope`; the validators
+  feed native context digests and native Merkle transaction proofs through that
+  command and assert rejection for stale digests, wrong policy, nonzero public
+  fees, and context roots not matched by the Merkle proof.
 
 The harnesses compare the Haskell and OCaml CLIs against the built
 TypeScript SDK artifact in `isabella.ts/dist/`.

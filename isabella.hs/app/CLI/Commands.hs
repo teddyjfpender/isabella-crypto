@@ -74,6 +74,7 @@ runCommand format cmd args = case cmd of
     "ct-prove-merkle" -> cmdCtProveMerkle format args
     "ct-verify" -> cmdCtVerify format args
     "ct-verify-merkle" -> cmdCtVerifyMerkle format args
+    "ct-verify-merkle-envelope" -> cmdCtVerifyMerkleEnvelope format args
     "ct-verify-bench" -> cmdCtVerifyBench format args
     _ -> putStrLn $ "Unknown command: " ++ cmd ++ "\nUse --help for usage."
 
@@ -471,8 +472,8 @@ prepareCtVerify [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledge
 prepareCtVerify _ =
     Left "Usage: ct-verify M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
-prepareCtVerifyMerkle :: [String] -> Either String (() -> Bool)
-prepareCtVerifyMerkle [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
+prepareCtVerifyMerkleWithRoot :: Maybe String -> [String] -> Either String (() -> Bool)
+prepareCtVerifyMerkleWithRoot rootOverride [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
     case
         ( parseCbParams mStr n2Str qStr betaStr
         , parseInt gammaStr
@@ -511,7 +512,7 @@ prepareCtVerifyMerkle [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr,
         , parseCube out2PairZsStr
         ) of
         (Just params, Just gamma, Just k, Just ck, Just nk, Just ledger, Just spent, Just cIn1, Just cIn2, Just cOut1, Just cOut2, Just nf1, Just nf2, Just in1ACommits, Just in1ANullifiers, Just in1ZMsgs, Just in1ZRands, Just in2ACommits, Just in2ANullifiers, Just in2ZMsgs, Just in2ZRands, Just balanceAs, Just balanceZs, Just out1Bits, Just out1Comps, Just out1AmountA, Just out1AmountZ, Just out1PairAs, Just out1PairZs, Just out2Bits, Just out2Comps, Just out2AmountA, Just out2AmountZ, Just out2PairAs, Just out2PairZs) ->
-            let root = ConfidentialTransaction.merkleLedgerRoot ledger
+            let root = maybe (ConfidentialTransaction.merkleLedgerRoot ledger) id rootOverride
              in case
                     ( ConfidentialTransaction.merkleMembershipProve ledger cIn1
                     , ConfidentialTransaction.merkleMembershipProve ledger cIn2
@@ -532,8 +533,11 @@ prepareCtVerifyMerkle [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr,
                                         params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
                     _ -> Left "Expected Merkle membership proofs for both input commitments in the supplied ledger"
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
-prepareCtVerifyMerkle _ =
+prepareCtVerifyMerkleWithRoot _ _ =
     Left "Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+prepareCtVerifyMerkle :: [String] -> Either String (() -> Bool)
+prepareCtVerifyMerkle = prepareCtVerifyMerkleWithRoot Nothing
 
 -- Command implementations
 
@@ -1448,6 +1452,101 @@ cmdCtVerifyMerkle format args =
         Left err
             | take 5 err == "Usage" -> outputUsage format err
             | otherwise -> outputError format err
+
+cmdCtVerifyMerkleEnvelope :: OutputFormat -> [String] -> IO ()
+cmdCtVerifyMerkleEnvelope format
+    ( mStr : n2Str : qStr : betaStr : gammaStr : kStr : ckStr : nkStr
+      : ledgerStr : spentStr : expectedVersionStr : expectedNetworkId
+      : expectedAssetIdStr : expectedLedgerEpochStr : expectedRoot
+      : expectedPublicFeeStr : contextDigest : protocolVersionStr : networkId
+      : assetIdStr : ledgerEpochStr : rootDigest : publicFeeStr : cIn1Str
+      : cIn2Str : cOut1Str : cOut2Str : nf1Str : nf2Str : proofArgs
+    ) =
+        case
+            ( parseInt expectedVersionStr
+            , parseInt expectedAssetIdStr
+            , parseInt expectedLedgerEpochStr
+            , parseInt expectedPublicFeeStr
+            , parseInt protocolVersionStr
+            , parseInt assetIdStr
+            , parseInt ledgerEpochStr
+            , parseInt publicFeeStr
+            , parseVec cIn1Str
+            , parseVec cIn2Str
+            , parseVec cOut1Str
+            , parseVec cOut2Str
+            , parseVec nf1Str
+            , parseVec nf2Str
+            )
+        of
+            ( Just expectedVersion
+              , Just expectedAssetId
+              , Just expectedLedgerEpoch
+              , Just expectedPublicFee
+              , Just protocolVersion
+              , Just assetId
+              , Just ledgerEpoch
+              , Just publicFee
+              , Just cIn1
+              , Just cIn2
+              , Just cOut1
+              , Just cOut2
+              , Just nf1
+              , Just nf2
+              ) -> do
+                let computedDigest =
+                        ConfidentialTransaction.transactionContextDigest
+                            protocolVersion
+                            networkId
+                            assetId
+                            ledgerEpoch
+                            rootDigest
+                            publicFee
+                            cIn1
+                            cIn2
+                            cOut1
+                            cOut2
+                            nf1
+                            nf2
+                    policyOk =
+                        expectedPublicFee == 0
+                            && publicFee == 0
+                            && protocolVersion == expectedVersion
+                            && networkId == expectedNetworkId
+                            && assetId == expectedAssetId
+                            && ledgerEpoch == expectedLedgerEpoch
+                            && rootDigest == expectedRoot
+                            && contextDigest == computedDigest
+                    merkleArgs =
+                        [ mStr
+                        , n2Str
+                        , qStr
+                        , betaStr
+                        , gammaStr
+                        , kStr
+                        , ckStr
+                        , nkStr
+                        , ledgerStr
+                        , spentStr
+                        , cIn1Str
+                        , cIn2Str
+                        , cOut1Str
+                        , cOut2Str
+                        , nf1Str
+                        , nf2Str
+                        ]
+                            ++ proofArgs
+                if not policyOk
+                    then outputBoolResult format "transaction_fs_verify_merkle_envelope = " False
+                    else case prepareCtVerifyMerkleWithRoot (Just rootDigest) merkleArgs of
+                        Right verify ->
+                            outputBoolResult format "transaction_fs_verify_merkle_envelope = " (verify ())
+                        Left err
+                            | take 5 err == "Usage" -> outputUsage format err
+                            | otherwise -> outputError format err
+            _ -> outputError format "Expected envelope policy, context, and proof fields"
+cmdCtVerifyMerkleEnvelope format _ =
+    outputUsage format "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
 cmdCtVerifyBench :: OutputFormat -> [String] -> IO ()
 cmdCtVerifyBench format (iterationsStr:warmupStr:rest) =

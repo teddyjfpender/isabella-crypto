@@ -85,6 +85,7 @@ showHelp = do
     putStrLn "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership"
     putStrLn "  ct-verify ... Verify deterministic confidential-transaction proof"
     putStrLn "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership"
+    putStrLn "  ct-verify-merkle-envelope ... Verify context digest, expected policy, and Merkle transaction proof"
     putStrLn "  ct-verify-bench I W ... Benchmark deterministic confidential-transaction verification natively"
     putStrLn ""
     putStrLn "Options:"

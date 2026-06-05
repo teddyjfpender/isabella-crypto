@@ -1449,7 +1449,7 @@ let prepare_ct_verify args =
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
   | _ -> Error "Usage: ct-verify M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
-let prepare_ct_verify_merkle args =
+let prepare_ct_verify_merkle_with_root root_override args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str; in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str; balance_as_str; balance_zs_str; out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str; out1_pair_as_str; out1_pair_zs_str; out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str; out2_pair_as_str; out2_pair_zs_str] ->
     (match
@@ -1489,7 +1489,11 @@ let prepare_ct_verify_merkle args =
        parse_cube out2_pair_as_str,
        parse_cube out2_pair_zs_str with
      | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent, Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2, Some in1_a_commits, Some in1_a_nullifiers, Some in1_z_msgs, Some in1_z_rands, Some in2_a_commits, Some in2_a_nullifiers, Some in2_z_msgs, Some in2_z_rands, Some balance_as, Some balance_zs, Some out1_bits, Some out1_comps, Some out1_amount_a, Some out1_amount_z, Some out1_pair_as, Some out1_pair_zs, Some out2_bits, Some out2_comps, Some out2_amount_a, Some out2_amount_z, Some out2_pair_as, Some out2_pair_zs ->
-       let root = Confidential_transaction.merkle_ledger_root ledger in
+       let root =
+         match root_override with
+         | Some root -> root
+         | None -> Confidential_transaction.merkle_ledger_root ledger
+       in
        (match
           Confidential_transaction.merkle_membership_prove ledger c_in1,
           Confidential_transaction.merkle_membership_prove ledger c_in2 with
@@ -1525,6 +1529,9 @@ let prepare_ct_verify_merkle args =
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
   | _ -> Error "Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
+let prepare_ct_verify_merkle args =
+  prepare_ct_verify_merkle_with_root None args
+
 let cmd_ct_verify args =
   match prepare_ct_verify args with
   | Ok verify -> output_result "transaction_fs_verify" (if verify () then "true" else "false")
@@ -1534,6 +1541,67 @@ let cmd_ct_verify_merkle args =
   match prepare_ct_verify_merkle args with
   | Ok verify -> output_result "transaction_fs_verify_merkle" (if verify () then "true" else "false")
   | Error msg -> output_error msg
+
+let cmd_ct_verify_merkle_envelope args =
+  match args with
+  | m_str :: n2_str :: q_str :: beta_str :: gamma_str :: k_str :: ck_str :: nk_str ::
+    ledger_str :: spent_str :: expected_version_str :: expected_network_id ::
+    expected_asset_id_str :: expected_ledger_epoch_str :: expected_root ::
+    expected_public_fee_str :: context_digest :: protocol_version_str :: network_id ::
+    asset_id_str :: ledger_epoch_str :: root :: public_fee_str :: c_in1_str ::
+    c_in2_str :: c_out1_str :: c_out2_str :: nf1_str :: nf2_str :: proof_args ->
+    (match
+       parse_int expected_version_str,
+       parse_int expected_asset_id_str,
+       parse_int expected_ledger_epoch_str,
+       parse_int expected_public_fee_str,
+       parse_int protocol_version_str,
+       parse_int asset_id_str,
+       parse_int ledger_epoch_str,
+       parse_int public_fee_str,
+       parse_vec c_in1_str,
+       parse_vec c_in2_str,
+       parse_vec c_out1_str,
+       parse_vec c_out2_str,
+       parse_vec nf1_str,
+       parse_vec nf2_str with
+     | Some expected_version, Some expected_asset_id, Some expected_ledger_epoch,
+       Some expected_public_fee, Some protocol_version, Some asset_id,
+       Some ledger_epoch, Some public_fee, Some c_in1, Some c_in2,
+       Some c_out1, Some c_out2, Some nf1, Some nf2 ->
+       (try
+          let computed_digest =
+            Confidential_transaction.transaction_context_digest
+              protocol_version network_id asset_id ledger_epoch root public_fee
+              c_in1 c_in2 c_out1 c_out2 nf1 nf2
+          in
+          let policy_ok =
+            expected_public_fee = 0 &&
+            public_fee = 0 &&
+            protocol_version = expected_version &&
+            network_id = expected_network_id &&
+            asset_id = expected_asset_id &&
+            ledger_epoch = expected_ledger_epoch &&
+            root = expected_root &&
+            context_digest = computed_digest
+          in
+          if not policy_ok then
+            output_result "transaction_fs_verify_merkle_envelope" "false"
+          else
+            let merkle_args =
+              [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str;
+               ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str;
+               nf1_str; nf2_str] @ proof_args
+            in
+            match prepare_ct_verify_merkle_with_root (Some root) merkle_args with
+            | Ok verify ->
+              output_result "transaction_fs_verify_merkle_envelope"
+                (if verify () then "true" else "false")
+            | Error msg -> output_error msg
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected envelope policy, context, and proof fields")
+  | _ ->
+    output_error "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
 let cmd_ct_verify_bench args =
   match args with
@@ -1827,6 +1895,7 @@ let show_help () =
   print_endline "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify ... Verify deterministic confidential-transaction proof";
   print_endline "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership";
+  print_endline "  ct-verify-merkle-envelope ... Verify context digest, expected policy, and Merkle transaction proof";
   print_endline "  ct-verify-bench I W ... Benchmark deterministic confidential-transaction verification natively";
   print_endline "";
   print_endline "Examples:";
@@ -1917,6 +1986,7 @@ let run_command cmd args =
   | "ct-prove-merkle" -> cmd_ct_prove_merkle args
   | "ct-verify" -> cmd_ct_verify args
   | "ct-verify-merkle" -> cmd_ct_verify_merkle args
+  | "ct-verify-merkle-envelope" -> cmd_ct_verify_merkle_envelope args
   | "ct-verify-bench" -> cmd_ct_verify_bench args
   | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
 

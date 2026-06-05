@@ -36,6 +36,7 @@ import {
   ctTransactionContext,
   ctVerify,
   ctVerifyMerkle,
+  ctVerifyMerkleEnvelope,
   crAmountCommitment,
   crProve,
   listNullifierProof,
@@ -1024,6 +1025,7 @@ const ocamlEnvelopeContext = {
   nf2: ctNf2,
 };
 const ocamlEnvelopePolicy = {
+  protocolVersion: ocamlEnvelopeContext.protocolVersion,
   networkId: ocamlEnvelopeContext.networkId,
   assetId: ocamlEnvelopeContext.assetId,
   ledgerEpoch: ocamlEnvelopeContext.ledgerEpoch,
@@ -1055,6 +1057,26 @@ const ocamlEnvelope = {
   proof: ctMerkleProof!,
 };
 assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ocamlEnvelopePolicy,
+    ocamlEnvelopeContextDigest,
+    ocamlEnvelopeContext,
+    ctMerkleProof!
+  ),
+  true,
+  'ct-verify-merkle-envelope OCaml accepts native context digest and Merkle proof'
+);
+assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
     ctParamsExpected,
     ctParamsCase.gamma,
@@ -1083,6 +1105,26 @@ assert.equal(
   'ct-merkle-envelope rejects stale OCaml context digest'
 );
 assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ocamlEnvelopePolicy,
+    ocamlEnvelopeContextDigest.replace(/^./, '0'),
+    ocamlEnvelopeContext,
+    ctMerkleProof!
+  ),
+  false,
+  'ct-verify-merkle-envelope OCaml rejects stale context digest'
+);
+assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
     ctParamsExpected,
     ctParamsCase.gamma,
@@ -1095,6 +1137,26 @@ assert.equal(
   ),
   false,
   'ct-merkle-envelope rejects wrong verifier policy'
+);
+assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    { ...ocamlEnvelopePolicy, assetId: ocamlEnvelopePolicy.assetId + 1 },
+    ocamlEnvelopeContextDigest,
+    ocamlEnvelopeContext,
+    ctMerkleProof!
+  ),
+  false,
+  'ct-verify-merkle-envelope OCaml rejects wrong verifier policy'
 );
 const ocamlFeeEnvelopeContext = { ...ocamlEnvelopeContext, publicFee: 1 };
 const ocamlFeeEnvelopeContextDigest = ctTransactionContext(
@@ -1133,6 +1195,64 @@ assert.equal(
   ),
   false,
   'ct-merkle-envelope rejects nonzero public fees until the balance relation is fee-aware'
+);
+assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    { ...ocamlEnvelopePolicy, publicFee: 1 },
+    ocamlFeeEnvelopeContextDigest,
+    ocamlFeeEnvelopeContext,
+    ctMerkleProof!
+  ),
+  false,
+  'ct-verify-merkle-envelope OCaml rejects nonzero public fees'
+);
+const ocamlWrongRootContext = {
+  ...ocamlEnvelopeContext,
+  root: ocamlEnvelopeContext.root.replace(/^./, ocamlEnvelopeContext.root[0] === '0' ? '1' : '0'),
+};
+const ocamlWrongRootDigest = ctTransactionContext(
+  ocamlWrongRootContext.protocolVersion,
+  ocamlWrongRootContext.networkId,
+  ocamlWrongRootContext.assetId,
+  ocamlWrongRootContext.ledgerEpoch,
+  ocamlWrongRootContext.root,
+  ocamlWrongRootContext.publicFee,
+  ocamlWrongRootContext.cIn1,
+  ocamlWrongRootContext.cIn2,
+  ocamlWrongRootContext.cOut1,
+  ocamlWrongRootContext.cOut2,
+  ocamlWrongRootContext.nf1,
+  ocamlWrongRootContext.nf2
+);
+assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    { ...ocamlEnvelopePolicy, root: ocamlWrongRootContext.root },
+    ocamlWrongRootDigest,
+    ocamlWrongRootContext,
+    ctMerkleProof!
+  ),
+  false,
+  'ct-verify-merkle-envelope OCaml rejects context roots not matched by the Merkle proof'
 );
 assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(

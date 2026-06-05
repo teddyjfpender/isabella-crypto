@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   balanceProofShape,
+  ctVerifyMerkleEnvelopeArgs,
   listBalanceProof,
   listNullifierProof,
   listRangeProof,
@@ -1215,6 +1216,7 @@ const haskellEnvelopeContext = {
   nf2: ctNf2,
 };
 const haskellEnvelopePolicy = {
+  protocolVersion: haskellEnvelopeContext.protocolVersion,
   networkId: haskellEnvelopeContext.networkId,
   assetId: haskellEnvelopeContext.assetId,
   ledgerEpoch: haskellEnvelopeContext.ledgerEpoch,
@@ -1248,6 +1250,43 @@ const haskellEnvelope = {
   contextDigest: haskellEnvelopeContextDigest,
   proof: ctMerkleProof!,
 };
+const runHaskellEnvelope = (
+  policy: typeof haskellEnvelopePolicy,
+  contextDigest: string,
+  context: typeof haskellEnvelopeContext,
+  proof: typeof ctMerkleProof
+) =>
+  parseResult<boolean>(
+    runHaskell([
+      'ct-verify-merkle-envelope',
+      ...ctVerifyMerkleEnvelopeArgs(
+        ctParamsCase.m,
+        ctParamsCase.n2,
+        ctParamsCase.q,
+        ctParamsCase.beta,
+        ctParamsCase.gamma,
+        ctOut1Bits.length,
+        ctCk,
+        ctNk,
+        ctLedger,
+        ctSpent,
+        policy,
+        contextDigest,
+        context,
+        proof!
+      ),
+    ])
+  );
+assert.equal(
+  runHaskellEnvelope(
+    haskellEnvelopePolicy,
+    haskellEnvelopeContextDigest,
+    haskellEnvelopeContext,
+    ctMerkleProof
+  ),
+  true,
+  'ct-verify-merkle-envelope Haskell accepts native context digest and Merkle proof'
+);
 assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
     ctParamsExpected,
@@ -1277,6 +1316,16 @@ assert.equal(
   'ct-merkle-envelope rejects stale Haskell context digest'
 );
 assert.equal(
+  runHaskellEnvelope(
+    haskellEnvelopePolicy,
+    haskellEnvelopeContextDigest.replace(/^./, '0'),
+    haskellEnvelopeContext,
+    ctMerkleProof
+  ),
+  false,
+  'ct-verify-merkle-envelope Haskell rejects stale context digest'
+);
+assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
     ctParamsExpected,
     ctParamsCase.gamma,
@@ -1289,6 +1338,16 @@ assert.equal(
   ),
   false,
   'ct-merkle-envelope rejects wrong verifier policy'
+);
+assert.equal(
+  runHaskellEnvelope(
+    { ...haskellEnvelopePolicy, assetId: haskellEnvelopePolicy.assetId + 1 },
+    haskellEnvelopeContextDigest,
+    haskellEnvelopeContext,
+    ctMerkleProof
+  ),
+  false,
+  'ct-verify-merkle-envelope Haskell rejects wrong verifier policy'
 );
 const haskellFeeEnvelopeContext = { ...haskellEnvelopeContext, publicFee: 1 };
 const haskellFeeEnvelopeContextDigest = parseResult<string>(
@@ -1330,6 +1389,47 @@ assert.equal(
   ),
   false,
   'ct-merkle-envelope rejects nonzero public fees until the balance relation is fee-aware'
+);
+assert.equal(
+  runHaskellEnvelope(
+    { ...haskellEnvelopePolicy, publicFee: 1 },
+    haskellFeeEnvelopeContextDigest,
+    haskellFeeEnvelopeContext,
+    ctMerkleProof
+  ),
+  false,
+  'ct-verify-merkle-envelope Haskell rejects nonzero public fees'
+);
+const haskellWrongRootContext = {
+  ...haskellEnvelopeContext,
+  root: haskellEnvelopeContext.root.replace(/^./, haskellEnvelopeContext.root[0] === '0' ? '1' : '0'),
+};
+const haskellWrongRootDigest = parseResult<string>(
+  runHaskell([
+    'ct-transaction-context',
+    haskellWrongRootContext.protocolVersion.toString(),
+    haskellWrongRootContext.networkId,
+    haskellWrongRootContext.assetId.toString(),
+    haskellWrongRootContext.ledgerEpoch.toString(),
+    haskellWrongRootContext.root,
+    haskellWrongRootContext.publicFee.toString(),
+    JSON.stringify(haskellWrongRootContext.cIn1),
+    JSON.stringify(haskellWrongRootContext.cIn2),
+    JSON.stringify(haskellWrongRootContext.cOut1),
+    JSON.stringify(haskellWrongRootContext.cOut2),
+    JSON.stringify(haskellWrongRootContext.nf1),
+    JSON.stringify(haskellWrongRootContext.nf2),
+  ])
+);
+assert.equal(
+  runHaskellEnvelope(
+    { ...haskellEnvelopePolicy, root: haskellWrongRootContext.root },
+    haskellWrongRootDigest,
+    haskellWrongRootContext,
+    ctMerkleProof
+  ),
+  false,
+  'ct-verify-merkle-envelope Haskell rejects context roots not matched by the Merkle proof'
 );
 assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(

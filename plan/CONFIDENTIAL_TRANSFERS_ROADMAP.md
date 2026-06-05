@@ -94,12 +94,13 @@ benchmarks are independently checked.
   `transactionContextDigest` surfaces checked by the SDK-equivalence harnesses.
   TypeScript also exposes `fsVerifyMerkleEnvelope` so callers can verify the
   canonical context digest, expected network/asset/root policy, and Merkle
-  transaction proof as one step. The OCaml and Haskell validators now feed
-  native `ct-transaction-context` digests and native Merkle transaction proofs
-  through that envelope gate, including stale-digest, wrong-policy,
-  nonzero-fee, and mutated-proof rejection. The envelope path intentionally
-  rejects nonzero public fees until the balance relation is extended to account
-  for fees.
+  transaction proof as one step. OCaml and Haskell now expose a matching
+  `ct-verify-merkle-envelope` command. The SDK-equivalence validators exercise
+  the TS and native envelope gates with native `ct-transaction-context`
+  digests and native Merkle transaction proofs, including stale-digest,
+  wrong-policy, nonzero-fee, context-root/proof-root mismatch, and
+  mutated-proof rejection. The envelope path intentionally rejects nonzero
+  public fees until the balance relation is extended to account for fees.
 
 ## Remaining Security Work
 
@@ -115,10 +116,11 @@ The formalization still needs these before production:
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.
 5. Finish the Merkle-default migration in consensus/product callers, retire or
-   quarantine the remaining algebraic scaffold compatibility APIs, add
-   first-class native envelope APIs or generated wrappers, broaden native
-   transaction-level negative/fuzz conformance for Merkle proofs, and extend
-   transaction membership soundness beyond same-path uniqueness.
+   quarantine the remaining algebraic scaffold compatibility APIs, replace the
+   hand-maintained native envelope command wrappers with generated or
+   vector-locked surfaces, broaden native transaction-level negative/fuzz
+   conformance for Merkle proofs, and extend transaction membership soundness
+   beyond same-path uniqueness.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
 7. Extend the pinned public transaction context into full canonical
@@ -211,12 +213,12 @@ Important validation caveats:
   is not full transaction/proof serialization yet.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
-  acceptance/rejection against native context digests and Merkle proofs by
-  default for both OCaml and Haskell.
+  acceptance/rejection against native context digests and Merkle proofs through
+  `ct-verify-merkle-envelope` by default for both OCaml and Haskell.
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.847417 ms median and verification had a 3.836333 ms median.
+  proving had a 4.0915 ms median and verification had a 3.807083 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -225,7 +227,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 0.723579791 s proving time, a 1.525439125 s verification time, and a
+  a 3.239116 s proving time, a 3.156808541 s verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.
 - `scripts/check_confidential_bench_budgets.mjs` enforces current CI ceilings

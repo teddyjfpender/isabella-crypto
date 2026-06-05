@@ -1109,6 +1109,30 @@ export interface MerkleTransactionProof {
   out2Range: RangeProofLike;
 }
 
+export interface TransactionContext {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  root: string;
+  publicFee: number;
+  cIn1: number[];
+  cIn2: number[];
+  cOut1: number[];
+  cOut2: number[];
+  nf1: number[];
+  nf2: number[];
+}
+
+export interface TransactionContextPolicy {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  root: string;
+  publicFee: number;
+}
+
 export function ctNullifier(
   m: number,
   n2: number,
@@ -1496,8 +1520,7 @@ export function ctProveMerkle(
   return output === 'null' ? null : parseCliResult<MerkleTransactionProof>(output);
 }
 
-function ctVerifyWithCommand(
-  command: string,
+export function ctVerifyMerkleArgs(
   m: number,
   n2: number,
   q: number,
@@ -1515,7 +1538,7 @@ function ctVerifyWithCommand(
   nf1: number[],
   nf2: number[],
   proof: TransactionProof | MerkleTransactionProof
-): boolean {
+): string[] {
   const listedBalance = listBalanceProof(proof.balance);
   const in1NullifierShape = nullifierProofShape(proof.in1Nullifier);
   const in2NullifierShape = nullifierProofShape(proof.in2Nullifier);
@@ -1537,8 +1560,7 @@ function ctVerifyWithCommand(
     out1RangeShape === 'legacy' ? (proof.out1Range as LegacyRangeProof) : null;
   const legacyOut2Range =
     out2RangeShape === 'legacy' ? (proof.out2Range as LegacyRangeProof) : null;
-  const output = runCli([
-    command,
+  return [
     m.toString(),
     n2.toString(),
     q.toString(),
@@ -1605,6 +1627,50 @@ function ctVerifyWithCommand(
     ),
     JSON.stringify(legacyOut2Range === null ? listedOut2Range!.pairAss : legacyOut2Range.pairAs),
     JSON.stringify(legacyOut2Range === null ? listedOut2Range!.pairZss : legacyOut2Range.pairZs),
+  ];
+}
+
+function ctVerifyWithCommand(
+  command: string,
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[],
+  proof: TransactionProof | MerkleTransactionProof
+): boolean {
+  const output = runCli([
+    command,
+    ...ctVerifyMerkleArgs(
+      m,
+      n2,
+      q,
+      beta,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    ),
   ]);
   return parseCliBool(output);
 }
@@ -1689,4 +1755,110 @@ export function ctVerifyMerkle(
     nf2,
     proof
   );
+}
+
+export function ctVerifyMerkleEnvelopeArgs(
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  policy: TransactionContextPolicy,
+  contextDigest: string,
+  context: TransactionContext,
+  proof: MerkleTransactionProof
+): string[] {
+  return [
+    m.toString(),
+    n2.toString(),
+    q.toString(),
+    beta.toString(),
+    gamma.toString(),
+    k.toString(),
+    JSON.stringify(ck),
+    JSON.stringify(nk),
+    JSON.stringify(ledger),
+    JSON.stringify(spent),
+    policy.protocolVersion.toString(),
+    policy.networkId,
+    policy.assetId.toString(),
+    policy.ledgerEpoch.toString(),
+    policy.root,
+    policy.publicFee.toString(),
+    contextDigest,
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root,
+    context.publicFee.toString(),
+    JSON.stringify(context.cIn1),
+    JSON.stringify(context.cIn2),
+    JSON.stringify(context.cOut1),
+    JSON.stringify(context.cOut2),
+    JSON.stringify(context.nf1),
+    JSON.stringify(context.nf2),
+    ...ctVerifyMerkleArgs(
+      m,
+      n2,
+      q,
+      beta,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      context.cIn1,
+      context.cIn2,
+      context.cOut1,
+      context.cOut2,
+      context.nf1,
+      context.nf2,
+      proof
+    ).slice(16),
+  ];
+}
+
+export function ctVerifyMerkleEnvelope(
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  policy: TransactionContextPolicy,
+  contextDigest: string,
+  context: TransactionContext,
+  proof: MerkleTransactionProof
+): boolean {
+  const output = runCli([
+    'ct-verify-merkle-envelope',
+    ...ctVerifyMerkleEnvelopeArgs(
+      m,
+      n2,
+      q,
+      beta,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      policy,
+      contextDigest,
+      context,
+      proof
+    ),
+  ]);
+  return parseCliBool(output);
 }
