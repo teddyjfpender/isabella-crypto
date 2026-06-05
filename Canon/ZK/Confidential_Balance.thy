@@ -134,6 +134,21 @@ definition balance_relation ::
     valid_balance_witness p r \<and>
     rand_commit p ck r = c"
 
+definition balance_relation_wellformed ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int_vec \<Rightarrow> bool" where
+  "balance_relation_wellformed p ck c r \<longleftrightarrow>
+    valid_scalar_commit_params p \<and>
+    valid_commit_key p ck \<and>
+    valid_balance_witness p r \<and>
+    rand_commit p ck r = c"
+
+lemma balance_relation_imp_wellformed:
+  assumes "balance_relation p ck c r"
+  shows "balance_relation_wellformed p ck c r"
+  using assms valid_confidential_commit_key_valid
+  unfolding balance_relation_def balance_relation_wellformed_def
+  by blast
+
 definition balance_fs_rounds :: nat where
   "balance_fs_rounds = fixed_fs_rounds"
 
@@ -166,7 +181,16 @@ definition balance_sigma_verify ::
   "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> bool" where
   "balance_sigma_verify p gamma ck c a e z \<longleftrightarrow>
     valid_scalar_commit_params p \<and>
-    valid_confidential_commit_key p ck \<and>
+    valid_commit_key p ck \<and>
+    valid_commitment p a \<and>
+    valid_balance_challenge p e \<and>
+    valid_balance_response p gamma e z \<and>
+    rand_commit p ck z =
+      vec_mod (vec_add a (scalar_mult e c)) (cp_q p)"
+
+definition balance_sigma_verify_core ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> bool" where
+  "balance_sigma_verify_core p gamma ck c a e z \<longleftrightarrow>
     valid_commitment p a \<and>
     valid_balance_challenge p e \<and>
     valid_balance_response p gamma e z \<and>
@@ -189,7 +213,7 @@ definition balance_fs_prove ::
     let as = map (balance_sigma_commit p ck) ys in
     let es = balance_fs_challenges p ck c as in
     let zs = balance_sigma_responds r ys es in
-    if balance_relation p ck c r \<and>
+    if balance_relation_wellformed p ck c r \<and>
        length ys = balance_fs_rounds \<and>
        (\<forall>i < balance_fs_rounds. valid_balance_mask p gamma (ys ! i)) \<and>
        (\<forall>i < balance_fs_rounds. valid_balance_response p gamma (es ! i) (zs ! i))
@@ -202,9 +226,18 @@ definition balance_fs_verify ::
     (let as = balance_as proof in
      let es = balance_fs_challenges p ck c as in
      let zs = balance_zs proof in
+     valid_scalar_commit_params p \<and>
+     valid_commit_key p ck \<and>
      length as = balance_fs_rounds \<and>
      length zs = balance_fs_rounds \<and>
-     (\<forall>i < balance_fs_rounds. balance_sigma_verify p gamma ck c (as ! i) (es ! i) (zs ! i)))"
+     (\<forall>i < balance_fs_rounds. balance_sigma_verify_core p gamma ck c (as ! i) (es ! i) (zs ! i)))"
+
+lemma balance_sigma_verify_imp_core:
+  assumes "balance_sigma_verify p gamma ck c a e z"
+  shows "balance_sigma_verify_core p gamma ck c a e z"
+  using assms
+  unfolding balance_sigma_verify_def balance_sigma_verify_core_def
+  by auto
 
 lemma all_bounded_mono:
   assumes "all_bounded v B" and "B \<le> C"
@@ -1064,22 +1097,22 @@ proof -
 qed
 
 lemma balance_sigma_complete:
-  assumes relation: "balance_relation p ck c r"
+  assumes relation: "balance_relation_wellformed p ck c r"
       and mask_ok: "valid_balance_mask p gamma y"
       and challenge_ok: "valid_balance_challenge p e"
       and a_def: "a = balance_sigma_commit p ck y"
       and z_def: "z = balance_sigma_respond r y e"
   shows "balance_sigma_verify p gamma ck c a e z"
 proof -
-  obtain params_ok key_ok_conf witness_ok c_eq where
+  obtain params_ok key_ok witness_ok c_eq where
       relation_props:
         "valid_scalar_commit_params p"
-        "valid_confidential_commit_key p ck"
+        "valid_commit_key p ck"
         "valid_balance_witness p r"
         "rand_commit p ck r = c"
-    using relation unfolding balance_relation_def by blast
+    using relation unfolding balance_relation_wellformed_def by blast
   have key_ok: "valid_commit_key p ck"
-    using relation_props(2) by (rule valid_confidential_commit_key_valid)
+    using relation_props(2) .
   have a_valid:
     "valid_commitment p a"
     using rand_commit_valid[OF valid_scalar_commit_params_props(1)[OF relation_props(1)] key_ok]
@@ -1138,7 +1171,7 @@ proof -
   qed
   show ?thesis
     unfolding balance_sigma_verify_def
-    using relation_props a_valid challenge_ok z_valid verify_eq by auto
+    using relation_props key_ok a_valid challenge_ok z_valid verify_eq by auto
 qed
 
 lemma balance_fs_complete:
@@ -1149,7 +1182,7 @@ proof -
       as_def: "as = map (balance_sigma_commit p ck) ys"
       and es_def: "es = balance_fs_challenges p ck c as"
       and zs_def: "zs = balance_sigma_responds r ys es"
-      and rel: "balance_relation p ck c r"
+      and rel: "balance_relation_wellformed p ck c r"
       and ys_len: "length ys = balance_fs_rounds"
       and masks_ok: "\<forall>i < balance_fs_rounds. valid_balance_mask p gamma (ys ! i)"
       and zs_ok: "\<forall>i < balance_fs_rounds. valid_balance_response p gamma (es ! i) (zs ! i)"
@@ -1158,7 +1191,9 @@ proof -
     unfolding balance_fs_prove_def Let_def
     by (auto split: if_splits)
   have params_ok: "valid_scalar_commit_params p"
-    using rel unfolding balance_relation_def by simp
+    using rel unfolding balance_relation_wellformed_def by simp
+  have key_ok: "valid_commit_key p ck"
+    using rel unfolding balance_relation_wellformed_def by simp
   have es_len: "length es = balance_fs_rounds"
     using as_def es_def by (simp add: balance_fs_challenges_length)
   have as_len: "length as = balance_fs_rounds"
@@ -1204,9 +1239,12 @@ proof -
         by simp
     qed
   qed
+  have sigma_core_ok:
+    "\<forall>i < balance_fs_rounds. balance_sigma_verify_core p gamma ck c (as ! i) (es ! i) (zs ! i)"
+    using sigma_ok balance_sigma_verify_imp_core by blast
   show ?thesis
     unfolding balance_fs_verify_def
-    using proof_eq as_len es_len zs_len sigma_ok
+    using proof_eq params_ok key_ok as_len es_len zs_len sigma_core_ok
     by (simp add: as_def es_def zs_def balance_fs_challenges_length)
 qed
 

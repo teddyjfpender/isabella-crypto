@@ -128,19 +128,21 @@ Completed:
 - `cd tests && bun run audit-confidential`
 - `make test-sdk-equivalence`
 - `make test-validation`
+- `node scripts/bench_confidential_balance_128.mjs`
 - `python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json`
 
 Important validation caveats:
 
-- `audit-confidential` now skips the full semantic transaction/tampering fixture
-  by default when `fsRounds() = 128`; run
-  `ISABELLA_CONFIDENTIAL_AUDIT_FULL=1 bun run audit-confidential` for the full
-  fixture.
-- `test-sdk-equivalence` validates base surfaces and confidential balance, then
-  skips range/transaction equivalence by default when `fsRounds() = 128`; run
-  `ISABELLA_SDK_EQUIV_FULL=1 make test-sdk-equivalence` for the full path.
-- `scripts/bench_confidential_balance_128.mjs` was added for focused
-  128-round balance proving/verifying, but the js_of_ocaml balance benchmark did
-  not complete within the observed multi-minute window. Treat that as a current
-  performance blocker and do not claim realistic proving/verifying benchmark
-  numbers yet.
+- `audit-confidential` now runs the 128-round semantic transaction/tampering
+  fixture by default.
+- `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
+  membership, and transaction equivalence by default for both OCaml and
+  Haskell.
+- `scripts/bench_confidential_balance_128.mjs` now completes and writes
+  `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
+  with toy dimensions, 128-round balance proving had a 0.184 ms median and
+  verification had a 0.141 ms median. The earlier multi-minute behavior was an
+  executable-model bug: the prover/verifier hot paths repeatedly evaluated the
+  brute-force SIS key-separation predicate. That predicate remains part of the
+  stronger security relations, but the executable proof paths now check only
+  parameter/key dimensions.

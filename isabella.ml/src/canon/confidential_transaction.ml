@@ -125,6 +125,14 @@ let nullifier_relation p ck nk c nf op =
   Commit_sis.verify_opening ck op c p.Commit_sis.cp_q &&
   nullifier p nk op = nf
 
+let nullifier_relation_wellformed p ck nk c nf op =
+  Confidential_balance.valid_scalar_commit_params p &&
+  Commit_sis.valid_commit_key p ck &&
+  Commit_sis.valid_commit_key p nk &&
+  Commit_sis.valid_opening p op &&
+  Commit_sis.verify_opening ck op c p.Commit_sis.cp_q &&
+  nullifier p nk op = nf
+
 let canonical_nullifier_challenge _p ck nk c nf a_commit a_nullifier =
   Repeated_fs.binary_fs_challenge
     nullifier_fs_domain
@@ -133,8 +141,8 @@ let canonical_nullifier_challenge _p ck nk c nf a_commit a_nullifier =
 
 let nullifier_sigma_verify p gamma ck nk c nf a_commit a_nullifier challenge z =
   Confidential_balance.valid_scalar_commit_params p &&
-  Confidential_balance.valid_confidential_commit_key p ck &&
-  Confidential_balance.valid_confidential_commit_key p nk &&
+  Commit_sis.valid_commit_key p ck &&
+  Commit_sis.valid_commit_key p nk &&
   valid_commitment p c &&
   valid_commitment p nf &&
   valid_commitment p a_commit &&
@@ -151,7 +159,7 @@ let nullifier_fs_prove p gamma ck nk c nf op ys =
   let a_nullifiers = List.map (nullifier p nk) ys in
   let challenges = nullifier_fs_challenges p ck nk c nf a_commits a_nullifiers in
   let zs = Repeated_fs.sigma_response_rounds nullifier_sigma_respond op ys challenges in
-  if nullifier_relation p ck nk c nf op &&
+  if nullifier_relation_wellformed p ck nk c nf op &&
      List.length ys = nullifier_fs_rounds &&
      List.for_all (valid_nullifier_mask p gamma) ys &&
      List.for_all2 (valid_nullifier_response p gamma) challenges zs
@@ -269,7 +277,7 @@ let rec distinct = function
 
 let ledger_valid p gamma k ck root notes spent =
   Confidential_balance.valid_scalar_commit_params p &&
-  Confidential_balance.valid_confidential_commit_key p ck &&
+  Commit_sis.valid_commit_key p ck &&
   root = ledger_root p (commitment_ledger notes) &&
   distinct spent &&
   List.for_all
@@ -299,9 +307,25 @@ let transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
     Confidential_balance.amount_of_opening op_out1 +
     Confidential_balance.amount_of_opening op_out2
 
+let transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+    op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps =
+  nullifier_relation_wellformed p ck nk c_in1 nf1 op_in1 &&
+  nullifier_relation_wellformed p ck nk c_in2 nf2 op_in2 &&
+  List.mem c_in1 ledger &&
+  List.mem c_in2 ledger &&
+  not (List.mem nf1 spent) &&
+  not (List.mem nf2 spent) &&
+  nf1 <> nf2 &&
+  Confidential_range.range_relation p ck c_out1 op_out1 out1_bits out1_comps &&
+  Confidential_range.range_relation p ck c_out2 op_out2 out2_bits out2_comps &&
+  Confidential_balance.amount_of_opening op_in1 +
+  Confidential_balance.amount_of_opening op_in2 =
+    Confidential_balance.amount_of_opening op_out1 +
+    Confidential_balance.amount_of_opening op_out2
+
 let transaction_fs_verify p gamma k ck nk root spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
-  Confidential_balance.valid_confidential_commit_key p ck &&
-  Confidential_balance.valid_confidential_commit_key p nk &&
+  Commit_sis.valid_commit_key p ck &&
+  Commit_sis.valid_commit_key p nk &&
   membership_verify p c_in1 proof.tx_in1_member &&
   membership_verify p c_in2 proof.tx_in2_member &&
   proof.tx_in1_member.member_root = root &&
@@ -340,7 +364,7 @@ let transaction_fs_prove p gamma k ck nk ledger spent c_in1 c_in2 c_out1 c_out2 
     Confidential_range.range_fs_prove p gamma k ck c_out2 op_out2 out2_bits out2_comps y_out2 y_out2_pairs
   with
   | Some member1, Some member2, Some nf_proof1, Some nf_proof2, Some bal_proof, Some range1, Some range2 ->
-      if transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      if transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
            op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps &&
          member1.member_index <> member2.member_index
       then

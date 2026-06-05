@@ -444,15 +444,6 @@ assert.equal(
 
 console.log('validate-ocaml: confidential balance shared surface passed');
 
-const runFullConfidentialEquivalence =
-  process.env.ISABELLA_SDK_EQUIV_FULL === '1' || sdk.ConfidentialBalance.fsRounds() <= 32;
-if (!runFullConfidentialEquivalence) {
-  console.log(
-    `validate-ocaml: skipping range/transaction equivalence for ${sdk.ConfidentialBalance.fsRounds()} FS rounds; set ISABELLA_SDK_EQUIV_FULL=1 to run it`
-  );
-  process.exit(0);
-}
-
 const crParamsCase = { m: 2, n2: 2, q: 17, beta: 6, gamma: 5 };
 const crParamsExpected = sdk.ConfidentialBalance.makeParams(
   crParamsCase.m,

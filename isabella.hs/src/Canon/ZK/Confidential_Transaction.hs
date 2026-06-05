@@ -186,6 +186,22 @@ nullifierRelation p ck nk c nf op =
   Commit.verify_opening ck op c (Commit.cp_q p) &&
   nullifier p nk op == nf
 
+nullifierRelationWellformed ::
+  Commit.CommitParams ->
+  [[Int]] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  Commit.CommitOpening ->
+  Bool
+nullifierRelationWellformed p ck nk c nf op =
+  ConfidentialBalance.validScalarCommitParams p &&
+  Commit.valid_commit_key p ck &&
+  Commit.valid_commit_key p nk &&
+  Commit.validOpening p op &&
+  Commit.verify_opening ck op c (Commit.cp_q p) &&
+  nullifier p nk op == nf
+
 canonicalNullifierChallenge ::
   Commit.CommitParams ->
   [[Int]] ->
@@ -215,8 +231,8 @@ nullifierSigmaVerify ::
   Bool
 nullifierSigmaVerify p gamma ck nk c nf aCommit aNullifier challenge z =
   ConfidentialBalance.validScalarCommitParams p &&
-  ConfidentialBalance.validConfidentialCommitKey p ck &&
-  ConfidentialBalance.validConfidentialCommitKey p nk &&
+  Commit.valid_commit_key p ck &&
+  Commit.valid_commit_key p nk &&
   validCommitment p c &&
   validCommitment p nf &&
   validCommitment p aCommit &&
@@ -243,7 +259,7 @@ nullifierFsProve p gamma ck nk c nf op ys =
       aNullifiers = map (nullifier p nk) ys
       challenges = nullifierFsChallenges p ck nk c nf aCommits aNullifiers
       zs = RepeatedFS.sigmaResponseRounds nullifierSigmaRespond op ys challenges
-   in if nullifierRelation p ck nk c nf op &&
+   in if nullifierRelationWellformed p ck nk c nf op &&
          length ys == nullifierFsRounds &&
          all (validNullifierMask p gamma) ys &&
          and (zipWith (validNullifierResponse p gamma) challenges zs)
@@ -374,7 +390,7 @@ ledgerValid ::
   Bool
 ledgerValid p gamma k ck root notes spent =
   ConfidentialBalance.validScalarCommitParams p &&
-  ConfidentialBalance.validConfidentialCommitKey p ck &&
+  Commit.valid_commit_key p ck &&
   root == ledgerRoot p (commitmentLedger notes) &&
   distinctList spent &&
   all
@@ -458,6 +474,40 @@ transactionRelation p ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 opIn1 opI
   ConfidentialBalance.amountOfOpening opIn1 + ConfidentialBalance.amountOfOpening opIn2 ==
     ConfidentialBalance.amountOfOpening opOut1 + ConfidentialBalance.amountOfOpening opOut2
 
+transactionRelationWellformed ::
+  Commit.CommitParams ->
+  [[Int]] ->
+  [[Int]] ->
+  [[Int]] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  Bool
+transactionRelationWellformed p ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 opIn1 opIn2 opOut1 opOut2 out1Bits out1Comps out2Bits out2Comps =
+  nullifierRelationWellformed p ck nk cIn1 nf1 opIn1 &&
+  nullifierRelationWellformed p ck nk cIn2 nf2 opIn2 &&
+  cIn1 `elem` ledger &&
+  cIn2 `elem` ledger &&
+  nf1 `notElem` spent &&
+  nf2 `notElem` spent &&
+  nf1 /= nf2 &&
+  ConfidentialRange.rangeRelation p ck cOut1 opOut1 out1Bits out1Comps &&
+  ConfidentialRange.rangeRelation p ck cOut2 opOut2 out2Bits out2Comps &&
+  ConfidentialBalance.amountOfOpening opIn1 + ConfidentialBalance.amountOfOpening opIn2 ==
+    ConfidentialBalance.amountOfOpening opOut1 + ConfidentialBalance.amountOfOpening opOut2
+
 transactionFsVerify ::
   Commit.CommitParams ->
   Int ->
@@ -475,8 +525,8 @@ transactionFsVerify ::
   TransactionProof ->
   Bool
 transactionFsVerify p gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
-  ConfidentialBalance.validConfidentialCommitKey p ck &&
-  ConfidentialBalance.validConfidentialCommitKey p nk &&
+  Commit.valid_commit_key p ck &&
+  Commit.valid_commit_key p nk &&
   membershipVerify p cIn1 (tx_in1_member proof) &&
   membershipVerify p cIn2 (tx_in2_member proof) &&
   member_root (tx_in1_member proof) == root &&
@@ -536,7 +586,7 @@ transactionFsProve p gamma k ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 op
        , ConfidentialRange.rangeFsProve p gamma k ck cOut2 opOut2 out2Bits out2Comps yOut2 yOut2Pairs
        ) of
     (Just member1, Just member2, Just nfProof1, Just nfProof2, Just balProof, Just range1, Just range2) ->
-      if transactionRelation p ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2
+      if transactionRelationWellformed p ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2
            opIn1 opIn2 opOut1 opOut2 out1Bits out1Comps out2Bits out2Comps &&
          member_index member1 /= member_index member2
         then Just (TransactionProof member1 member2 nfProof1 nfProof2 balProof range1 range2)

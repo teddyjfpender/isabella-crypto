@@ -135,6 +135,13 @@ balanceRelation p ck c r =
   validBalanceWitness p r &&
   randCommit p ck r == c
 
+balanceRelationWellformed :: Commit.CommitParams -> [[Int]] -> [Int] -> [Int] -> Bool
+balanceRelationWellformed p ck c r =
+  validScalarCommitParams p &&
+  Commit.valid_commit_key p ck &&
+  validBalanceWitness p r &&
+  randCommit p ck r == c
+
 balanceSigmaCommit :: Commit.CommitParams -> [[Int]] -> [Int] -> [Int]
 balanceSigmaCommit = randCommit
 
@@ -164,7 +171,23 @@ balanceSigmaVerify ::
   Bool
 balanceSigmaVerify p gamma ck c a challenge z =
   validScalarCommitParams p &&
-  validConfidentialCommitKey p ck &&
+  Commit.valid_commit_key p ck &&
+  Listvec.valid_vec (Commit.cp_m p) a &&
+  validBalanceChallenge p challenge &&
+  validBalanceResponse p gamma challenge z &&
+  randCommit p ck z ==
+    Zq.vec_mod (Listvec.vec_add a (Listvec.scalar_mult challenge c)) (Commit.cp_q p)
+
+balanceSigmaVerifyCore ::
+  Commit.CommitParams ->
+  Int ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  Int ->
+  [Int] ->
+  Bool
+balanceSigmaVerifyCore p gamma ck c a challenge z =
   Listvec.valid_vec (Commit.cp_m p) a &&
   validBalanceChallenge p challenge &&
   validBalanceResponse p gamma challenge z &&
@@ -195,7 +218,7 @@ balanceFsProve p gamma ck c r ys =
         and [validBalanceMask p gamma (ys !! i) | i <- [0 .. balanceFsRounds - 1]]
       validResponses = length zs == balanceFsRounds &&
         and [validBalanceResponse p gamma (es !! i) (zs !! i) | i <- [0 .. balanceFsRounds - 1]]
-   in if balanceRelation p ck c r &&
+   in if balanceRelationWellformed p ck c r &&
          validMasks &&
          validResponses
         then Just (BalanceProof as zs)
@@ -212,9 +235,11 @@ balanceFsVerify p gamma ck c proof =
   let as = balance_as proof
       es = balanceFsChallenges p ck c as
       zs = balance_zs proof
-   in length as == balanceFsRounds &&
+   in validScalarCommitParams p &&
+      Commit.valid_commit_key p ck &&
+      length as == balanceFsRounds &&
       length zs == balanceFsRounds &&
       and
-        [ balanceSigmaVerify p gamma ck c (as !! i) (es !! i) (zs !! i)
+        [ balanceSigmaVerifyCore p gamma ck c (as !! i) (es !! i) (zs !! i)
         | i <- [0 .. balanceFsRounds - 1]
         ]

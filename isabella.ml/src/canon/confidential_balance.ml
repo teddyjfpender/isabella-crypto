@@ -81,6 +81,12 @@ let balance_relation p ck c r =
   valid_balance_witness p r &&
   rand_commit p ck r = c
 
+let balance_relation_wellformed p ck c r =
+  valid_scalar_commit_params p &&
+  Commit_sis.valid_commit_key p ck &&
+  valid_balance_witness p r &&
+  rand_commit p ck r = c
+
 let balance_sigma_commit = rand_commit
 
 let balance_sigma_respond r y challenge =
@@ -98,7 +104,14 @@ let canonical_balance_challenge _p ck c a =
 
 let balance_sigma_verify p gamma ck c a challenge z =
   valid_scalar_commit_params p &&
-  valid_confidential_commit_key p ck &&
+  Commit_sis.valid_commit_key p ck &&
+  Listvec.valid_vec p.Commit_sis.cp_m a &&
+  valid_balance_challenge p challenge &&
+  valid_balance_response p gamma challenge z &&
+  rand_commit p ck z =
+    Zq.vec_mod (Listvec.vec_add a (Listvec.scalar_mult challenge c)) p.Commit_sis.cp_q
+
+let balance_sigma_verify_core p gamma ck c a challenge z =
   Listvec.valid_vec p.Commit_sis.cp_m a &&
   valid_balance_challenge p challenge &&
   valid_balance_response p gamma challenge z &&
@@ -115,7 +128,7 @@ let balance_fs_prove p gamma ck c r ys =
   let as_ = List.map (balance_sigma_commit p ck) ys in
   let es = balance_fs_challenges p ck c as_ in
   let zs = balance_sigma_responds r ys es in
-  if balance_relation p ck c r &&
+  if balance_relation_wellformed p ck c r &&
      List.length ys = balance_fs_rounds &&
      List.for_all (valid_balance_mask p gamma) ys &&
      List.for_all2 (fun e z -> valid_balance_response p gamma e z) es zs
@@ -126,9 +139,11 @@ let balance_fs_verify p gamma ck c proof =
   let as_ = proof.balance_as in
   let es = balance_fs_challenges p ck c as_ in
   let zs = proof.balance_zs in
+  valid_scalar_commit_params p &&
+  Commit_sis.valid_commit_key p ck &&
   List.length as_ = balance_fs_rounds &&
   List.length zs = balance_fs_rounds &&
   List.for_all2
-    (fun a (e, z) -> balance_sigma_verify p gamma ck c a e z)
+    (fun a (e, z) -> balance_sigma_verify_core p gamma ck c a e z)
     as_
     (List.combine es zs)

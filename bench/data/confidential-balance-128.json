@@ -1,0 +1,38 @@
+{
+  "benchmark": "confidential-balance-128",
+  "timestamp": "2026-06-05T19:13:35.419Z",
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v26.0.0",
+    "cpu": "Apple M4 Max"
+  },
+  "config": {
+    "iterations": 5,
+    "warmup": 1,
+    "fsRounds": 128,
+    "params": {
+      "m": 2,
+      "n2": 2,
+      "q": 17,
+      "beta": 6,
+      "gamma": 5
+    }
+  },
+  "cases": {
+    "balance_fs_prove": {
+      "min_ms": 0.102209,
+      "median_ms": 0.184208,
+      "max_ms": 0.378292,
+      "mean_ms": 0.2179668,
+      "stdev_ms": 0.09392759642490593
+    },
+    "balance_fs_verify": {
+      "min_ms": 0.122083,
+      "median_ms": 0.141208,
+      "max_ms": 0.218375,
+      "mean_ms": 0.15883319999999998,
+      "stdev_ms": 0.03373425097671505
+    }
+  }
+}

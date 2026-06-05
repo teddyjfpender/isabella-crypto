@@ -57,6 +57,22 @@ definition nullifier_relation ::
     verify_opening p ck c op \<and>
     nullifier p nk op = nf"
 
+definition nullifier_relation_wellformed ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commit_opening \<Rightarrow> bool" where
+  "nullifier_relation_wellformed p ck nk c nf op \<longleftrightarrow>
+    valid_scalar_commit_params p \<and>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
+    verify_opening p ck c op \<and>
+    nullifier p nk op = nf"
+
+lemma nullifier_relation_imp_wellformed:
+  assumes "nullifier_relation p ck nk c nf op"
+  shows "nullifier_relation_wellformed p ck nk c nf op"
+  using assms valid_confidential_commit_key_valid
+  unfolding nullifier_relation_def nullifier_relation_wellformed_def
+  by blast
+
 definition nullifier_fs_rounds :: nat where
   "nullifier_fs_rounds = balance_fs_rounds"
 
@@ -164,8 +180,8 @@ definition nullifier_sigma_verify ::
    commitment \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> bool" where
   "nullifier_sigma_verify p gamma ck nk c nf a_commit a_nullifier e z \<longleftrightarrow>
     valid_scalar_commit_params p \<and>
-    valid_confidential_commit_key p ck \<and>
-    valid_confidential_commit_key p nk \<and>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
     valid_commitment p c \<and>
     valid_commitment p nf \<and>
     valid_commitment p a_commit \<and>
@@ -190,7 +206,7 @@ definition nullifier_fs_prove ::
              nullifier_a_nullifiers = a_nullifiers,
              nullifier_z_msgs = map open_msg zs,
              nullifier_z_rands = map open_rand zs \<rparr>
-     in if nullifier_relation p ck nk c nf op \<and>
+     in if nullifier_relation_wellformed p ck nk c nf op \<and>
            length ys = nullifier_fs_rounds \<and>
            (\<forall>i < nullifier_fs_rounds. valid_nullifier_mask p gamma (ys ! i)) \<and>
            (\<forall>i < nullifier_fs_rounds. valid_nullifier_response p gamma (es ! i) (zs ! i))
@@ -262,7 +278,7 @@ definition ledger_valid ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> verified_note list \<Rightarrow> commitment list \<Rightarrow> bool" where
   "ledger_valid p gamma k ck ledger_rt notes spent \<longleftrightarrow>
     valid_scalar_commit_params p \<and>
-    valid_confidential_commit_key p ck \<and>
+    valid_commit_key p ck \<and>
     ledger_rt = ledger_root p (commitment_ledger notes) \<and>
     distinct spent \<and>
     (\<forall>note \<in> set notes.
@@ -296,13 +312,41 @@ definition transaction_relation ::
     amount_of_opening op_in1 + amount_of_opening op_in2 =
       amount_of_opening op_out1 + amount_of_opening op_out2"
 
+definition transaction_relation_wellformed ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   commit_opening \<Rightarrow> commit_opening \<Rightarrow> commit_opening \<Rightarrow> commit_opening \<Rightarrow>
+   commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> bool" where
+  "transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps \<longleftrightarrow>
+    nullifier_relation_wellformed p ck nk c_in1 nf1 op_in1 \<and>
+    nullifier_relation_wellformed p ck nk c_in2 nf2 op_in2 \<and>
+    c_in1 \<in> set ledger \<and>
+    c_in2 \<in> set ledger \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    range_relation p ck c_out1 op_out1 out1_bits out1_comps \<and>
+    range_relation p ck c_out2 op_out2 out2_bits out2_comps \<and>
+    amount_of_opening op_in1 + amount_of_opening op_in2 =
+      amount_of_opening op_out1 + amount_of_opening op_out2"
+
+lemma transaction_relation_imp_wellformed:
+  assumes "transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
+  shows "transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
+  using assms nullifier_relation_imp_wellformed
+  unfolding transaction_relation_def transaction_relation_wellformed_def
+  by blast
+
 definition transaction_fs_verify ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow>
    commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
    transaction_proof \<Rightarrow> bool" where
   "transaction_fs_verify p gamma k ck nk ledger_rt spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof \<longleftrightarrow>
-    valid_confidential_commit_key p ck \<and>
-    valid_confidential_commit_key p nk \<and>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
     membership_verify p c_in1 (tx_in1_member proof) \<and>
     membership_verify p c_in2 (tx_in2_member proof) \<and>
     member_root (tx_in1_member proof) = ledger_rt \<and>
@@ -340,7 +384,7 @@ definition transaction_fs_prove ::
            range_fs_prove p gamma k ck c_out1 op_out1 out1_bits out1_comps y_out1_amounts y_out1_pairss,
            range_fs_prove p gamma k ck c_out2 op_out2 out2_bits out2_comps y_out2_amounts y_out2_pairss) of
        (Some member1, Some member2, Some nf_proof1, Some nf_proof2, Some bal_proof, Some range1, Some range2) \<Rightarrow>
-         if transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+         if transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
               op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps \<and>
             member_index member1 \<noteq> member_index member2
          then Some
@@ -584,7 +628,7 @@ lemma nullifier_deterministic:
   using rel1 rel2 unfolding nullifier_relation_def by simp
 
 lemma nullifier_sigma_complete:
-  assumes relation: "nullifier_relation p ck nk c nf op"
+  assumes relation: "nullifier_relation_wellformed p ck nk c nf op"
       and mask_ok: "valid_nullifier_mask p gamma y"
       and challenge_ok: "valid_nullifier_challenge p e"
       and a_commit_def: "a_commit = commit ck y (cp_q p)"
@@ -592,18 +636,18 @@ lemma nullifier_sigma_complete:
       and z_def: "z = nullifier_sigma_respond op y e"
   shows "nullifier_sigma_verify p gamma ck nk c nf a_commit a_nf e z"
 proof -
-  obtain params_ok key_ok_conf nf_key_ok_conf open_ok nf_eq where
+  obtain params_ok key_ok nf_key_ok open_ok nf_eq where
       relation_props:
         "valid_scalar_commit_params p"
-        "valid_confidential_commit_key p ck"
-        "valid_confidential_commit_key p nk"
+        "valid_commit_key p ck"
+        "valid_commit_key p nk"
         "verify_opening p ck c op"
         "nullifier p nk op = nf"
-    using relation unfolding nullifier_relation_def by blast
+    using relation unfolding nullifier_relation_wellformed_def by blast
   have key_ok: "valid_commit_key p ck"
-    using relation_props(2) by (rule valid_confidential_commit_key_valid)
+    using relation_props(2) .
   have nf_key_ok: "valid_commit_key p nk"
-    using relation_props(3) by (rule valid_confidential_commit_key_valid)
+    using relation_props(3) .
   have open_valid: "valid_opening p op"
     using relation_props(4) by (rule verify_opening_valid)
   have c_valid: "valid_commitment p c"
@@ -736,7 +780,7 @@ proof -
       and a_nullifiers_def: "a_nullifiers = map (\<lambda>y. nullifier p nk y) ys"
       and es_def: "es = nullifier_fs_challenges p ck nk c nf a_commits a_nullifiers"
       and zs_def: "zs = nullifier_sigma_responses op ys es"
-      and relation: "nullifier_relation p ck nk c nf op"
+      and relation: "nullifier_relation_wellformed p ck nk c nf op"
       and ys_len: "length ys = nullifier_fs_rounds"
       and masks_ok: "\<forall>i < nullifier_fs_rounds. valid_nullifier_mask p gamma (ys ! i)"
       and zs_valid: "\<forall>i < nullifier_fs_rounds. valid_nullifier_response p gamma (es ! i) (zs ! i)"
@@ -750,7 +794,7 @@ proof -
     unfolding nullifier_fs_prove_def Let_def
     by (auto split: if_splits)
   have params_ok: "valid_scalar_commit_params p"
-    using relation unfolding nullifier_relation_def by simp
+    using relation unfolding nullifier_relation_wellformed_def by simp
   have es_len: "length es = nullifier_fs_rounds"
     using es_def by (simp add: nullifier_fs_challenges_length)
   have a_commits_len: "length a_commits = nullifier_fs_rounds"
@@ -1088,7 +1132,7 @@ proof -
       and range2_def:
         "range_fs_prove p gamma k ck c_out2 op_out2 out2_bits out2_comps y_out2_amounts y_out2_pairss = Some range2"
       and rel:
-        "transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+        "transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
           op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
       and idx_ne: "member_index member1 \<noteq> member_index member2"
       and proof_eq:
@@ -1128,11 +1172,11 @@ proof -
     using range_fs_complete[OF range2_def] .
   have spent_ok:
     "nf1 \<notin> set spent \<and> nf2 \<notin> set spent \<and> nf1 \<noteq> nf2"
-    using rel unfolding transaction_relation_def by simp
-  have ck_ok: "valid_confidential_commit_key p ck"
-    using rel unfolding transaction_relation_def nullifier_relation_def by blast
-  have nk_ok: "valid_confidential_commit_key p nk"
-    using rel unfolding transaction_relation_def nullifier_relation_def by blast
+    using rel unfolding transaction_relation_wellformed_def by simp
+  have ck_ok: "valid_commit_key p ck"
+    using rel unfolding transaction_relation_wellformed_def nullifier_relation_wellformed_def by blast
+  have nk_ok: "valid_commit_key p nk"
+    using rel unfolding transaction_relation_wellformed_def nullifier_relation_wellformed_def by blast
   show ?thesis
     unfolding transaction_fs_verify_def
     using ck_ok nk_ok member1_ok member2_ok root1_eq root2_eq idx_ne spent_ok nf1_ok nf2_ok bal_ok range1_ok range2_ok proof_eq
@@ -1166,10 +1210,8 @@ lemma ledger_snapshot_valid_after_transaction:
 proof -
   have params_ok: "valid_scalar_commit_params p"
     using ledger_ok unfolding ledger_valid_def by simp
-  have key_conf_ok: "valid_confidential_commit_key p ck"
-    using ledger_ok unfolding ledger_valid_def by simp
   have key_ok: "valid_commit_key p ck"
-    using key_conf_ok by (rule valid_confidential_commit_key_valid)
+    using ledger_ok unfolding ledger_valid_def by simp
   have spent_distinct: "distinct spent"
     using ledger_ok unfolding ledger_valid_def by simp
   have tx_ok:
@@ -1222,8 +1264,8 @@ proof -
   proof (intro conjI ballI)
     show "valid_scalar_commit_params p"
       using params_ok .
-    show "valid_confidential_commit_key p ck"
-      using key_conf_ok .
+    show "valid_commit_key p ck"
+      using key_ok .
     show "ledger_root p
         (commitment_ledger
           (\<lparr>note_commitment = c_out1, note_range_proof = tx_out1_range proof\<rparr> #
@@ -1278,6 +1320,10 @@ lemma ledger_step_semantic_after_transaction:
           op_in1 op_in2 op_out1 op_out2
           out1_bits out1_comps out2_bits out2_comps
           y_in1 y_in2 y_balance y_out1_amounts y_out1_pairss y_out2_amounts y_out2_pairss = Some proof"
+      and tx_relation:
+        "transaction_relation p ck nk (commitment_ledger notes) spent
+          c_in1 c_in2 c_out1 c_out2 nf1 nf2
+          op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
   shows "ledger_step_semantic p gamma k ck nk notes spent
            c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
            (ledger_apply_notes notes proof c_out1 c_out2)
@@ -1299,7 +1345,7 @@ proof -
       and range2_def:
         "range_fs_prove p gamma k ck c_out2 op_out2 out2_bits out2_comps y_out2_amounts y_out2_pairss = Some range2"
       and rel:
-        "transaction_relation p ck nk (commitment_ledger notes) spent
+        "transaction_relation_wellformed p ck nk (commitment_ledger notes) spent
           c_in1 c_in2 c_out1 c_out2 nf1 nf2
           op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
       and idx_ne: "member_index member1 \<noteq> member_index member2"
@@ -1343,7 +1389,7 @@ proof -
     using idx_ne proof_eq by simp
   show ?thesis
     unfolding ledger_step_semantic_def
-    using ledger_ok member1_ok' member2_ok' root1_eq' root2_eq' idx_ne' post_ok rel proof_eq
+    using ledger_ok member1_ok' member2_ok' root1_eq' root2_eq' idx_ne' post_ok tx_relation proof_eq
     by blast
 qed
 
@@ -1356,6 +1402,10 @@ lemma ledger_reachable_after_transaction:
           op_in1 op_in2 op_out1 op_out2
           out1_bits out1_comps out2_bits out2_comps
           y_in1 y_in2 y_balance y_out1_amounts y_out1_pairss y_out2_amounts y_out2_pairss = Some proof"
+      and tx_relation:
+        "transaction_relation p ck nk (commitment_ledger notes) spent
+          c_in1 c_in2 c_out1 c_out2 nf1 nf2
+          op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
   shows "ledger_reachable p gamma k ck nk notes0 spent0
            (ledger_apply_notes notes proof c_out1 c_out2)
            (ledger_apply_spent spent nf1 nf2)"
@@ -1368,7 +1418,7 @@ proof -
       c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
       (ledger_apply_notes notes proof c_out1 c_out2)
       (ledger_apply_spent spent nf1 nf2)"
-    using ledger_step_semantic_after_transaction[OF ledger_ok tx_prove] .
+    using ledger_step_semantic_after_transaction[OF ledger_ok tx_prove tx_relation] .
   show ?thesis
     using reach step_ok by (meson ledger_reachable.intros)
 qed

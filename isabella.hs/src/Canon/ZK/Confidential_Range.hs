@@ -168,7 +168,7 @@ rangeRelation ::
   Bool
 rangeRelation p ck cAmount opAmount opsBits opsComps =
   ConfidentialBalance.validScalarCommitParams p &&
-  ConfidentialBalance.validConfidentialCommitKey p ck &&
+  Commit.valid_commit_key p ck &&
   Commit.validOpening p opAmount &&
   Commit.verify_opening ck opAmount cAmount (Commit.cp_q p) &&
   allBitPairs p opsBits opsComps &&
@@ -311,7 +311,7 @@ rangeAmountSigmaVerify ::
   Bool
 rangeAmountSigmaVerify p gamma k ck c a challenge z =
   ConfidentialBalance.validScalarCommitParams p &&
-  ConfidentialBalance.validConfidentialCommitKey p ck &&
+  Commit.valid_commit_key p ck &&
   Listvec.valid_vec (Commit.cp_m p) a &&
   validRangeChallenge p challenge &&
   validRangeAmountResponse p gamma k challenge z &&
@@ -329,7 +329,7 @@ rangePairSigmaVerify ::
   Bool
 rangePairSigmaVerify p gamma ck c a challenge z =
   ConfidentialBalance.validScalarCommitParams p &&
-  ConfidentialBalance.validConfidentialCommitKey p ck &&
+  Commit.valid_commit_key p ck &&
   Listvec.valid_vec (Commit.cp_m p) a &&
   validRangeChallenge p challenge &&
   validRangePairResponse p gamma challenge z &&

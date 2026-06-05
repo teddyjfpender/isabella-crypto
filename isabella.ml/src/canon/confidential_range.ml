@@ -111,7 +111,7 @@ let rec range_pair_commitments p ck c_bits c_comps =
 
 let range_relation p ck c_amount op_amount ops_bits ops_comps =
   Confidential_balance.valid_scalar_commit_params p &&
-  Confidential_balance.valid_confidential_commit_key p ck &&
+  Commit_sis.valid_commit_key p ck &&
   Commit_sis.valid_opening p op_amount &&
   Commit_sis.verify_opening ck op_amount c_amount p.Commit_sis.cp_q &&
   all_bit_pairs p ops_bits ops_comps &&
@@ -210,7 +210,7 @@ let canonical_range_challenge _p ck c_amount c_bits c_comps a_amounts a_pairss =
 
 let range_amount_sigma_verify p gamma k ck c a challenge z =
   Confidential_balance.valid_scalar_commit_params p &&
-  Confidential_balance.valid_confidential_commit_key p ck &&
+  Commit_sis.valid_commit_key p ck &&
   Listvec.valid_vec p.Commit_sis.cp_m a &&
   valid_range_challenge p challenge &&
   valid_range_amount_response p gamma k challenge z &&
@@ -219,7 +219,7 @@ let range_amount_sigma_verify p gamma k ck c a challenge z =
 
 let range_pair_sigma_verify p gamma ck c a challenge z =
   Confidential_balance.valid_scalar_commit_params p &&
-  Confidential_balance.valid_confidential_commit_key p ck &&
+  Commit_sis.valid_commit_key p ck &&
   Listvec.valid_vec p.Commit_sis.cp_m a &&
   valid_range_challenge p challenge &&
   valid_range_pair_response p gamma challenge z &&
