@@ -4,9 +4,9 @@ Last updated: 2026-06-05
 
 ## Current Branch State
 
-The branch was checkpointed before this pass in commit `a407ec8`
-(`Checkpoint confidential transfer proof slices`). The remaining untracked files
-are local Codex skill folders, not confidential-transfer source changes.
+The confidential-transfer source changes are checkpointed in git. The remaining
+untracked files are local Codex skill folders, not confidential-transfer source
+changes.
 
 The current confidential-transfer stack is an SIS note-commitment MVP:
 
@@ -72,8 +72,8 @@ benchmarks are independently checked.
   leaf, and internal-node encodings, an abstract Merkle hash, and same-path
   membership soundness under collision resistance. Runtime SHA3-256 Merkle
   encoding vectors live in `tests/fixtures/confidential-merkle-vectors.json`,
-  and the TypeScript SDK exposes `ConfidentialMerkle` leaf/node/root/path APIs
-  tested against those vectors and tampered membership paths.
+  and the TypeScript, OCaml, and Haskell surfaces expose Merkle leaf/node/root
+  and membership-path APIs checked by the SDK-equivalence harnesses.
 - `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
   contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
   asset IDs, version contexts, wallet proof generation, and failure semantics.
@@ -171,7 +171,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.791542 ms median and verification had a 3.653958 ms median.
+  proving had a 3.815334 ms median and verification had a 3.858833 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -180,6 +180,6 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 3.154990166 s proving time, a 3.136773916 s verification time, and a
+  a 0.776891625 s proving time, a 0.749495542 s verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.

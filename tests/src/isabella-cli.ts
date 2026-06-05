@@ -1082,6 +1082,13 @@ export interface MembershipProof {
   directions: boolean[];
 }
 
+export interface MerkleMembershipProof {
+  index: number;
+  root: string;
+  siblings: string[];
+  directions: boolean[];
+}
+
 export interface TransactionProof {
   in1Member: MembershipProof;
   in2Member: MembershipProof;
@@ -1232,6 +1239,39 @@ export function ctMemberVerify(
     JSON.stringify(proof.directions) === JSON.stringify(indexDirections(proof.siblings.length, proof.index)) &&
     JSON.stringify(authPathRoot(params, c, proof.siblings, proof.directions)) === JSON.stringify(proof.root)
   );
+}
+
+export function ctMerkleLeaf(commitment: number[]): string {
+  const output = runCli(['ct-merkle-leaf', JSON.stringify(commitment)]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctMerkleEmpty(width: number): string {
+  const output = runCli(['ct-merkle-empty', width.toString()]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctMerkleNode(left: string, right: string): string {
+  const output = runCli(['ct-merkle-node', left, right]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctMerkleRoot(ledger: number[][]): string {
+  const output = runCli(['ct-merkle-root', JSON.stringify(ledger)]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctMerkleMemberProve(
+  ledger: number[][],
+  commitment: number[]
+): MerkleMembershipProof | null {
+  const output = runCli(['ct-merkle-member-prove', JSON.stringify(ledger), JSON.stringify(commitment)]);
+  return output === 'null' ? null : parseCliResult<MerkleMembershipProof>(output);
+}
+
+export function ctMerkleMemberVerify(ledger: number[][], commitment: number[]): boolean {
+  const output = runCli(['ct-merkle-member-verify', JSON.stringify(ledger), JSON.stringify(commitment)]);
+  return parseCliBool(output);
 }
 
 export function ctProve(

@@ -18,6 +18,7 @@
     - {!Confidential_balance} - Confidential balance proof helpers
     - {!Confidential_range} - Confidential range proof helpers
     - {!Confidential_transaction} - Confidential transaction proof helpers
+    - {!Confidential_merkle} - Cryptographic confidential-note Merkle helpers
     - {!Kyber} - CRYSTALS-Kyber (ML-KEM) key encapsulation
     - {!Dilithium} - CRYSTALS-Dilithium (ML-DSA) digital signatures *)
 
@@ -35,5 +36,6 @@ module Commit_sis = Commit_sis
 module Confidential_balance = Confidential_balance
 module Confidential_range = Confidential_range
 module Confidential_transaction = Confidential_transaction
+module Confidential_merkle = Confidential_merkle
 module Kyber = Kyber
 module Dilithium = Dilithium

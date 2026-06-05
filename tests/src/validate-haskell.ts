@@ -828,6 +828,49 @@ assert.equal(
   true,
   'ct-member-verify shared surface'
 );
+const merkleVectors = JSON.parse(
+  fs.readFileSync(path.join(projectRoot, 'tests/fixtures/confidential-merkle-vectors.json'), 'utf8')
+);
+const [merkleLeaf0, merkleLeaf1] = merkleVectors.leaves;
+const [merkleEmpty0] = merkleVectors.empty;
+const [merkleParent01] = merkleVectors.nodes;
+const merkleLedger = [merkleLeaf0.commitment, merkleLeaf1.commitment, merkleLeaf0.commitment];
+assert.equal(
+  parseResult<string>(runHaskell(['ct-merkle-leaf', JSON.stringify(merkleLeaf0.commitment)])),
+  sdk.ConfidentialMerkle.leaf(merkleLeaf0.commitment),
+  'ct-merkle-leaf Haskell/TypeScript parity'
+);
+assert.equal(
+  parseResult<string>(runHaskell(['ct-merkle-empty', merkleEmpty0.width.toString()])),
+  sdk.ConfidentialMerkle.empty(merkleEmpty0.width),
+  'ct-merkle-empty Haskell/TypeScript parity'
+);
+assert.equal(
+  parseResult<string>(runHaskell(['ct-merkle-node', merkleParent01.left, merkleParent01.right])),
+  sdk.ConfidentialMerkle.node(merkleParent01.left, merkleParent01.right),
+  'ct-merkle-node Haskell/TypeScript parity'
+);
+assert.equal(
+  parseResult<string>(runHaskell(['ct-merkle-root', JSON.stringify(merkleLedger)])),
+  sdk.ConfidentialMerkle.root(merkleLedger),
+  'ct-merkle-root Haskell/TypeScript parity'
+);
+const haskellMerkleProof = parseJson<{
+  index: number;
+  root: string;
+  siblings: string[];
+  directions: boolean[];
+} | null>(runHaskell(['ct-merkle-member-prove', JSON.stringify(merkleLedger), JSON.stringify(merkleLeaf1.commitment)]));
+assert.deepEqual(
+  haskellMerkleProof,
+  sdk.ConfidentialMerkle.membershipProve(merkleLedger, merkleLeaf1.commitment),
+  'ct-merkle-member-prove Haskell/TypeScript parity'
+);
+assert.equal(
+  parseResult<boolean>(runHaskell(['ct-merkle-member-verify', JSON.stringify(merkleLedger), JSON.stringify(merkleLeaf1.commitment)])),
+  true,
+  'ct-merkle-member-verify Haskell accepts generated path'
+);
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'ct-ledger-step alias exported');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'ct-ledger-step compatibility export');
 
@@ -978,5 +1021,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 67 deterministic shared-surface cases.'
+  'Validated Haskell CLI and SDK surfaces on 73 deterministic shared-surface cases.'
 );

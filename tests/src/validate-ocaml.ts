@@ -21,6 +21,12 @@ import {
   cbVerify,
   ctMemberProve,
   ctMemberVerify,
+  ctMerkleEmpty,
+  ctMerkleLeaf,
+  ctMerkleMemberProve,
+  ctMerkleMemberVerify,
+  ctMerkleNode,
+  ctMerkleRoot,
   ctNullifier,
   ctNullifierCanonicalChallenge,
   ctNullifierProve,
@@ -728,6 +734,46 @@ assert.equal(
   'ct-member-verify shared surface'
 );
 logProgress('validate-ocaml: membership checks passed');
+const merkleVectors = JSON.parse(
+  fs.readFileSync(path.join(projectRoot, 'tests/fixtures/confidential-merkle-vectors.json'), 'utf8')
+);
+const [merkleLeaf0, merkleLeaf1] = merkleVectors.leaves;
+const [merkleEmpty0] = merkleVectors.empty;
+const [merkleParent01] = merkleVectors.nodes;
+const merkleLedger = [merkleLeaf0.commitment, merkleLeaf1.commitment, merkleLeaf0.commitment];
+assert.equal(
+  ctMerkleLeaf(merkleLeaf0.commitment),
+  sdk.ConfidentialMerkle.leaf(merkleLeaf0.commitment),
+  'ct-merkle-leaf OCaml/TypeScript parity'
+);
+assert.equal(ctMerkleLeaf(merkleLeaf0.commitment), merkleLeaf0.digest, 'ct-merkle-leaf vector');
+assert.equal(
+  ctMerkleEmpty(merkleEmpty0.width),
+  sdk.ConfidentialMerkle.empty(merkleEmpty0.width),
+  'ct-merkle-empty OCaml/TypeScript parity'
+);
+assert.equal(
+  ctMerkleNode(merkleParent01.left, merkleParent01.right),
+  sdk.ConfidentialMerkle.node(merkleParent01.left, merkleParent01.right),
+  'ct-merkle-node OCaml/TypeScript parity'
+);
+assert.equal(
+  ctMerkleRoot(merkleLedger),
+  sdk.ConfidentialMerkle.root(merkleLedger),
+  'ct-merkle-root OCaml/TypeScript parity'
+);
+const ocamlMerkleProof = ctMerkleMemberProve(merkleLedger, merkleLeaf1.commitment);
+assert.deepEqual(
+  ocamlMerkleProof,
+  sdk.ConfidentialMerkle.membershipProve(merkleLedger, merkleLeaf1.commitment),
+  'ct-merkle-member-prove OCaml/TypeScript parity'
+);
+assert.equal(
+  ctMerkleMemberVerify(merkleLedger, merkleLeaf1.commitment),
+  true,
+  'ct-merkle-member-verify OCaml accepts generated path'
+);
+logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'ct-ledger-step alias exported');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'ct-ledger-step compatibility export');
 
@@ -827,4 +873,4 @@ logProgress('validate-ocaml: verified input notes constructed');
 
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
-console.log('Validated the TypeScript SDK against the OCaml surface on 67 deterministic shared-surface cases.');
+console.log('Validated the TypeScript SDK against the OCaml surface on 73 deterministic shared-surface cases.');

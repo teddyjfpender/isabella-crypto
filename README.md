@@ -748,8 +748,8 @@ Current status and roadmap:
 - The executable ledger hash remains a scaffold and is explicitly marked
   non-production; `Canon/ZK/Authenticated_Merkle.thy` is the checked target
   model for the cryptographic Merkle/hash replacement, with SHA3-256 encoding
-  vectors in `tests/fixtures/confidential-merkle-vectors.json` and a
-  TypeScript `ConfidentialMerkle` API for leaf/node/root/path checks.
+  vectors in `tests/fixtures/confidential-merkle-vectors.json` and
+  TypeScript/OCaml/Haskell Merkle APIs for leaf/node/root/path checks.
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.

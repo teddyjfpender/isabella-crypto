@@ -110,15 +110,15 @@
 | `ZK/Confidential_Balance.thy` | 🔄 | SIS-note balance proof slice with domain-separated FS challenges, completeness, and exact binary response-bound lemma |
 | `ZK/Confidential_Range.thy` | 🔄 | Bit/complement range proof slice with in-range theorem, completeness, and exact binary response-bound lemmas |
 | `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, membership, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link, exact nullifier response-bound lemma |
-| `ZK/Authenticated_Merkle.thy` | 🔄 | Cryptographic Merkle/hash target model with canonical encodings and same-path soundness under collision resistance; TypeScript `ConfidentialMerkle` leaf/node/root/path API is vector-tested |
+| `ZK/Authenticated_Merkle.thy` | 🔄 | Cryptographic Merkle/hash target model with canonical encodings and same-path soundness under collision resistance; TypeScript/OCaml/Haskell Merkle leaf/node/root/path APIs are vector-tested |
 | `ZK/Authenticated_Ledger.thy` | 🔄 | Authenticated membership scaffold; ledger hash explicitly marked non-production |
 | `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness and abort analysis |
 | `ZK/LinearRelations.thy` | ⬜ | LaZer-style linear proofs |
 
 **Blockers**: Fiat-Shamir security-model connection, concrete
 extractors/simulators, external lattice-estimator pass, full-protocol
-realistic benchmarks, cross-backend Merkle APIs, and migration from the
-scaffold ledger to the cryptographic Merkle/hash target model. See
+realistic benchmarks, and migration from the scaffold ledger to the
+cryptographic Merkle/hash target model. See
 `plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md`.
 
 Protocol/product status is tracked in

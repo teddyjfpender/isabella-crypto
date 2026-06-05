@@ -5,6 +5,7 @@ import Control.Exception (evaluate)
 import Control.Monad (replicateM, replicateM_)
 import qualified Canon.Commit_sis as Commit
 import qualified Canon.Confidential_balance as ConfidentialBalance
+import qualified Canon.Confidential_merkle as ConfidentialMerkle
 import qualified Canon.Confidential_range as ConfidentialRange
 import qualified Canon.Confidential_transaction as ConfidentialTransaction
 import qualified Canon.Dilithium as Dilithium
@@ -55,6 +56,12 @@ runCommand format cmd args = case cmd of
     "cr-prove" -> cmdCrProve format args
     "cr-verify" -> cmdCrVerify format args
     "cr-verify-bench" -> cmdCrVerifyBench format args
+    "ct-merkle-leaf" -> cmdCtMerkleLeaf format args
+    "ct-merkle-empty" -> cmdCtMerkleEmpty format args
+    "ct-merkle-node" -> cmdCtMerkleNode format args
+    "ct-merkle-root" -> cmdCtMerkleRoot format args
+    "ct-merkle-member-prove" -> cmdCtMerkleMemberProve format args
+    "ct-merkle-member-verify" -> cmdCtMerkleMemberVerify format args
     "ct-nullifier" -> cmdCtNullifier format args
     "ct-nullifier-canonical-challenge" -> cmdCtNullifierCanonicalChallenge format args
     "ct-nullifier-prove" -> cmdCtNullifierProve format args
@@ -102,6 +109,9 @@ jsonBool False = "false"
 jsonBoolList :: [Bool] -> String
 jsonBoolList = ("[" ++) . (++ "]") . intercalate "," . map jsonBool
 
+jsonStringList :: [String] -> String
+jsonStringList = ("[" ++) . (++ "]") . intercalate "," . map jsonString
+
 jsonVec :: [Int] -> String
 jsonVec = ("[" ++) . (++ "]") . intercalate "," . map show
 
@@ -114,6 +124,15 @@ jsonCube = ("[" ++) . (++ "]") . intercalate "," . map jsonMat
 jsonObject :: [(String, String)] -> String
 jsonObject fields =
     "{" ++ intercalate "," [jsonString key ++ ":" ++ value | (key, value) <- fields] ++ "}"
+
+jsonMerkleMembershipProof :: ConfidentialMerkle.MerkleMembershipProof -> String
+jsonMerkleMembershipProof proof =
+    jsonObject
+        [ ("index", show (ConfidentialMerkle.merkle_index proof))
+        , ("root", jsonString (ConfidentialMerkle.merkle_root proof))
+        , ("siblings", jsonStringList (ConfidentialMerkle.merkle_siblings proof))
+        , ("directions", jsonBoolList (ConfidentialMerkle.merkle_directions proof))
+        ]
 
 data BenchStats = BenchStats
   { benchValid :: Bool
@@ -224,6 +243,10 @@ outputIntResult Json _ result = putStrLn $ "{\"result\":" ++ show result ++ "}"
 outputBoolResult :: OutputFormat -> String -> Bool -> IO ()
 outputBoolResult Human label result = putStrLn $ label ++ show result
 outputBoolResult Json _ result = putStrLn $ "{\"result\":" ++ jsonBool result ++ "}"
+
+outputStringResult :: OutputFormat -> String -> String -> IO ()
+outputStringResult Human label result = putStrLn $ label ++ result
+outputStringResult Json _ result = putStrLn $ "{\"result\":" ++ jsonString result ++ "}"
 
 outputVecResult :: OutputFormat -> String -> [Int] -> IO ()
 outputVecResult Human label result = putStrLn $ label ++ show result
@@ -875,6 +898,66 @@ cmdCrVerifyBench format (iterationsStr:warmupStr:rest) =
         _ -> outputError format "Expected positive ITERATIONS and non-negative WARMUP"
 cmdCrVerifyBench format _ =
     outputUsage format "Usage: cr-verify-bench ITERATIONS WARMUP M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
+
+cmdCtMerkleLeaf :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleLeaf format [commitmentStr] =
+    case parseVec commitmentStr of
+        Just commitment -> outputStringResult format "ct_merkle_leaf = " (ConfidentialMerkle.leaf commitment)
+        Nothing -> outputError format "Expected commitment vector"
+cmdCtMerkleLeaf format _ =
+    outputUsage format "Usage: ct-merkle-leaf \"[commitment]\""
+
+cmdCtMerkleEmpty :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleEmpty format [widthStr] =
+    case parseInt widthStr of
+        Just width
+            | width >= 0 -> outputStringResult format "ct_merkle_empty = " (ConfidentialMerkle.empty width)
+        _ -> outputError format "Expected non-negative width"
+cmdCtMerkleEmpty format _ =
+    outputUsage format "Usage: ct-merkle-empty WIDTH"
+
+cmdCtMerkleNode :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleNode format [left, right] =
+    outputStringResult format "ct_merkle_node = " (ConfidentialMerkle.node left right)
+cmdCtMerkleNode format _ =
+    outputUsage format "Usage: ct-merkle-node LEFT_DIGEST RIGHT_DIGEST"
+
+cmdCtMerkleRoot :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleRoot format [ledgerStr] =
+    case parseMat ledgerStr of
+        Just ledger -> outputStringResult format "ct_merkle_root = " (ConfidentialMerkle.root ledger)
+        Nothing -> outputError format "Expected ledger matrix"
+cmdCtMerkleRoot format _ =
+    outputUsage format "Usage: ct-merkle-root \"[[commitment],...]\""
+
+cmdCtMerkleMemberProve :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleMemberProve format [ledgerStr, commitmentStr] =
+    case (parseMat ledgerStr, parseVec commitmentStr) of
+        (Just ledger, Just commitment) ->
+            case ConfidentialMerkle.membershipProve ledger commitment of
+                Just proof ->
+                    case format of
+                        Human -> putStrLn $ "ct_merkle_membership_proof = " ++ show proof
+                        Json -> putStrLn $ jsonMerkleMembershipProof proof
+                Nothing ->
+                    case format of
+                        Human -> putStrLn "ct_merkle_membership_proof = null"
+                        Json -> putStrLn "null"
+        _ -> outputError format "Expected ledger matrix and commitment vector"
+cmdCtMerkleMemberProve format _ =
+    outputUsage format "Usage: ct-merkle-member-prove \"[[commitment],...]\" \"[commitment]\""
+
+cmdCtMerkleMemberVerify :: OutputFormat -> [String] -> IO ()
+cmdCtMerkleMemberVerify format [ledgerStr, commitmentStr] =
+    case (parseMat ledgerStr, parseVec commitmentStr) of
+        (Just ledger, Just commitment) ->
+            outputBoolResult format "ct_merkle_membership_verify = "
+                (case ConfidentialMerkle.membershipProve ledger commitment of
+                    Just proof -> ConfidentialMerkle.membershipVerify commitment proof
+                    Nothing -> False)
+        _ -> outputError format "Expected ledger matrix and commitment vector"
+cmdCtMerkleMemberVerify format _ =
+    outputUsage format "Usage: ct-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
 
 cmdCtNullifier :: OutputFormat -> [String] -> IO ()
 cmdCtNullifier format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =

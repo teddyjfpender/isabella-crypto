@@ -1,5 +1,6 @@
 module Canon.ZK.Internal.RepeatedFS
   ( fixedFsRounds
+  , sha3_256
   , binaryFsChallenge
   , binaryFsChallenges
   , boolFsChallenges

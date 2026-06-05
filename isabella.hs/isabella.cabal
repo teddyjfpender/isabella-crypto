@@ -63,6 +63,7 @@ library
         Canon.ZK.Confidential_Balance
         Canon.ZK.Confidential_Range
         Canon.ZK.Confidential_Transaction
+        Canon.ZK.Confidential_Merkle
         Canon.Regev_pke
         Canon.Commit_sis
         Canon.Kyber
@@ -70,6 +71,7 @@ library
         Canon.Confidential_balance
         Canon.Confidential_range
         Canon.Confidential_transaction
+        Canon.Confidential_merkle
     other-modules:
         Canon.ZK.Internal.RepeatedFS
 

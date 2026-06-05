@@ -60,6 +60,12 @@ let string_of_vec v =
 let json_of_vec v =
   "[" ^ String.concat "," (List.map string_of_int v) ^ "]"
 
+let json_of_string s =
+  Printf.sprintf "%S" s
+
+let json_of_string_list values =
+  "[" ^ String.concat "," (List.map json_of_string values) ^ "]"
+
 let[@warning "-32"] parse_mat s =
   (* Parse "[[1,2],[3,4]]" *)
   let trim_brackets s =
@@ -173,11 +179,28 @@ let json_of_ct_transaction_proof proof =
     (json_of_cr_proof proof.Confidential_transaction.tx_out1_range)
     (json_of_cr_proof proof.Confidential_transaction.tx_out2_range)
 
+let json_of_merkle_membership_proof proof =
+  Printf.sprintf
+    "{\"index\":%d,\"root\":%s,\"siblings\":%s,\"directions\":%s}"
+    proof.Confidential_merkle.merkle_index
+    (json_of_string proof.Confidential_merkle.merkle_root)
+    (json_of_string_list proof.Confidential_merkle.merkle_siblings)
+    (Printf.sprintf
+       "[%s]"
+       (String.concat ","
+          (List.map (fun b -> if b then "true" else "false")
+             proof.Confidential_merkle.merkle_directions)))
+
 (** JSON output helpers *)
 let[@warning "-32"] output_result key value =
   match !output_format with
   | Human -> Printf.printf "%s = %s\n" key value
   | Json -> Printf.printf "{\"result\":%s}\n" value
+
+let output_string_result key value =
+  match !output_format with
+  | Human -> Printf.printf "%s = %s\n" key value
+  | Json -> Printf.printf "{\"result\":%s}\n" (json_of_string value)
 
 type bench_stats = {
   valid : bool;
@@ -958,6 +981,78 @@ let cmd_cr_verify_bench args =
      | _ -> output_error "Expected positive ITERATIONS and non-negative WARMUP")
   | _ -> output_error "Usage: cr-verify-bench ITERATIONS WARMUP M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
 
+(** {1 Confidential Merkle Commands} *)
+
+let cmd_ct_merkle_leaf args =
+  match args with
+  | [commitment_str] ->
+    (match parse_vec commitment_str with
+     | Some commitment ->
+       output_string_result "ct_merkle_leaf" (Confidential_merkle.leaf commitment)
+     | None -> output_error "Expected commitment vector")
+  | _ -> output_error "Usage: ct-merkle-leaf \"[commitment]\""
+
+let cmd_ct_merkle_empty args =
+  match args with
+  | [width_str] ->
+    (match parse_int width_str with
+     | Some width when width >= 0 ->
+       output_string_result "ct_merkle_empty" (Confidential_merkle.empty width)
+     | _ -> output_error "Expected non-negative width")
+  | _ -> output_error "Usage: ct-merkle-empty WIDTH"
+
+let cmd_ct_merkle_node args =
+  match args with
+  | [left; right] ->
+    (try output_string_result "ct_merkle_node" (Confidential_merkle.node left right)
+     with Invalid_argument msg -> output_error msg)
+  | _ -> output_error "Usage: ct-merkle-node LEFT_DIGEST RIGHT_DIGEST"
+
+let cmd_ct_merkle_root args =
+  match args with
+  | [ledger_str] ->
+    (match parse_mat ledger_str with
+     | Some ledger ->
+       (try output_string_result "ct_merkle_root" (Confidential_merkle.root ledger)
+        with Invalid_argument msg -> output_error msg)
+     | None -> output_error "Expected ledger matrix")
+  | _ -> output_error "Usage: ct-merkle-root \"[[commitment],...]\""
+
+let cmd_ct_merkle_member_prove args =
+  match args with
+  | [ledger_str; commitment_str] ->
+    (match parse_mat ledger_str, parse_vec commitment_str with
+     | Some ledger, Some commitment ->
+       (try
+          match Confidential_merkle.membership_prove ledger commitment with
+          | Some proof ->
+            (match !output_format with
+             | Human -> Printf.printf "ct_merkle_membership_proof = %s\n" (json_of_merkle_membership_proof proof)
+             | Json -> Printf.printf "%s\n" (json_of_merkle_membership_proof proof))
+          | None ->
+            (match !output_format with
+             | Human -> print_endline "ct_merkle_membership_proof = null"
+             | Json -> print_endline "null")
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected ledger matrix and commitment vector")
+  | _ -> output_error "Usage: ct-merkle-member-prove \"[[commitment],...]\" \"[commitment]\""
+
+let cmd_ct_merkle_member_verify args =
+  match args with
+  | [ledger_str; commitment_str] ->
+    (match parse_mat ledger_str, parse_vec commitment_str with
+     | Some ledger, Some commitment ->
+       let result =
+         try
+           match Confidential_merkle.membership_prove ledger commitment with
+           | Some proof -> Confidential_merkle.membership_verify commitment proof
+           | None -> false
+         with Invalid_argument _ -> false
+       in
+       output_result "ct_merkle_membership_verify" (if result then "true" else "false")
+     | _ -> output_error "Expected ledger matrix and commitment vector")
+  | _ -> output_error "Usage: ct-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
+
 (** {1 Confidential Transaction Commands} *)
 
 let cmd_ct_nullifier args =
@@ -1504,6 +1599,16 @@ let show_help () =
   print_endline "  cr-prove M N2 Q BETA G K CK C AMOUNT RAND BITS BIT_RANDS COMPS COMP_RANDS YAMOUNTS YPAIRSS  Build deterministic range proof";
   print_endline "  cr-verify M N2 Q BETA G K CK C BITS COMPS AMOUNT_AS AMOUNT_ZS PAIR_ASS PAIR_ZSS  Verify deterministic range proof";
   print_endline "  cr-verify-bench I W ...  Benchmark deterministic range verification natively";
+  print_endline "";
+  print_endline "Confidential Merkle Commands:";
+  print_endline "  ct-merkle-leaf C             Hash a confidential note commitment leaf";
+  print_endline "  ct-merkle-empty WIDTH        Hash an empty Merkle placeholder";
+  print_endline "  ct-merkle-node LEFT RIGHT    Hash an internal Merkle node";
+  print_endline "  ct-merkle-root LEDGER        Compute cryptographic Merkle root";
+  print_endline "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof";
+  print_endline "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof";
+  print_endline "";
+  print_endline "Confidential Transaction Commands:";
   print_endline "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier";
   print_endline "  ct-nullifier-canonical-challenge M N2 Q BETA CK NK C NF ACOMMIT ANULLIFIER  Deterministic nullifier Fiat-Shamir challenge";
   print_endline "  ct-nullifier-prove M N2 Q BETA G CK NK C NF AMOUNT RAND YMSGS YRANDS  Build repeated-round deterministic nullifier proof";
@@ -1585,6 +1690,12 @@ let run_command cmd args =
   | "cr-prove" -> cmd_cr_prove args
   | "cr-verify" -> cmd_cr_verify args
   | "cr-verify-bench" -> cmd_cr_verify_bench args
+  | "ct-merkle-leaf" -> cmd_ct_merkle_leaf args
+  | "ct-merkle-empty" -> cmd_ct_merkle_empty args
+  | "ct-merkle-node" -> cmd_ct_merkle_node args
+  | "ct-merkle-root" -> cmd_ct_merkle_root args
+  | "ct-merkle-member-prove" -> cmd_ct_merkle_member_prove args
+  | "ct-merkle-member-verify" -> cmd_ct_merkle_member_verify args
   | "ct-nullifier" -> cmd_ct_nullifier args
   | "ct-nullifier-canonical-challenge" -> cmd_ct_nullifier_canonical_challenge args
   | "ct-nullifier-prove" -> cmd_ct_nullifier_prove args
