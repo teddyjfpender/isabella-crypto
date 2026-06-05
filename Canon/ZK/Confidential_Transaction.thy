@@ -208,6 +208,16 @@ definition nullifier_sigma_verify ::
     nullifier p nk z =
       vec_mod (vec_add a_nullifier (scalar_mult e nf)) (cp_q p)"
 
+definition nullifier_sigma_sim_commit ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> commitment" where
+  "nullifier_sigma_sim_commit p ck c e z =
+    vec_mod (vec_sub (commit ck z (cp_q p)) (scalar_mult e c)) (cp_q p)"
+
+definition nullifier_sigma_sim_nullifier ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> commitment" where
+  "nullifier_sigma_sim_nullifier p nk nf e z =
+    vec_mod (vec_sub (nullifier p nk z) (scalar_mult e nf)) (cp_q p)"
+
 definition nullifier_sigma_extract ::
   "int \<Rightarrow> commit_opening \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> commit_opening option" where
   "nullifier_sigma_extract e1 z1 e2 z2 =
@@ -981,6 +991,80 @@ lemma nullifier_valid:
   shows "valid_commitment p (nullifier p nk op)"
   unfolding nullifier_def
   using commit_valid[OF valid_scalar_commit_params_props(1)[OF params_ok] key_ok open_ok] .
+
+lemma nullifier_sigma_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and nf_key_ok: "valid_commit_key p nk"
+      and c_valid: "valid_commitment p c"
+      and nf_valid: "valid_commitment p nf"
+      and challenge_ok: "valid_nullifier_challenge p e"
+      and z_ok: "valid_nullifier_response p gamma e z"
+      and a_commit_def: "a_commit = nullifier_sigma_sim_commit p ck c e z"
+      and a_nullifier_def: "a_nullifier = nullifier_sigma_sim_nullifier p nk nf e z"
+  shows "nullifier_sigma_verify p gamma ck nk c nf a_commit a_nullifier e z"
+proof -
+  have msg_vec: "valid_vec (open_msg z) (cp_n1 p)"
+    using z_ok unfolding valid_nullifier_response_def by simp
+  have rand_vec: "valid_vec (open_rand z) (cp_n2 p)"
+    using z_ok unfolding valid_nullifier_response_def by simp
+  have commit_z_valid: "valid_commitment p (commit ck z (cp_q p))"
+    using commit_shape_valid[OF valid_scalar_commit_params_props(1)[OF params_ok]
+          key_ok msg_vec rand_vec] .
+  have nullifier_z_valid: "valid_commitment p (nullifier p nk z)"
+    unfolding nullifier_def
+    using commit_shape_valid[OF valid_scalar_commit_params_props(1)[OF params_ok]
+          nf_key_ok msg_vec rand_vec] .
+  have len_commit_z: "length (commit ck z (cp_q p)) = cp_m p"
+    using commit_z_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_nullifier_z: "length (nullifier p nk z) = cp_m p"
+    using nullifier_z_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_c: "length c = cp_m p"
+    using c_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_nf: "length nf = cp_m p"
+    using nf_valid unfolding valid_commitment_def valid_vec_def by simp
+  have a_commit_valid: "valid_commitment p a_commit"
+    unfolding a_commit_def nullifier_sigma_sim_commit_def valid_commitment_def valid_vec_def
+    using len_commit_z len_c
+    by (simp add: vec_sub_length scalar_mult_length vec_mod_length)
+  have a_nullifier_valid: "valid_commitment p a_nullifier"
+    unfolding a_nullifier_def nullifier_sigma_sim_nullifier_def valid_commitment_def valid_vec_def
+    using len_nullifier_z len_nf
+    by (simp add: vec_sub_length scalar_mult_length vec_mod_length)
+  have q_pos: "cp_q p > 0"
+    using valid_scalar_commit_params_props(5)[OF params_ok] by linarith
+  have commit_len_eq:
+    "length (commit ck z (cp_q p)) = length (scalar_mult e c)"
+    using len_commit_z len_c by (simp add: scalar_mult_length)
+  have nullifier_len_eq:
+    "length (nullifier p nk z) = length (scalar_mult e nf)"
+    using len_nullifier_z len_nf by (simp add: scalar_mult_length)
+  have commit_canonical:
+    "vec_mod (commit ck z (cp_q p)) (cp_q p) = commit ck z (cp_q p)"
+    unfolding commit_def
+    using q_pos by (simp add: vec_mod_idemp)
+  have nullifier_canonical:
+    "vec_mod (nullifier p nk z) (cp_q p) = nullifier p nk z"
+    unfolding nullifier_def commit_def
+    using q_pos by (simp add: vec_mod_idemp)
+  have commit_eq:
+    "commit ck z (cp_q p) =
+      vec_mod (vec_add a_commit (scalar_mult e c)) (cp_q p)"
+    unfolding a_commit_def nullifier_sigma_sim_commit_def
+    using vec_mod_sub_add_cancel_right[OF commit_len_eq q_pos commit_canonical]
+    by simp
+  have nullifier_eq:
+    "nullifier p nk z =
+      vec_mod (vec_add a_nullifier (scalar_mult e nf)) (cp_q p)"
+    unfolding a_nullifier_def nullifier_sigma_sim_nullifier_def
+    using vec_mod_sub_add_cancel_right[OF nullifier_len_eq q_pos nullifier_canonical]
+    by simp
+  show ?thesis
+    unfolding nullifier_sigma_verify_def
+    using params_ok key_ok nf_key_ok c_valid nf_valid a_commit_valid a_nullifier_valid
+          challenge_ok z_ok commit_eq nullifier_eq
+    by simp
+qed
 
 lemma nullifier_response_valid:
   assumes params_ok: "valid_scalar_commit_params p"

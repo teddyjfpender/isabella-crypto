@@ -477,6 +477,47 @@ next
     using nth_eq mod_cancel by simp
 qed
 
+lemma vec_mod_sub_add_cancel_right:
+  assumes len_eq: "length v = length w"
+      and q_pos: "q > 0"
+      and v_canonical: "vec_mod v q = v"
+  shows "vec_mod (vec_add (vec_mod (vec_sub v w) q) w) q = v"
+proof (intro nth_equalityI)
+  show "length (vec_mod (vec_add (vec_mod (vec_sub v w) q) w) q) = length v"
+    using len_eq by (simp add: vec_sub_length vec_add_length vec_mod_length)
+next
+  fix i
+  assume i_lt: "i < length (vec_mod (vec_add (vec_mod (vec_sub v w) q) w) q)"
+  have i_v: "i < length v"
+    using i_lt len_eq by (simp add: vec_sub_length vec_add_length vec_mod_length)
+  have i_w: "i < length w"
+    using i_v len_eq by simp
+  have v_i_mod: "v ! i mod q = v ! i"
+  proof -
+    have "(vec_mod v q) ! i = v ! i"
+      using v_canonical by simp
+    then show ?thesis
+      using i_v by (simp add: vec_mod_nth)
+  qed
+  have mod_cancel:
+    "((v ! i - w ! i) mod q + w ! i) mod q = v ! i"
+  proof -
+    have "((v ! i - w ! i) mod q + w ! i) mod q =
+          ((v ! i - w ! i) + w ! i) mod q"
+      by (simp add: mod_add_left_eq)
+    also have "... = v ! i"
+      using v_i_mod by simp
+    finally show ?thesis .
+  qed
+  have nth_eq:
+    "vec_mod (vec_add (vec_mod (vec_sub v w) q) w) q ! i =
+      ((v ! i - w ! i) mod q + w ! i) mod q"
+    using i_v i_w
+    by (simp add: vec_add_def vec_sub_def vec_mod_def)
+  show "vec_mod (vec_add (vec_mod (vec_sub v w) q) w) q ! i = v ! i"
+    using nth_eq mod_cancel by simp
+qed
+
 lemma scalar_mult_bounded:
   assumes "all_bounded v B"
   shows "all_bounded (scalar_mult c v) (abs c * B)"
@@ -736,6 +777,78 @@ definition balance_sigma_extract ::
     (if e1 = 1 \<and> e2 = 0 then Some (vec_sub z1 z2)
      else if e1 = 0 \<and> e2 = 1 then Some (vec_sub z2 z1)
      else None)"
+
+definition balance_sigma_sim_commit ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> commitment" where
+  "balance_sigma_sim_commit p ck c e z =
+    vec_mod (vec_sub (rand_commit p ck z) (scalar_mult e c)) (cp_q p)"
+
+lemma balance_sigma_sim_commit_valid:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and z_vec: "valid_vec z (cp_n2 p)"
+  shows "valid_commitment p (balance_sigma_sim_commit p ck c e z)"
+proof -
+  have rc_valid: "valid_commitment p (rand_commit p ck z)"
+    using rand_commit_valid[OF valid_scalar_commit_params_props(1)[OF params_ok] key_ok z_vec] .
+  have len_rc: "length (rand_commit p ck z) = cp_m p"
+    using rc_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_c: "length c = cp_m p"
+    using c_valid unfolding valid_commitment_def valid_vec_def by simp
+  show ?thesis
+    unfolding balance_sigma_sim_commit_def valid_commitment_def valid_vec_def
+    using len_rc len_c by (simp add: vec_sub_length scalar_mult_length vec_mod_length)
+qed
+
+lemma balance_sigma_sim_commit_equation:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and z_vec: "valid_vec z (cp_n2 p)"
+  shows "rand_commit p ck z =
+    vec_mod (vec_add (balance_sigma_sim_commit p ck c e z)
+             (scalar_mult e c)) (cp_q p)"
+proof -
+  have rc_valid: "valid_commitment p (rand_commit p ck z)"
+    using rand_commit_valid[OF valid_scalar_commit_params_props(1)[OF params_ok] key_ok z_vec] .
+  have len_rc: "length (rand_commit p ck z) = cp_m p"
+    using rc_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_c: "length c = cp_m p"
+    using c_valid unfolding valid_commitment_def valid_vec_def by simp
+  have len_eq: "length (rand_commit p ck z) = length (scalar_mult e c)"
+    using len_rc len_c by (simp add: scalar_mult_length)
+  have q_pos: "cp_q p > 0"
+    using valid_scalar_commit_params_props(5)[OF params_ok] by linarith
+  have rc_canonical: "vec_mod (rand_commit p ck z) (cp_q p) = rand_commit p ck z"
+    unfolding rand_commit_def
+    using q_pos by (simp add: vec_mod_idemp)
+  show ?thesis
+    unfolding balance_sigma_sim_commit_def
+    using vec_mod_sub_add_cancel_right[OF len_eq q_pos rc_canonical] by simp
+qed
+
+lemma balance_sigma_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and challenge_ok: "valid_balance_challenge p e"
+      and z_ok: "valid_balance_response p gamma e z"
+      and a_def: "a = balance_sigma_sim_commit p ck c e z"
+  shows "balance_sigma_verify p gamma ck c a e z"
+proof -
+  have z_vec: "valid_vec z (cp_n2 p)"
+    using z_ok unfolding valid_balance_response_def by simp
+  have a_valid: "valid_commitment p a"
+    using balance_sigma_sim_commit_valid[OF params_ok key_ok c_valid z_vec] a_def by simp
+  have sim_eq:
+    "rand_commit p ck z = vec_mod (vec_add a (scalar_mult e c)) (cp_q p)"
+    using balance_sigma_sim_commit_equation[OF params_ok key_ok c_valid z_vec] a_def by simp
+  show ?thesis
+    unfolding balance_sigma_verify_def
+    using params_ok key_ok a_valid challenge_ok z_ok sim_eq
+    by simp
+qed
 
 lemma balance_sigma_extract_some_if_distinct_binary:
   assumes e1_ok: "valid_balance_challenge p e1"

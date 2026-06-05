@@ -320,6 +320,72 @@ definition range_pair_sigma_verify ::
     rand_commit p ck z =
       vec_mod (vec_add a (scalar_mult e c)) (cp_q p)"
 
+definition range_amount_sigma_sim_commit ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> commitment" where
+  "range_amount_sigma_sim_commit p ck c e z =
+    balance_sigma_sim_commit p ck c e z"
+
+definition range_pair_sigma_sim_commit ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> commitment" where
+  "range_pair_sigma_sim_commit p ck c e z =
+    balance_sigma_sim_commit p ck c e z"
+
+lemma range_amount_sigma_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and challenge_ok: "valid_range_challenge p e"
+      and z_ok: "valid_range_amount_response p gamma k e z"
+      and a_def: "a = range_amount_sigma_sim_commit p ck c e z"
+  shows "range_amount_sigma_verify p gamma k ck c a e z"
+proof -
+  have z_vec: "valid_vec z (cp_n2 p)"
+    using z_ok unfolding valid_range_amount_response_def by simp
+  have a_valid: "valid_commitment p a"
+    using balance_sigma_sim_commit_valid[OF params_ok key_ok c_valid z_vec]
+          a_def
+    unfolding range_amount_sigma_sim_commit_def
+    by simp
+  have sim_eq:
+    "rand_commit p ck z = vec_mod (vec_add a (scalar_mult e c)) (cp_q p)"
+    using balance_sigma_sim_commit_equation[OF params_ok key_ok c_valid z_vec]
+          a_def
+    unfolding range_amount_sigma_sim_commit_def
+    by simp
+  show ?thesis
+    unfolding range_amount_sigma_verify_def
+    using params_ok key_ok a_valid challenge_ok z_ok sim_eq
+    by simp
+qed
+
+lemma range_pair_sigma_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and challenge_ok: "valid_range_challenge p e"
+      and z_ok: "valid_range_pair_response p gamma e z"
+      and a_def: "a = range_pair_sigma_sim_commit p ck c e z"
+  shows "range_pair_sigma_verify p gamma ck c a e z"
+proof -
+  have z_vec: "valid_vec z (cp_n2 p)"
+    using z_ok unfolding valid_range_pair_response_def by simp
+  have a_valid: "valid_commitment p a"
+    using balance_sigma_sim_commit_valid[OF params_ok key_ok c_valid z_vec]
+          a_def
+    unfolding range_pair_sigma_sim_commit_def
+    by simp
+  have sim_eq:
+    "rand_commit p ck z = vec_mod (vec_add a (scalar_mult e c)) (cp_q p)"
+    using balance_sigma_sim_commit_equation[OF params_ok key_ok c_valid z_vec]
+          a_def
+    unfolding range_pair_sigma_sim_commit_def
+    by simp
+  show ?thesis
+    unfolding range_pair_sigma_verify_def
+    using params_ok key_ok a_valid challenge_ok z_ok sim_eq
+    by simp
+qed
+
 definition range_amount_sigma_extract ::
   "int \<Rightarrow> int_vec \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> int_vec option" where
   "range_amount_sigma_extract e1 z1 e2 z2 =
