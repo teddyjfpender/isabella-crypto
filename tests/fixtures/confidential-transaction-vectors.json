@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "algorithm": "SHA3-256",
+  "dst": "ISABELLA-CT-TX-v1",
+  "protocolId": "ISABELLA-CT-SIS-NOTE",
+  "integerEncoding": "signed-64-bit-little-endian",
+  "stringEncoding": "len_i64_le || printable_ascii_bytes",
+  "digestEncoding": "len_i64_le || 32 raw digest bytes",
+  "vectorEncoding": "len_i64_le || values_i64_le...",
+  "tags": {
+    "context": 0
+  },
+  "cases": [
+    {
+      "name": "sis-note-context-basic",
+      "context": {
+        "protocolVersion": 1,
+        "networkId": "isabella-local-devnet",
+        "assetId": 7,
+        "ledgerEpoch": 42,
+        "root": "555c11b4fa295214bdd5dc9aa06b0141ee7c7b9d51828f559032a42981ff1b55",
+        "publicFee": 3,
+        "cIn1": [
+          1,
+          -2,
+          3
+        ],
+        "cIn2": [
+          4,
+          5,
+          -6
+        ],
+        "cOut1": [
+          7,
+          8,
+          9
+        ],
+        "cOut2": [
+          -1,
+          0,
+          1
+        ],
+        "nf1": [
+          3,
+          2,
+          1
+        ],
+        "nf2": [
+          -3,
+          -2,
+          -1
+        ]
+      },
+      "preimageHex": "49534142454c4c412d43542d54582d76310000000000000000140000000000000049534142454c4c412d43542d5349532d4e4f54450100000000000000150000000000000069736162656c6c612d6c6f63616c2d6465766e657407000000000000002a000000000000002000000000000000555c11b4fa295214bdd5dc9aa06b0141ee7c7b9d51828f559032a42981ff1b55030000000000000003000000000000000100000000000000feffffffffffffff0300000000000000030000000000000004000000000000000500000000000000faffffffffffffff03000000000000000700000000000000080000000000000009000000000000000300000000000000ffffffffffffffff0000000000000000010000000000000003000000000000000300000000000000020000000000000001000000000000000300000000000000fdfffffffffffffffeffffffffffffffffffffffffffffff",
+      "digest": "ca7d87171bdc7856d7549d0f07b9b60331736872b910df34a5c17cd1dc1b2d2b"
+    }
+  ]
+}

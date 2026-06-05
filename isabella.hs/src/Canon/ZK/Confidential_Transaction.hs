@@ -17,6 +17,11 @@ module Canon.ZK.Confidential_Transaction
   , merkleMemberDirections
   , MerkleTransactionProof(..)
   , makeMerkleTransactionProof
+  , transactionDst
+  , transactionProtocolId
+  , transactionContextTag
+  , transactionContextPreimageHex
+  , transactionContextDigest
   , nullifier
   , validNullifierMask
   , validNullifierResponse
@@ -54,7 +59,10 @@ module Canon.ZK.Confidential_Transaction
   , ledgerApplySpent
   ) where
 
+import Data.Bits (shiftL, shiftR, (.&.), (.|.))
+import Data.Char (ord)
 import Data.List (delete, nub)
+import Data.Word (Word64, Word8)
 import qualified Canon.Commit_sis as Commit
 import qualified Canon.Confidential_balance as ConfidentialBalance
 import qualified Canon.Confidential_merkle as ConfidentialMerkle
@@ -155,6 +163,144 @@ makeMerkleTransactionProof ::
   ConfidentialRange.RangeProof ->
   MerkleTransactionProof
 makeMerkleTransactionProof = MerkleTransactionProof
+
+transactionDst :: String
+transactionDst = "ISABELLA-CT-TX-v1"
+
+transactionProtocolId :: String
+transactionProtocolId = "ISABELLA-CT-SIS-NOTE"
+
+transactionContextTag :: Int
+transactionContextTag = 0
+
+transactionWord64LeBytes :: Word64 -> [Word8]
+transactionWord64LeBytes value =
+  [ fromIntegral ((value `shiftR` (8 * i)) .&. 0xff)
+  | i <- [0 .. 7]
+  ]
+
+transactionInt64LeBytes :: Int -> [Word8]
+transactionInt64LeBytes value =
+  transactionWord64LeBytes (fromIntegral value :: Word64)
+
+encodeTransactionAscii :: String -> String -> [Word8]
+encodeTransactionAscii label value =
+  let bytes = map ord value
+      validByte index byte =
+        if byte >= 0x20 && byte <= 0x7e
+          then fromIntegral byte
+          else error (label ++ "[" ++ show index ++ "] must be printable ASCII")
+   in transactionInt64LeBytes (length bytes) ++
+      zipWith validByte [0 :: Int ..] bytes
+
+encodeTransactionInt :: String -> Int -> [Word8]
+encodeTransactionInt label value
+  | value < 0 = error (label ++ " must be non-negative")
+  | otherwise = transactionInt64LeBytes value
+
+encodeTransactionVec :: [Int] -> [Word8]
+encodeTransactionVec values =
+  transactionInt64LeBytes (length values) ++ concatMap transactionInt64LeBytes values
+
+transactionHexByte :: Word8 -> String
+transactionHexByte byte =
+  let alphabet = "0123456789abcdef"
+      hi = fromIntegral ((byte `shiftR` 4) .&. 0x0f)
+      lo = fromIntegral (byte .&. 0x0f)
+   in [alphabet !! hi, alphabet !! lo]
+
+transactionDigestHex :: [Word8] -> String
+transactionDigestHex =
+  concatMap transactionHexByte
+
+transactionHexValue :: Char -> Maybe Word8
+transactionHexValue c
+  | c >= '0' && c <= '9' = Just (fromIntegral (ord c - ord '0'))
+  | c >= 'a' && c <= 'f' = Just (fromIntegral (10 + ord c - ord 'a'))
+  | otherwise = Nothing
+
+transactionHexToBytes :: String -> Maybe [Word8]
+transactionHexToBytes hex
+  | length hex /= 64 = Nothing
+  | otherwise = go hex
+ where
+  go [] = Just []
+  go (hi:lo:rest) = do
+    hiValue <- transactionHexValue hi
+    loValue <- transactionHexValue lo
+    tailBytes <- go rest
+    pure (((hiValue `shiftL` 4) .|. loValue) : tailBytes)
+  go _ = Nothing
+
+encodeTransactionDigest :: String -> String -> [Word8]
+encodeTransactionDigest label digest =
+  case transactionHexToBytes digest of
+    Just bytes -> transactionInt64LeBytes (length bytes) ++ bytes
+    Nothing -> error (label ++ " must be a canonical lowercase SHA3-256 digest")
+
+transactionContextPreimage ::
+  Int ->
+  String ->
+  Int ->
+  Int ->
+  String ->
+  Int ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Word8]
+transactionContextPreimage
+  protocolVersion
+  networkId
+  assetId
+  ledgerEpoch
+  rt
+  publicFee
+  cIn1
+  cIn2
+  cOut1
+  cOut2
+  nf1
+  nf2 =
+  map (fromIntegral . ord) transactionDst ++
+  transactionInt64LeBytes transactionContextTag ++
+  encodeTransactionAscii "protocolId" transactionProtocolId ++
+  encodeTransactionInt "protocolVersion" protocolVersion ++
+  encodeTransactionAscii "networkId" networkId ++
+  encodeTransactionInt "assetId" assetId ++
+  encodeTransactionInt "ledgerEpoch" ledgerEpoch ++
+  encodeTransactionDigest "root" rt ++
+  encodeTransactionInt "publicFee" publicFee ++
+  encodeTransactionVec cIn1 ++
+  encodeTransactionVec cIn2 ++
+  encodeTransactionVec cOut1 ++
+  encodeTransactionVec cOut2 ++
+  encodeTransactionVec nf1 ++
+  encodeTransactionVec nf2
+
+transactionContextPreimageHex ::
+  Int -> String -> Int -> Int -> String -> Int ->
+  [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> String
+transactionContextPreimageHex protocolVersion networkId assetId ledgerEpoch rt publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
+  transactionDigestHex
+    (transactionContextPreimage
+      protocolVersion networkId assetId ledgerEpoch rt publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2)
+
+transactionContextDigest ::
+  Int -> String -> Int -> Int -> String -> Int ->
+  [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> String
+transactionContextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
+  transactionDigestHex
+    (RepeatedFS.sha3_256
+      (transactionContextPreimage
+        protocolVersion networkId assetId ledgerEpoch rt publicFee
+        cIn1 cIn2 cOut1 cOut2 nf1 nf2))
 
 validCommitment :: Commit.CommitParams -> [Int] -> Bool
 validCommitment p = Listvec.valid_vec (Commit.cp_m p)

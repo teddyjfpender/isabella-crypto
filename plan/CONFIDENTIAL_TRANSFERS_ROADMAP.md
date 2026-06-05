@@ -85,6 +85,13 @@ benchmarks are independently checked.
 - `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
   contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
   asset IDs, version contexts, wallet proof generation, and failure semantics.
+- The runtime now pins the public SIS-note transaction context with canonical
+  bytes and a SHA3-256 digest over protocol version, network ID, asset ID,
+  ledger epoch, Merkle root, public fee, two input commitments, two output
+  commitments, and two revealed nullifiers. The fixture lives in
+  `tests/fixtures/confidential-transaction-vectors.json`, and OCaml, Haskell,
+  and TypeScript expose matching `ct-transaction-context` /
+  `transactionContextDigest` surfaces checked by the SDK-equivalence harnesses.
 
 ## Remaining Security Work
 
@@ -105,6 +112,9 @@ The formalization still needs these before production:
    extend transaction membership soundness beyond same-path uniqueness.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
+7. Extend the pinned public transaction context into full canonical
+   transaction/proof serialization, wallet request serialization, and
+   consensus/indexer API contracts with non-canonical encoding rejection.
 
 ## Parameter Baseline
 
@@ -150,6 +160,7 @@ Benchmark checks:
 make bench-typescript-confidential
 make bench-confidential-verify
 make bench-confidential-realistic
+node scripts/generate_confidential_transaction_vectors.mjs
 node scripts/check_confidential_bench_budgets.mjs
 ```
 
@@ -168,6 +179,8 @@ Completed:
 - `make test-validation`
 - `node scripts/bench_confidential_balance_128.mjs`
 - `node scripts/bench_confidential_balance_realistic.mjs`
+- `node scripts/generate_confidential_transaction_vectors.mjs`
+- `cd tests && bun test confidential-transaction`
 - `node scripts/check_confidential_bench_budgets.mjs`
 - `python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json`
 
@@ -179,13 +192,17 @@ Important validation caveats:
   transaction mutation matrix covering root/path changes, spent nullifiers,
   nullifier responses, balance responses, range responses, and swapped proof
   components.
+- `tests/src/confidential-transaction.test.ts` pins the canonical public
+  transaction context preimage/digest and rejects malformed roots, negative
+  fees, unsafe integers, and non-ASCII replay-context fields. This is not full
+  transaction/proof serialization yet.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
-  membership, and transaction equivalence by default for both OCaml and
-  Haskell.
+  membership, transaction context, and transaction equivalence by default for
+  both OCaml and Haskell.
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
   `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
   with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 3.801209 ms median and verification had a 3.751583 ms median.
+  proving had a 3.731042 ms median and verification had a 3.616708 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
@@ -194,7 +211,7 @@ Important validation caveats:
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
   `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
   run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 0.733704542 s proving time, a 0.733947834 s verification time, and a
+  a 3.144791583 s proving time, a 3.27841275 s verification time, and a
   972347-byte JSON proof object. This is a structured-key runtime benchmark,
   not a production lattice security estimate.
 - `scripts/check_confidential_bench_budgets.mjs` enforces current CI ceilings

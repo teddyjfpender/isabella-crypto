@@ -98,6 +98,81 @@ let make_merkle_transaction_proof
     tx_merkle_out2_range;
   }
 
+let transaction_dst = "ISABELLA-CT-TX-v1"
+let transaction_protocol_id = "ISABELLA-CT-SIS-NOTE"
+let transaction_context_tag = 0
+
+let require_nonnegative label value =
+  if value < 0 then invalid_arg (label ^ " must be non-negative")
+
+let encode_ascii label value =
+  let bytes = Repeated_fs.string_bytes value in
+  List.iteri
+    (fun index byte ->
+       if byte < 0x20 || byte > 0x7e then
+         invalid_arg (Printf.sprintf "%s[%d] must be printable ASCII" label index))
+    bytes;
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length bytes)) @ bytes
+
+let encode_transaction_int label value =
+  require_nonnegative label value;
+  Repeated_fs.int64_le_bytes (Int64.of_int value)
+
+let encode_transaction_vec values =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length values))
+  @ List.concat (List.map (fun value -> Repeated_fs.int64_le_bytes (Int64.of_int value)) values)
+
+let encode_transaction_digest label digest =
+  match Confidential_merkle.hex_to_bytes digest with
+  | Some bytes ->
+      Repeated_fs.int64_le_bytes (Int64.of_int (List.length bytes)) @ bytes
+  | None -> invalid_arg (label ^ " must be a canonical lowercase SHA3-256 digest")
+
+let transaction_context_preimage
+    protocol_version
+    network_id
+    asset_id
+    ledger_epoch
+    root
+    public_fee
+    c_in1
+    c_in2
+    c_out1
+    c_out2
+    nf1
+    nf2 =
+  Repeated_fs.string_bytes transaction_dst
+  @ Repeated_fs.int64_le_bytes (Int64.of_int transaction_context_tag)
+  @ encode_ascii "protocolId" transaction_protocol_id
+  @ encode_transaction_int "protocolVersion" protocol_version
+  @ encode_ascii "networkId" network_id
+  @ encode_transaction_int "assetId" asset_id
+  @ encode_transaction_int "ledgerEpoch" ledger_epoch
+  @ encode_transaction_digest "root" root
+  @ encode_transaction_int "publicFee" public_fee
+  @ encode_transaction_vec c_in1
+  @ encode_transaction_vec c_in2
+  @ encode_transaction_vec c_out1
+  @ encode_transaction_vec c_out2
+  @ encode_transaction_vec nf1
+  @ encode_transaction_vec nf2
+
+let transaction_context_preimage_hex
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 =
+  transaction_context_preimage
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2
+  |> Confidential_merkle.digest_hex
+
+let transaction_context_digest
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 =
+  transaction_context_preimage
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2
+  |> Confidential_merkle.digest
+
 let valid_commitment p c =
   Listvec.valid_vec p.Commit_sis.cp_m c
 

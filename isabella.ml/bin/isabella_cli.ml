@@ -1064,6 +1064,34 @@ let cmd_ct_merkle_member_verify args =
      | _ -> output_error "Expected ledger matrix and commitment vector")
   | _ -> output_error "Usage: ct-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
 
+let cmd_ct_transaction_context args =
+  match args with
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root;
+     public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str] ->
+    (match
+       parse_int protocol_version_str,
+       parse_int asset_id_str,
+       parse_int ledger_epoch_str,
+       parse_int public_fee_str,
+       parse_vec c_in1_str,
+       parse_vec c_in2_str,
+       parse_vec c_out1_str,
+       parse_vec c_out2_str,
+       parse_vec nf1_str,
+       parse_vec nf2_str
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2 ->
+       (try
+          output_string_result "ct_transaction_context"
+            (Confidential_transaction.transaction_context_digest
+               protocol_version network_id asset_id ledger_epoch root public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected transaction context fields")
+  | _ ->
+    output_error "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
+
 (** {1 Confidential Transaction Commands} *)
 
 let cmd_ct_nullifier args =
@@ -1785,6 +1813,7 @@ let show_help () =
   print_endline "  ct-merkle-root LEDGER        Compute cryptographic Merkle root";
   print_endline "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof";
   print_endline "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof";
+  print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2";
   print_endline "";
   print_endline "Confidential Transaction Commands:";
   print_endline "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier";
@@ -1876,6 +1905,7 @@ let run_command cmd args =
   | "ct-merkle-root" -> cmd_ct_merkle_root args
   | "ct-merkle-member-prove" -> cmd_ct_merkle_member_prove args
   | "ct-merkle-member-verify" -> cmd_ct_merkle_member_verify args
+  | "ct-transaction-context" -> cmd_ct_transaction_context args
   | "ct-nullifier" -> cmd_ct_nullifier args
   | "ct-nullifier-canonical-challenge" -> cmd_ct_nullifier_canonical_challenge args
   | "ct-nullifier-prove" -> cmd_ct_nullifier_prove args

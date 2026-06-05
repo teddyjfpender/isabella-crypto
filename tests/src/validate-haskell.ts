@@ -871,6 +871,37 @@ assert.equal(
   true,
   'ct-merkle-member-verify Haskell accepts generated path'
 );
+const transactionVectors = JSON.parse(
+  fs.readFileSync(path.join(projectRoot, 'tests/fixtures/confidential-transaction-vectors.json'), 'utf8')
+);
+const [transactionContextVector] = transactionVectors.cases;
+const transactionContext = transactionContextVector.context;
+assert.equal(
+  parseResult<string>(
+    runHaskell([
+      'ct-transaction-context',
+      transactionContext.protocolVersion.toString(),
+      transactionContext.networkId,
+      transactionContext.assetId.toString(),
+      transactionContext.ledgerEpoch.toString(),
+      transactionContext.root,
+      transactionContext.publicFee.toString(),
+      JSON.stringify(transactionContext.cIn1),
+      JSON.stringify(transactionContext.cIn2),
+      JSON.stringify(transactionContext.cOut1),
+      JSON.stringify(transactionContext.cOut2),
+      JSON.stringify(transactionContext.nf1),
+      JSON.stringify(transactionContext.nf2),
+    ])
+  ),
+  sdk.ConfidentialTransaction.transactionContextDigest(transactionContext),
+  'ct-transaction-context Haskell/TypeScript parity'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.transactionContextDigest(transactionContext),
+  transactionContextVector.digest,
+  'ct-transaction-context vector'
+);
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'scaffold ledger-step compatibility export');
@@ -1200,5 +1231,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 79 deterministic shared-surface cases.'
+  'Validated Haskell CLI and SDK surfaces on 80 deterministic shared-surface cases.'
 );

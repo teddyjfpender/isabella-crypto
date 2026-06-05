@@ -107,12 +107,16 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@node scripts/generate_confidential_transcript_vectors.mjs
 	@echo "Generating confidential Merkle vectors..."
 	@node scripts/generate_confidential_merkle_vectors.mjs
+	@echo "Generating confidential transaction context vectors..."
+	@node scripts/generate_confidential_transaction_vectors.mjs
 	@echo "Screening confidential transfer parameters..."
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
 	@echo "Running confidential transcript vector tests..."
 	@cd tests && bun test confidential-transcript
 	@echo "Running confidential Merkle vector tests..."
 	@cd tests && bun test confidential-merkle
+	@echo "Running confidential transaction context vector tests..."
+	@cd tests && bun test confidential-transaction
 	@echo "Running confidential transaction audit..."
 	@cd tests && bun run audit-confidential
 	@$(MAKE) test-sdk-equivalence

@@ -192,6 +192,22 @@ export interface MerkleTransactionProof {
   out2Range: RangeProofLike;
 }
 
+/** Public, replay-sensitive context for the SIS-note 2-in/2-out MVP statement */
+export interface ConfidentialTransactionContext {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  root: MerkleDigest;
+  publicFee: number;
+  cIn1: IntVec;
+  cIn2: IntVec;
+  cOut1: IntVec;
+  cOut2: IntVec;
+  nf1: IntVec;
+  nf2: IntVec;
+}
+
 /**
  * Raw Isabella module interface (from js_of_ocaml)
  * @internal
@@ -900,6 +916,11 @@ const CT_MERKLE_TAGS = {
   node: 1,
   empty: 2,
 } as const;
+const CT_TRANSACTION_DST = 'ISABELLA-CT-TX-v1';
+const CT_TRANSACTION_PROTOCOL_ID = 'ISABELLA-CT-SIS-NOTE';
+const CT_TRANSACTION_TAGS = {
+  context: 0,
+} as const;
 
 function assertSafeI64(value: number, label: string): void {
   if (!Number.isSafeInteger(value)) {
@@ -926,6 +947,30 @@ function encodeIntVector(values: IntVec, label: string): Buffer {
   return Buffer.concat([
     encodeI64LE(values.length, `${label}.length`),
     ...values.map((value, index) => encodeI64LE(value, `${label}[${index}]`)),
+  ]);
+}
+
+function encodeAsciiString(value: string, label: string): Buffer {
+  const bytes = [...value].map((char, index) => {
+    const code = char.charCodeAt(0);
+    if (code > 0x7e || code < 0x20) {
+      throw new Error(`${label}[${index}] must be printable ASCII`);
+    }
+    return code;
+  });
+  assertNonNegativeSafeI64(bytes.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(bytes.length, `${label}.length`),
+    Buffer.from(bytes),
+  ]);
+}
+
+function encodeDigest(digest: MerkleDigest, label: string): Buffer {
+  assertDigestHex(digest, label);
+  const bytes = Buffer.from(digest, 'hex');
+  return Buffer.concat([
+    encodeI64LE(bytes.length, `${label}.length`),
+    bytes,
   ]);
 }
 
@@ -981,6 +1026,30 @@ function merkleHashEmpty(width: number): MerkleDigest {
 
 function merkleHashNode(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
   return sha3Hex(merkleNodePreimage(left, right));
+}
+
+function transactionContextPreimage(context: ConfidentialTransactionContext): Buffer {
+  assertNonNegativeSafeI64(context.protocolVersion, 'protocolVersion');
+  assertNonNegativeSafeI64(context.assetId, 'assetId');
+  assertNonNegativeSafeI64(context.ledgerEpoch, 'ledgerEpoch');
+  assertNonNegativeSafeI64(context.publicFee, 'publicFee');
+  return Buffer.concat([
+    Buffer.from(CT_TRANSACTION_DST, 'ascii'),
+    encodeI64LE(CT_TRANSACTION_TAGS.context, 'transaction tag'),
+    encodeAsciiString(CT_TRANSACTION_PROTOCOL_ID, 'protocolId'),
+    encodeI64LE(context.protocolVersion, 'protocolVersion'),
+    encodeAsciiString(context.networkId, 'networkId'),
+    encodeI64LE(context.assetId, 'assetId'),
+    encodeI64LE(context.ledgerEpoch, 'ledgerEpoch'),
+    encodeDigest(context.root, 'root'),
+    encodeI64LE(context.publicFee, 'publicFee'),
+    encodeIntVector(context.cIn1, 'cIn1'),
+    encodeIntVector(context.cIn2, 'cIn2'),
+    encodeIntVector(context.cOut1, 'cOut1'),
+    encodeIntVector(context.cOut2, 'cOut2'),
+    encodeIntVector(context.nf1, 'nf1'),
+    encodeIntVector(context.nf2, 'nf2'),
+  ]);
 }
 
 function merkleCompressLevel(width: number, level: MerkleDigest[]): MerkleDigest[] {
@@ -1939,6 +2008,22 @@ export namespace ConfidentialMerkle {
  * 2-in/2-out transfer verifier.
  */
 export namespace ConfidentialTransaction {
+  export const transactionDst = CT_TRANSACTION_DST;
+  export const transactionProtocolId = CT_TRANSACTION_PROTOCOL_ID;
+  export const transactionTags = CT_TRANSACTION_TAGS;
+
+  export function transactionContextPreimageHex(
+    context: ConfidentialTransactionContext
+  ): string {
+    return transactionContextPreimage(context).toString('hex');
+  }
+
+  export function transactionContextDigest(
+    context: ConfidentialTransactionContext
+  ): MerkleDigest {
+    return sha3Hex(transactionContextPreimage(context));
+  }
+
   export function nullifier(
     params: ScalarCommitParams,
     nk: IntMatrix,

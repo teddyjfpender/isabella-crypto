@@ -1284,6 +1284,38 @@ export function ctMerkleMemberVerify(ledger: number[][], commitment: number[]): 
   return parseCliBool(output);
 }
 
+export function ctTransactionContext(
+  protocolVersion: number,
+  networkId: string,
+  assetId: number,
+  ledgerEpoch: number,
+  root: string,
+  publicFee: number,
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[]
+): string {
+  const output = runCli([
+    'ct-transaction-context',
+    protocolVersion.toString(),
+    networkId,
+    assetId.toString(),
+    ledgerEpoch.toString(),
+    root,
+    publicFee.toString(),
+    JSON.stringify(cIn1),
+    JSON.stringify(cIn2),
+    JSON.stringify(cOut1),
+    JSON.stringify(cOut2),
+    JSON.stringify(nf1),
+    JSON.stringify(nf2),
+  ]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
 export function ctProve(
   m: number,
   n2: number,

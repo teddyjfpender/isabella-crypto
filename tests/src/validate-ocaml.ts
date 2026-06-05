@@ -33,6 +33,7 @@ import {
   ctNullifierVerify,
   ctProve,
   ctProveMerkle,
+  ctTransactionContext,
   ctVerify,
   ctVerifyMerkle,
   crAmountCommitment,
@@ -775,6 +776,34 @@ assert.equal(
   true,
   'ct-merkle-member-verify OCaml accepts generated path'
 );
+const transactionVectors = JSON.parse(
+  fs.readFileSync(path.join(projectRoot, 'tests/fixtures/confidential-transaction-vectors.json'), 'utf8')
+);
+const [transactionContextVector] = transactionVectors.cases;
+const transactionContext = transactionContextVector.context;
+assert.equal(
+  ctTransactionContext(
+    transactionContext.protocolVersion,
+    transactionContext.networkId,
+    transactionContext.assetId,
+    transactionContext.ledgerEpoch,
+    transactionContext.root,
+    transactionContext.publicFee,
+    transactionContext.cIn1,
+    transactionContext.cIn2,
+    transactionContext.cOut1,
+    transactionContext.cOut2,
+    transactionContext.nf1,
+    transactionContext.nf2
+  ),
+  sdk.ConfidentialTransaction.transactionContextDigest(transactionContext),
+  'ct-transaction-context OCaml/TypeScript parity'
+);
+assert.equal(
+  sdk.ConfidentialTransaction.transactionContextDigest(transactionContext),
+  transactionContextVector.digest,
+  'ct-transaction-context vector'
+);
 logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
@@ -1014,4 +1043,4 @@ logProgress('validate-ocaml: verified input notes constructed');
 
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
-console.log('Validated the TypeScript SDK against the OCaml surface on 79 deterministic shared-surface cases.');
+console.log('Validated the TypeScript SDK against the OCaml surface on 80 deterministic shared-surface cases.');

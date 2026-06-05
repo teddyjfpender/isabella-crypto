@@ -62,6 +62,7 @@ runCommand format cmd args = case cmd of
     "ct-merkle-root" -> cmdCtMerkleRoot format args
     "ct-merkle-member-prove" -> cmdCtMerkleMemberProve format args
     "ct-merkle-member-verify" -> cmdCtMerkleMemberVerify format args
+    "ct-transaction-context" -> cmdCtTransactionContext format args
     "ct-nullifier" -> cmdCtNullifier format args
     "ct-nullifier-canonical-challenge" -> cmdCtNullifierCanonicalChallenge format args
     "ct-nullifier-prove" -> cmdCtNullifierProve format args
@@ -1036,6 +1037,63 @@ cmdCtMerkleMemberVerify format [ledgerStr, commitmentStr] =
         _ -> outputError format "Expected ledger matrix and commitment vector"
 cmdCtMerkleMemberVerify format _ =
     outputUsage format "Usage: ct-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
+
+cmdCtTransactionContext :: OutputFormat -> [String] -> IO ()
+cmdCtTransactionContext format
+    [ protocolVersionStr
+    , networkId
+    , assetIdStr
+    , ledgerEpochStr
+    , rootDigest
+    , publicFeeStr
+    , cIn1Str
+    , cIn2Str
+    , cOut1Str
+    , cOut2Str
+    , nf1Str
+    , nf2Str
+    ] =
+    case
+        ( parseInt protocolVersionStr
+        , parseInt assetIdStr
+        , parseInt ledgerEpochStr
+        , parseInt publicFeeStr
+        , parseVec cIn1Str
+        , parseVec cIn2Str
+        , parseVec cOut1Str
+        , parseVec cOut2Str
+        , parseVec nf1Str
+        , parseVec nf2Str
+        )
+    of
+        ( Just protocolVersion
+          , Just assetId
+          , Just ledgerEpoch
+          , Just publicFee
+          , Just cIn1
+          , Just cIn2
+          , Just cOut1
+          , Just cOut2
+          , Just nf1
+          , Just nf2
+          ) ->
+            outputStringResult format "ct_transaction_context = " $
+                ConfidentialTransaction.transactionContextDigest
+                    protocolVersion
+                    networkId
+                    assetId
+                    ledgerEpoch
+                    rootDigest
+                    publicFee
+                    cIn1
+                    cIn2
+                    cOut1
+                    cOut2
+                    nf1
+                    nf2
+        _ -> outputError format "Expected transaction context fields"
+cmdCtTransactionContext format _ =
+    outputUsage format "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
 
 cmdCtNullifier :: OutputFormat -> [String] -> IO ()
 cmdCtNullifier format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =
