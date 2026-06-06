@@ -820,6 +820,20 @@ definition range_scheduled_verify ::
             range_pair_sigma_verify p gamma ck (c_pair_res ! j)
               ((a_pairss ! i) ! j) (es ! i) ((z_pairss ! i) ! j))))"
 
+definition range_scheduled_fork_extract_amount ::
+  "int list \<Rightarrow> int_vec list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow> nat \<Rightarrow>
+   int_vec option" where
+  "range_scheduled_fork_extract_amount es1 z_amounts1 es2 z_amounts2 i =
+    range_amount_sigma_extract (es1 ! i) (z_amounts1 ! i)
+      (es2 ! i) (z_amounts2 ! i)"
+
+definition range_scheduled_fork_extract_pair ::
+  "int list \<Rightarrow> int_vec list list \<Rightarrow> int list \<Rightarrow> int_vec list list \<Rightarrow>
+   nat \<Rightarrow> nat \<Rightarrow> int_vec option" where
+  "range_scheduled_fork_extract_pair es1 z_pairss1 es2 z_pairss2 i j =
+    range_pair_sigma_extract (es1 ! i) ((z_pairss1 ! i) ! j)
+      (es2 ! i) ((z_pairss2 ! i) ! j)"
+
 lemma range_scheduled_fork_extract_amount_algebraic_opening:
   assumes left:
         "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
@@ -834,8 +848,8 @@ lemma range_scheduled_fork_extract_amount_algebraic_opening:
         "vec_mod (range_amount_commitment p ck c_amount c_bits) (cp_q p) =
          range_amount_commitment p ck c_amount c_bits"
   obtains r where
-    "range_amount_sigma_extract (es1 ! i) (z_amounts1 ! i)
-       (es2 ! i) (z_amounts2 ! i) = Some r"
+    "range_scheduled_fork_extract_amount es1 z_amounts1 es2 z_amounts2 i =
+       Some r"
     "rand_commit p ck r = range_amount_commitment p ck c_amount c_bits"
     "valid_vec r (cp_n2 p)"
     "all_bounded r (2 * gamma + range_amount_witness_bound p k)"
@@ -869,6 +883,10 @@ proof -
     using range_amount_sigma_extract_some_if_distinct_binary[
       OF e1_ok e2_ok distinct]
     by blast
+  have fork_ext:
+    "range_scheduled_fork_extract_amount es1 z_amounts1 es2 z_amounts2 i =
+       Some r"
+    using ext unfolding range_scheduled_fork_extract_amount_def by simp
   have open_eq: "rand_commit p ck r = ?c"
     using range_amount_sigma_extract_algebraic_opening[
       OF t1 t2 c_valid c_canonical ext] .
@@ -878,7 +896,7 @@ proof -
     using range_amount_sigma_extract_distinct_binary_bound[
       OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
   show ?thesis
-    using that ext open_eq bounded by blast
+    using that fork_ext open_eq bounded by blast
 qed
 
 lemma range_scheduled_fork_extract_pair_algebraic_opening:
@@ -896,8 +914,8 @@ lemma range_scheduled_fork_extract_pair_algebraic_opening:
         "vec_mod ((range_pair_commitments p ck c_bits c_comps) ! j) (cp_q p) =
          (range_pair_commitments p ck c_bits c_comps) ! j"
   obtains r where
-    "range_pair_sigma_extract (es1 ! i) ((z_pairss1 ! i) ! j)
-       (es2 ! i) ((z_pairss2 ! i) ! j) = Some r"
+    "range_scheduled_fork_extract_pair es1 z_pairss1 es2 z_pairss2 i j =
+       Some r"
     "rand_commit p ck r = (range_pair_commitments p ck c_bits c_comps) ! j"
     "valid_vec r (cp_n2 p)"
     "all_bounded r (2 * gamma + range_pair_witness_bound p)"
@@ -931,6 +949,10 @@ proof -
     using range_pair_sigma_extract_some_if_distinct_binary[
       OF e1_ok e2_ok distinct]
     by blast
+  have fork_ext:
+    "range_scheduled_fork_extract_pair es1 z_pairss1 es2 z_pairss2 i j =
+       Some r"
+    using ext unfolding range_scheduled_fork_extract_pair_def by simp
   have open_eq: "rand_commit p ck r = ?cs ! j"
     using range_pair_sigma_extract_algebraic_opening[
       OF t1 t2 c_valid c_canonical ext] .
@@ -940,7 +962,7 @@ proof -
     using range_pair_sigma_extract_distinct_binary_bound[
       OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
   show ?thesis
-    using that ext open_eq bounded by blast
+    using that fork_ext open_eq bounded by blast
 qed
 
 definition range_fs_prove ::

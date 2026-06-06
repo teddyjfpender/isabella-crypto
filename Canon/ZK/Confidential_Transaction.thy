@@ -582,6 +582,12 @@ definition nullifier_scheduled_verify ::
       nullifier_sigma_verify p gamma ck nk c nf
         (a_commits ! i) (a_nullifiers ! i) (es ! i) (zs ! i))"
 
+definition nullifier_scheduled_fork_extract ::
+  "int list \<Rightarrow> commit_opening list \<Rightarrow> int list \<Rightarrow> commit_opening list \<Rightarrow>
+   nat \<Rightarrow> commit_opening option" where
+  "nullifier_scheduled_fork_extract es1 zs1 es2 zs2 i =
+    nullifier_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i)"
+
 lemma nullifier_scheduled_fork_extract_algebraic_opening:
   assumes left:
         "nullifier_scheduled_verify p gamma ck nk c nf
@@ -593,7 +599,7 @@ lemma nullifier_scheduled_fork_extract_algebraic_opening:
       and c_canonical: "vec_mod c (cp_q p) = c"
       and nf_canonical: "vec_mod nf (cp_q p) = nf"
   obtains op where
-    "nullifier_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) = Some op"
+    "nullifier_scheduled_fork_extract es1 zs1 es2 zs2 i = Some op"
     "commit ck op (cp_q p) = c"
     "nullifier p nk op = nf"
     "valid_vec (open_msg op) (cp_n1 p)"
@@ -627,6 +633,8 @@ proof -
     using nullifier_sigma_extract_some_if_distinct_binary[
       OF e1_ok e2_ok distinct]
     by blast
+  have fork_ext: "nullifier_scheduled_fork_extract es1 zs1 es2 zs2 i = Some op"
+    using ext unfolding nullifier_scheduled_fork_extract_def by simp
   have algebraic:
     "commit ck op (cp_q p) = c \<and> nullifier p nk op = nf"
     using nullifier_sigma_extract_algebraic_opening[
@@ -639,7 +647,7 @@ proof -
     using nullifier_sigma_extract_distinct_binary_bound[
       OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
   show ?thesis
-    using that ext algebraic bounded by blast
+    using that fork_ext algebraic bounded by blast
 qed
 
 record membership_proof =
@@ -2204,6 +2212,225 @@ lemma nullifier_fs_knowledge_sound_if_extractor_correct:
   using assms
   unfolding nullifier_fs_extractor_correct_def
   by blast
+
+definition balance_fs_scheduled_forking_assumption ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> balance_proof \<Rightarrow> bool" where
+  "balance_fs_scheduled_forking_assumption p gamma ck c proof \<longleftrightarrow>
+    (balance_fs_verify p gamma ck c proof \<longrightarrow>
+      (\<exists>es1 zs1 es2 zs2 i.
+        balance_scheduled_verify p gamma ck c (balance_as proof) es1 zs1 \<and>
+        balance_scheduled_verify p gamma ck c (balance_as proof) es2 zs2 \<and>
+        forked_binary_challenge_schedules balance_fs_rounds es1 es2 i))"
+
+definition range_fs_scheduled_forking_assumption ::
+  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> range_proof \<Rightarrow> bool" where
+  "range_fs_scheduled_forking_assumption p gamma k ck c proof \<longleftrightarrow>
+    (range_fs_verify p gamma k ck c proof \<longrightarrow>
+      (\<exists>es1 z_amounts1 z_pairss1 es2 z_amounts2 z_pairss2 i.
+        range_scheduled_verify p gamma k ck c
+          (range_bits proof) (range_comps proof)
+          (range_amount_as proof) (range_pair_ass proof)
+          es1 z_amounts1 z_pairss1 \<and>
+        range_scheduled_verify p gamma k ck c
+          (range_bits proof) (range_comps proof)
+          (range_amount_as proof) (range_pair_ass proof)
+          es2 z_amounts2 z_pairss2 \<and>
+        forked_binary_challenge_schedules range_fs_rounds es1 es2 i))"
+
+definition nullifier_fs_scheduled_forking_assumption ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> nullifier_proof \<Rightarrow> bool" where
+  "nullifier_fs_scheduled_forking_assumption p gamma ck nk c nf proof \<longleftrightarrow>
+    (nullifier_fs_verify p gamma ck nk c nf proof \<longrightarrow>
+      (\<exists>es1 zs1 es2 zs2 i.
+        nullifier_scheduled_verify p gamma ck nk c nf
+          (nullifier_a_commits proof) (nullifier_a_nullifiers proof) es1 zs1 \<and>
+        nullifier_scheduled_verify p gamma ck nk c nf
+          (nullifier_a_commits proof) (nullifier_a_nullifiers proof) es2 zs2 \<and>
+        forked_binary_challenge_schedules nullifier_fs_rounds es1 es2 i))"
+
+lemma balance_fs_bounded_opening_if_scheduled_forking:
+  assumes fork_model: "balance_fs_scheduled_forking_assumption p gamma ck c proof"
+      and verify: "balance_fs_verify p gamma ck c proof"
+      and c_valid: "valid_commitment p c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+  obtains es1 zs1 es2 zs2 i r where
+    "balance_scheduled_verify p gamma ck c (balance_as proof) es1 zs1"
+    "balance_scheduled_verify p gamma ck c (balance_as proof) es2 zs2"
+    "forked_binary_challenge_schedules balance_fs_rounds es1 es2 i"
+    "balance_scheduled_fork_extract es1 zs1 es2 zs2 i = Some r"
+    "rand_commit p ck r = c"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + 4 * cp_beta p)"
+proof -
+  obtain es1 zs1 es2 zs2 i where forked:
+    "balance_scheduled_verify p gamma ck c (balance_as proof) es1 zs1"
+    "balance_scheduled_verify p gamma ck c (balance_as proof) es2 zs2"
+    "forked_binary_challenge_schedules balance_fs_rounds es1 es2 i"
+    using fork_model verify
+    unfolding balance_fs_scheduled_forking_assumption_def
+    by blast
+  obtain r where extracted:
+    "balance_scheduled_fork_extract es1 zs1 es2 zs2 i = Some r"
+    "rand_commit p ck r = c"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + 4 * cp_beta p)"
+    using balance_scheduled_fork_extract_algebraic_opening[
+      OF forked(1) forked(2) forked(3) c_valid c_canonical]
+    by blast
+  show ?thesis
+    using that forked extracted by blast
+qed
+
+lemma range_fs_amount_residual_opening_if_scheduled_forking:
+  assumes fork_model: "range_fs_scheduled_forking_assumption p gamma k ck c proof"
+      and verify: "range_fs_verify p gamma k ck c proof"
+      and c_valid:
+        "valid_commitment p (range_amount_commitment p ck c (range_bits proof))"
+      and c_canonical:
+        "vec_mod (range_amount_commitment p ck c (range_bits proof)) (cp_q p) =
+         range_amount_commitment p ck c (range_bits proof)"
+  obtains es1 z_amounts1 z_pairss1 es2 z_amounts2 z_pairss2 i r where
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es1 z_amounts1 z_pairss1"
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es2 z_amounts2 z_pairss2"
+    "forked_binary_challenge_schedules range_fs_rounds es1 es2 i"
+    "range_scheduled_fork_extract_amount es1 z_amounts1 es2 z_amounts2 i =
+       Some r"
+    "rand_commit p ck r = range_amount_commitment p ck c (range_bits proof)"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + range_amount_witness_bound p k)"
+proof -
+  obtain es1 z_amounts1 z_pairss1 es2 z_amounts2 z_pairss2 i where forked:
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es1 z_amounts1 z_pairss1"
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es2 z_amounts2 z_pairss2"
+    "forked_binary_challenge_schedules range_fs_rounds es1 es2 i"
+    using fork_model verify
+    unfolding range_fs_scheduled_forking_assumption_def
+    by blast
+  obtain r where extracted:
+    "range_scheduled_fork_extract_amount es1 z_amounts1 es2 z_amounts2 i =
+       Some r"
+    "rand_commit p ck r = range_amount_commitment p ck c (range_bits proof)"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + range_amount_witness_bound p k)"
+    using range_scheduled_fork_extract_amount_algebraic_opening[
+      OF forked(1) forked(2) forked(3) c_valid c_canonical]
+    by blast
+  show ?thesis
+    using that forked extracted by blast
+qed
+
+lemma range_fs_pair_residual_opening_if_scheduled_forking:
+  assumes fork_model: "range_fs_scheduled_forking_assumption p gamma k ck c proof"
+      and verify: "range_fs_verify p gamma k ck c proof"
+      and j_lt: "j < k"
+      and c_valid:
+        "valid_commitment p
+          ((range_pair_commitments p ck (range_bits proof) (range_comps proof)) ! j)"
+      and c_canonical:
+        "vec_mod
+          ((range_pair_commitments p ck (range_bits proof) (range_comps proof)) ! j)
+          (cp_q p) =
+         (range_pair_commitments p ck (range_bits proof) (range_comps proof)) ! j"
+  obtains es1 z_amounts1 z_pairss1 es2 z_amounts2 z_pairss2 i r where
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es1 z_amounts1 z_pairss1"
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es2 z_amounts2 z_pairss2"
+    "forked_binary_challenge_schedules range_fs_rounds es1 es2 i"
+    "range_scheduled_fork_extract_pair es1 z_pairss1 es2 z_pairss2 i j =
+       Some r"
+    "rand_commit p ck r =
+      (range_pair_commitments p ck (range_bits proof) (range_comps proof)) ! j"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + range_pair_witness_bound p)"
+proof -
+  obtain es1 z_amounts1 z_pairss1 es2 z_amounts2 z_pairss2 i where forked:
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es1 z_amounts1 z_pairss1"
+    "range_scheduled_verify p gamma k ck c
+      (range_bits proof) (range_comps proof)
+      (range_amount_as proof) (range_pair_ass proof)
+      es2 z_amounts2 z_pairss2"
+    "forked_binary_challenge_schedules range_fs_rounds es1 es2 i"
+    using fork_model verify
+    unfolding range_fs_scheduled_forking_assumption_def
+    by blast
+  obtain r where extracted:
+    "range_scheduled_fork_extract_pair es1 z_pairss1 es2 z_pairss2 i j =
+       Some r"
+    "rand_commit p ck r =
+      (range_pair_commitments p ck (range_bits proof) (range_comps proof)) ! j"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + range_pair_witness_bound p)"
+    using range_scheduled_fork_extract_pair_algebraic_opening[
+      OF forked(1) forked(2) forked(3) j_lt c_valid c_canonical]
+    by blast
+  show ?thesis
+    using that forked extracted by blast
+qed
+
+lemma nullifier_fs_opening_if_scheduled_forking:
+  assumes fork_model:
+        "nullifier_fs_scheduled_forking_assumption p gamma ck nk c nf proof"
+      and verify: "nullifier_fs_verify p gamma ck nk c nf proof"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and nf_canonical: "vec_mod nf (cp_q p) = nf"
+  obtains es1 zs1 es2 zs2 i op where
+    "nullifier_scheduled_verify p gamma ck nk c nf
+      (nullifier_a_commits proof) (nullifier_a_nullifiers proof) es1 zs1"
+    "nullifier_scheduled_verify p gamma ck nk c nf
+      (nullifier_a_commits proof) (nullifier_a_nullifiers proof) es2 zs2"
+    "forked_binary_challenge_schedules nullifier_fs_rounds es1 es2 i"
+    "nullifier_scheduled_fork_extract es1 zs1 es2 zs2 i = Some op"
+    "commit ck op (cp_q p) = c"
+    "nullifier p nk op = nf"
+    "valid_vec (open_msg op) (cp_n1 p)"
+    "valid_vec (open_rand op) (cp_n2 p)"
+    "all_bounded (open_msg op) (2 * gamma + cp_beta p)"
+    "all_bounded (open_rand op) (2 * gamma + cp_beta p)"
+proof -
+  obtain es1 zs1 es2 zs2 i where forked:
+    "nullifier_scheduled_verify p gamma ck nk c nf
+      (nullifier_a_commits proof) (nullifier_a_nullifiers proof) es1 zs1"
+    "nullifier_scheduled_verify p gamma ck nk c nf
+      (nullifier_a_commits proof) (nullifier_a_nullifiers proof) es2 zs2"
+    "forked_binary_challenge_schedules nullifier_fs_rounds es1 es2 i"
+    using fork_model verify
+    unfolding nullifier_fs_scheduled_forking_assumption_def
+    by blast
+  obtain op where extracted:
+    "nullifier_scheduled_fork_extract es1 zs1 es2 zs2 i = Some op"
+    "commit ck op (cp_q p) = c"
+    "nullifier p nk op = nf"
+    "valid_vec (open_msg op) (cp_n1 p)"
+    "valid_vec (open_rand op) (cp_n2 p)"
+    "all_bounded (open_msg op) (2 * gamma + cp_beta p)"
+    "all_bounded (open_rand op) (2 * gamma + cp_beta p)"
+    using nullifier_scheduled_fork_extract_algebraic_opening[
+      OF forked(1) forked(2) forked(3) c_canonical nf_canonical]
+    by blast
+  show ?thesis
+    using that forked extracted by blast
+qed
 
 type_synonym balance_fs_simulator =
   "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> balance_proof"

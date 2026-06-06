@@ -807,6 +807,12 @@ definition balance_sigma_extract ::
      else if e1 = 0 \<and> e2 = 1 then Some (vec_sub z2 z1)
      else None)"
 
+definition balance_scheduled_fork_extract ::
+  "int list \<Rightarrow> int_vec list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow> nat \<Rightarrow>
+   int_vec option" where
+  "balance_scheduled_fork_extract es1 zs1 es2 zs2 i =
+    balance_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i)"
+
 definition balance_sigma_sim_commit ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> int_vec \<Rightarrow> commitment" where
   "balance_sigma_sim_commit p ck c e z =
@@ -1078,7 +1084,7 @@ lemma balance_scheduled_fork_extract_algebraic_opening:
       and c_valid: "valid_commitment p c"
       and c_canonical: "vec_mod c (cp_q p) = c"
   obtains r where
-    "balance_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) = Some r"
+    "balance_scheduled_fork_extract es1 zs1 es2 zs2 i = Some r"
     "rand_commit p ck r = c"
     "valid_vec r (cp_n2 p)"
     "all_bounded r (2 * gamma + 4 * cp_beta p)"
@@ -1105,6 +1111,8 @@ proof -
     "balance_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) = Some r"
     using balance_sigma_extract_some_if_distinct_binary[OF e1_ok e2_ok distinct]
     by blast
+  have fork_ext: "balance_scheduled_fork_extract es1 zs1 es2 zs2 i = Some r"
+    using ext unfolding balance_scheduled_fork_extract_def by simp
   have open_eq: "rand_commit p ck r = c"
     using balance_sigma_extract_algebraic_opening[
       OF t1 t2 c_valid c_canonical ext] .
@@ -1113,7 +1121,7 @@ proof -
     using balance_sigma_extract_distinct_binary_bound[
       OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
   show ?thesis
-    using that ext open_eq bounded by blast
+    using that fork_ext open_eq bounded by blast
 qed
 
 lemma amount_of_opening_eq_hd:

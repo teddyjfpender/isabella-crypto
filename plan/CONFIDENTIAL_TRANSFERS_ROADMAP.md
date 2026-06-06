@@ -73,12 +73,16 @@ benchmarks are independently checked.
   later SIS reductions.
 - `Repeated_FS.thy` now defines valid and forked binary challenge schedules.
   `Confidential_Balance.thy`, `Confidential_Range.thy`, and
-  `Confidential_Transaction.thy` prove scheduled-fork extraction lemmas for
-  balance, range amount, range bit-pair, and nullifier rounds. These lemmas
-  show that two accepting scheduled transcripts with the same announcements
-  and a forked binary challenge round yield bounded algebraic openings. They
-  deliberately do not prove the ROM/forking lemma that obtains such forks from
-  the deterministic SHA3 Fiat-Shamir verifier.
+  `Confidential_Transaction.thy` define named scheduled-fork extractors and
+  prove extraction lemmas for balance, range amount, range bit-pair, and
+  nullifier rounds. These lemmas show that two accepting scheduled transcripts
+  with the same announcements and a forked binary challenge round yield
+  bounded algebraic openings. `Confidential_Transaction.thy` now also states
+  narrower scheduled-forking assumptions for the Fiat-Shamir verifier and
+  proves that those assumptions imply concrete extractor outputs for accepted
+  balance, range residual, and nullifier proofs. They deliberately do not prove
+  the ROM/forking lemma that obtains such forks from the deterministic SHA3
+  Fiat-Shamir verifier.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
@@ -155,9 +159,9 @@ The formalization still needs these before production:
    security model that connects the SHA3-256 transcript instantiation to the
    Fiat-Shamir assumptions used by the proof system.
 2. Connect the deterministic SHA3 Fiat-Shamir verifier to the scheduled-fork
-   extraction model with an explicit ROM/forking assumption or theorem, then
-   replace extractor-correctness assumptions with concrete extractors and
-   soundness proofs for balance, range, and nullifier proof objects.
+   extraction model with a ROM/forking theorem, then replace the remaining
+   extractor-correctness assumptions with full proof-object soundness for
+   balance, range, and nullifier proofs.
 3. Instantiate simulator assumptions with concrete simulators, rejection
    sampling/distribution bounds, and Fiat-Shamir-with-aborts analysis.
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
