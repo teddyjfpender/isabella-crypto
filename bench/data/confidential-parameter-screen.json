@@ -1,6 +1,30 @@
 {
   "tool": "confidential_parameter_screen",
   "external_lattice_estimator_available": false,
+  "external_lattice_estimator_probe": {
+    "available": false,
+    "selected_module": null,
+    "attempted_modules": [
+      {
+        "module": "estimator",
+        "available": false,
+        "error": "ModuleNotFoundError",
+        "message": "No module named 'estimator'"
+      },
+      {
+        "module": "lattice_estimator",
+        "available": false,
+        "error": "ModuleNotFoundError",
+        "message": "No module named 'lattice_estimator'"
+      },
+      {
+        "module": "lwe_estimator",
+        "available": false,
+        "error": "ModuleNotFoundError",
+        "message": "No module named 'lwe_estimator'"
+      }
+    ]
+  },
   "warning": "This JSON is a deterministic parameter screening artifact. It is not a production security estimate and does not replace lattice-estimator, LaZer parameter generation, or implementation benchmarks.",
   "launch_readiness": {
     "ready": false,

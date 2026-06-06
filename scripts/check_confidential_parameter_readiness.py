@@ -44,11 +44,118 @@ def require_list(value: Any, label: str) -> list[Any]:
     return value
 
 
+def require_string(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        fail(f"{label} must be a non-empty string")
+    return value
+
+
+def require_positive_number(value: Any, label: str) -> int | float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+        fail(f"{label} must be a positive number")
+    return value
+
+
 def candidate_name(candidate: dict[str, Any]) -> str:
     name = candidate.get("name")
     if not isinstance(name, str) or not name:
         fail("candidate.name must be a non-empty string")
     return name
+
+
+def validate_estimator_probe(report: dict[str, Any], external_estimator_available: bool) -> None:
+    probe = require_object(report.get("external_lattice_estimator_probe"), "external_lattice_estimator_probe")
+    if probe.get("available") != external_estimator_available:
+        fail("external_lattice_estimator_probe.available disagrees with external_lattice_estimator_available")
+    selected = probe.get("selected_module")
+    if external_estimator_available:
+        require_string(selected, "external_lattice_estimator_probe.selected_module")
+    elif selected is not None:
+        fail("external_lattice_estimator_probe.selected_module must be null when unavailable")
+
+    attempts = require_list(
+        probe.get("attempted_modules"),
+        "external_lattice_estimator_probe.attempted_modules",
+    )
+    if not attempts:
+        fail("external_lattice_estimator_probe.attempted_modules must not be empty")
+
+    saw_available = False
+    for index, raw_attempt in enumerate(attempts):
+        attempt = require_object(raw_attempt, f"external_lattice_estimator_probe.attempted_modules[{index}]")
+        module = require_string(attempt.get("module"), f"estimator attempt {index}.module")
+        available = attempt.get("available")
+        if not isinstance(available, bool):
+            fail(f"estimator attempt {module}.available must be a boolean")
+        if available:
+            saw_available = True
+            if selected != module:
+                fail(f"available estimator attempt {module} must match selected_module")
+            path = attempt.get("path")
+            if path is not None and not isinstance(path, str):
+                fail(f"estimator attempt {module}.path must be a string or null")
+        else:
+            require_string(attempt.get("error"), f"estimator attempt {module}.error")
+            message = attempt.get("message")
+            if not isinstance(message, str):
+                fail(f"estimator attempt {module}.message must be a string")
+
+    if external_estimator_available != saw_available:
+        fail("external_lattice_estimator_probe availability is inconsistent with attempts")
+
+
+def validate_command(value: Any, label: str) -> None:
+    if isinstance(value, str):
+        if not value:
+            fail(f"{label} must not be empty")
+        return
+    if isinstance(value, list) and value and all(isinstance(part, str) and part for part in value):
+        return
+    fail(f"{label} must be a non-empty string or non-empty string list")
+
+
+def validate_external_estimator_report(report: dict[str, Any], candidate: str) -> None:
+    if require_string(report.get("candidate"), f"{candidate}.external_lattice_estimator_report.candidate") != candidate:
+        fail(f"{candidate}.external_lattice_estimator_report.candidate does not match candidate name")
+    require_string(report.get("tool"), f"{candidate}.external_lattice_estimator_report.tool")
+    require_string(report.get("source"), f"{candidate}.external_lattice_estimator_report.source")
+    require_string(report.get("generated_at"), f"{candidate}.external_lattice_estimator_report.generated_at")
+    validate_command(report.get("command"), f"{candidate}.external_lattice_estimator_report.command")
+    require_positive_number(
+        report.get("security_level_bits"),
+        f"{candidate}.external_lattice_estimator_report.security_level_bits",
+    )
+    require_object(
+        report.get("parameters"),
+        f"{candidate}.external_lattice_estimator_report.parameters",
+    )
+    assumptions = require_list(
+        report.get("assumptions"),
+        f"{candidate}.external_lattice_estimator_report.assumptions",
+    )
+    if not assumptions or not all(isinstance(assumption, str) and assumption for assumption in assumptions):
+        fail(f"{candidate}.external_lattice_estimator_report.assumptions must contain non-empty strings")
+
+
+def validate_lazer_parameter_report(report: dict[str, Any], candidate: str) -> None:
+    if require_string(report.get("candidate"), f"{candidate}.lazer_parameter_generation_report.candidate") != candidate:
+        fail(f"{candidate}.lazer_parameter_generation_report.candidate does not match candidate name")
+    require_string(report.get("tool"), f"{candidate}.lazer_parameter_generation_report.tool")
+    require_string(report.get("source"), f"{candidate}.lazer_parameter_generation_report.source")
+    require_string(report.get("generated_at"), f"{candidate}.lazer_parameter_generation_report.generated_at")
+    validate_command(report.get("command"), f"{candidate}.lazer_parameter_generation_report.command")
+    require_object(
+        report.get("parameter_set"),
+        f"{candidate}.lazer_parameter_generation_report.parameter_set",
+    )
+    require_object(
+        report.get("proof_size_estimate"),
+        f"{candidate}.lazer_parameter_generation_report.proof_size_estimate",
+    )
+    require_positive_number(
+        report.get("security_level_bits"),
+        f"{candidate}.lazer_parameter_generation_report.security_level_bits",
+    )
 
 
 def validate_candidate(candidate: dict[str, Any], external_estimator_available: bool) -> bool:
@@ -68,14 +175,28 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
     if not isinstance(warnings, list):
         fail(f"{name}.formal_proof_margins.warnings must be a list when present")
 
+    estimator_report = candidate.get("external_lattice_estimator_report")
+    if estimator_report is not None:
+        validate_external_estimator_report(
+            require_object(estimator_report, f"{name}.external_lattice_estimator_report"),
+            name,
+        )
+
+    lazer_report = candidate.get("lazer_parameter_generation_report")
+    if lazer_report is not None:
+        validate_lazer_parameter_report(
+            require_object(lazer_report, f"{name}.lazer_parameter_generation_report"),
+            name,
+        )
+
     if ready:
         if candidate.get("screening_status") != "production_candidate":
             fail(f"{name} is ready without screening_status=production_candidate")
         if not external_estimator_available:
             fail(f"{name} is ready while external_lattice_estimator_available=false")
-        if "external_lattice_estimator_report" not in candidate:
+        if estimator_report is None:
             fail(f"{name} is ready without external_lattice_estimator_report")
-        if "lazer_parameter_generation_report" not in candidate:
+        if lazer_report is None:
             fail(f"{name} is ready without lazer_parameter_generation_report")
         if not margins.get("applicable", False):
             fail(f"{name} is ready without applicable formal proof margins")
@@ -114,6 +235,7 @@ def main() -> None:
     external_estimator_available = report.get("external_lattice_estimator_available")
     if not isinstance(external_estimator_available, bool):
         fail("external_lattice_estimator_available must be a boolean")
+    validate_estimator_probe(report, external_estimator_available)
 
     launch = require_object(report.get("launch_readiness"), "launch_readiness")
     candidates = require_list(report.get("candidates"), "candidates")

@@ -166,6 +166,20 @@ Repository-local screening is in
 python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
 ```
 
+External estimator and LaZer parameter evidence must be attached as structured
+JSON report collections, keyed by candidate:
+
+```bash
+python3 scripts/confidential_parameter_screen.py \
+  --external-estimator-report path/to/estimator-reports.json \
+  --lazer-parameter-report path/to/lazer-parameter-reports.json \
+  --out bench/data/confidential-parameter-screen.json
+```
+
+`scripts/check_confidential_parameter_readiness.py` now validates the estimator
+probe, external-estimator report fields, and LaZer parameter-generation report
+fields before any candidate can be marked production-ready.
+
 Selected baseline candidates:
 
 | Candidate | Architecture | q | n1 | n2 | m | beta | gamma | range bits | FS bits |
@@ -173,9 +187,10 @@ Selected baseline candidates:
 | `ct_sis_note_mvp_v0` | SIS note commitment MVP | 8380417 | 1 | 1024 | 1024 | 65536 | 16777216 | 64 | 128 |
 | `rlwe_ahe_transfer_research_v0` | RLWE/AHE research layer | 8380417 | 1 | 2048 | 2048 | 65536 | 16777216 | 64 | 128 |
 
-The local screen is not a production security estimate. On this machine the
-Python `estimator` module was not installed, so the external estimator gate is
-still open.
+The local screen is not a production security estimate. The generated artifact
+now records the exact estimator import probe. On this machine the Python
+`estimator`, `lattice_estimator`, and `lwe_estimator` modules were not
+installed, so the external estimator gate is still open.
 
 ## Validation Plan
 

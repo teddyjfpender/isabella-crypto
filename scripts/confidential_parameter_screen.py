@@ -10,8 +10,10 @@ estimator module is available in the local Python environment.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import math
+from importlib import metadata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -195,17 +197,86 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
     return blockers
 
 
-def external_estimator_available() -> bool:
+def module_version(distribution: str) -> str | None:
     try:
-        __import__("estimator")
-    except Exception:
-        return False
-    return True
+        return metadata.version(distribution)
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def external_estimator_probe() -> dict[str, Any]:
+    attempted = []
+    for module_name in ["estimator", "lattice_estimator", "lwe_estimator"]:
+        attempt: dict[str, Any] = {"module": module_name}
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:  # noqa: BLE001 - capture exact local import failure as evidence.
+            attempt["available"] = False
+            attempt["error"] = type(exc).__name__
+            attempt["message"] = str(exc)
+            attempted.append(attempt)
+            continue
+
+        attempt["available"] = True
+        attempt["path"] = getattr(module, "__file__", None)
+        attempt["version"] = (
+            getattr(module, "__version__", None)
+            or module_version(module_name)
+            or module_version("lattice-estimator")
+        )
+        attempted.append(attempt)
+        return {
+            "available": True,
+            "selected_module": module_name,
+            "attempted_modules": attempted,
+        }
+
+    return {
+        "available": False,
+        "selected_module": None,
+        "attempted_modules": attempted,
+    }
+
+
+def load_report_collection(path: str | None, label: str) -> dict[str, dict[str, Any]]:
+    if path is None:
+        return {}
+    report_path = Path(path)
+    try:
+        loaded = json.loads(report_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise SystemExit(f"{label} report file missing: {report_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{label} report file is not valid JSON: {exc}") from exc
+
+    reports = loaded.get("reports") if isinstance(loaded, dict) else None
+    if not isinstance(reports, list):
+        raise SystemExit(f"{label} report file must contain a reports list")
+
+    by_candidate: dict[str, dict[str, Any]] = {}
+    for index, report in enumerate(reports):
+        if not isinstance(report, dict):
+            raise SystemExit(f"{label} report at index {index} must be an object")
+        candidate = report.get("candidate")
+        if not isinstance(candidate, str) or not candidate:
+            raise SystemExit(f"{label} report at index {index} must name a candidate")
+        if candidate in by_candidate:
+            raise SystemExit(f"{label} report has duplicate candidate entry: {candidate}")
+        by_candidate[candidate] = report
+    return by_candidate
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="bench/data/confidential-parameter-screen.json")
+    parser.add_argument(
+        "--external-estimator-report",
+        help="optional JSON report collection containing production lattice-estimator evidence",
+    )
+    parser.add_argument(
+        "--lazer-parameter-report",
+        help="optional JSON report collection containing LaZer-style parameter-generation evidence",
+    )
     args = parser.parse_args()
 
     candidates = [
@@ -243,10 +314,18 @@ def main() -> None:
         ),
     ]
 
-    estimator_available = external_estimator_available()
+    estimator_probe = external_estimator_probe()
+    estimator_available = bool(estimator_probe["available"])
+    estimator_reports = load_report_collection(args.external_estimator_report, "external estimator")
+    lazer_reports = load_report_collection(args.lazer_parameter_report, "LaZer parameter")
     screened_candidates = []
     for candidate in candidates:
         screened = screen(candidate)
+        if candidate.name in estimator_reports:
+            screened["external_lattice_estimator_report"] = estimator_reports[candidate.name]
+            screened["screening_status"] = "production_candidate"
+        if candidate.name in lazer_reports:
+            screened["lazer_parameter_generation_report"] = lazer_reports[candidate.name]
         blockers = production_blockers(screened, estimator_available)
         screened["production_readiness"] = {
             "ready": len(blockers) == 0,
@@ -263,6 +342,7 @@ def main() -> None:
     output = {
         "tool": "confidential_parameter_screen",
         "external_lattice_estimator_available": estimator_available,
+        "external_lattice_estimator_probe": estimator_probe,
         "warning": (
             "This JSON is a deterministic parameter screening artifact. It is not "
             "a production security estimate and does not replace lattice-estimator, "

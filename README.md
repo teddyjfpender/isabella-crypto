@@ -764,6 +764,9 @@ Current status and roadmap:
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.
+  `bench/data/confidential-parameter-screen.json` records the local estimator
+  import probe and remains blocked until structured external-estimator and
+  LaZer parameter-generation reports pass the readiness checker.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)
