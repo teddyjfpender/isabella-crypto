@@ -11,7 +11,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "tests" / "fixtures" / "confidential-runtime-surface.json"
+DEFAULT_MANIFEST = ROOT / "tests" / "fixtures" / "confidential-runtime-surface.json"
 COMMAND_PATTERN = re.compile(r"""["'](ct-[A-Za-z0-9-]+)["']""")
 
 
@@ -23,14 +23,21 @@ def read_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        fail(f"required file is missing: {path.relative_to(ROOT)}")
+        fail(f"required file is missing: {display_path(path)}")
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def read_json(path: Path) -> dict[str, Any]:
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        fail(f"runtime-surface manifest missing: {path.relative_to(ROOT)}")
+        fail(f"runtime-surface manifest missing: {display_path(path)}")
     except json.JSONDecodeError as exc:
         fail(f"runtime-surface manifest is not valid JSON: {exc}")
     if not isinstance(loaded, dict):
@@ -246,10 +253,19 @@ def check_runtime_integer_boundary(
         boundary.get("requiredProductionEncoding"),
         "runtimeIntegerBoundary.requiredProductionEncoding",
     )
-    if production_encoding != "signed-64-bit-little-endian":
-        fail("runtimeIntegerBoundary.productionIntegerEncoding is stale")
     if required_encoding != "sign_u8 || len_i64_le || magnitude_le_minimal":
         fail("runtimeIntegerBoundary.requiredProductionEncoding must be the confidential bignum codec")
+    if status == "blocked_by_transaction_i64_encoding":
+        if production_encoding != "signed-64-bit-little-endian":
+            fail(
+                "blocked runtimeIntegerBoundary.productionIntegerEncoding must be the "
+                "current signed-64 production codec"
+            )
+    elif production_encoding != required_encoding:
+        fail(
+            "bignum_ready runtimeIntegerBoundary.productionIntegerEncoding must be the "
+            "required confidential bignum codec"
+        )
 
     registry_path = path_from_manifest(
         boundary.get("domainRegistry"),
@@ -257,7 +273,26 @@ def check_runtime_integer_boundary(
     )
     registry = read_json(registry_path)
     namespaces = require_object(registry.get("namespaces"), "domain registry namespaces")
-    for namespace_name in ("merkle", "transaction"):
+    production_namespaces = require_string_list(
+        boundary.get("productionDomainNamespaces"),
+        "runtimeIntegerBoundary.productionDomainNamespaces",
+    )
+    preview_namespaces = require_string_list(
+        boundary.get("previewDomainNamespaces"),
+        "runtimeIntegerBoundary.previewDomainNamespaces",
+    )
+    if status == "blocked_by_transaction_i64_encoding" and production_namespaces != ["merkle", "transaction"]:
+        fail(
+            "blocked runtimeIntegerBoundary.productionDomainNamespaces must select the "
+            "current signed-64 merkle/transaction namespaces"
+        )
+    if status == "bignum_ready" and production_namespaces == ["merkle", "transaction"]:
+        fail(
+            "bignum_ready runtimeIntegerBoundary.productionDomainNamespaces must move "
+            "off the current signed-64 merkle/transaction namespaces"
+        )
+
+    for namespace_name in production_namespaces:
         namespace = require_object(namespaces.get(namespace_name), f"domain registry {namespace_name}")
         actual_encoding = require_string(
             namespace.get("integerEncoding"),
@@ -266,6 +301,17 @@ def check_runtime_integer_boundary(
         if actual_encoding != production_encoding:
             fail(
                 f"runtimeIntegerBoundary.productionIntegerEncoding disagrees with "
+                f"{namespace_name} registry encoding: {actual_encoding}"
+            )
+    for namespace_name in preview_namespaces:
+        namespace = require_object(namespaces.get(namespace_name), f"domain registry {namespace_name}")
+        actual_encoding = require_string(
+            namespace.get("integerEncoding"),
+            f"domain registry {namespace_name}.integerEncoding",
+        )
+        if actual_encoding != required_encoding:
+            fail(
+                f"runtimeIntegerBoundary.requiredProductionEncoding disagrees with "
                 f"{namespace_name} registry encoding: {actual_encoding}"
             )
 
@@ -293,6 +339,8 @@ def check_runtime_integer_boundary(
         "status": status,
         "production_integer_encoding": production_encoding,
         "required_production_encoding": required_encoding,
+        "production_domain_namespaces": production_namespaces,
+        "preview_domain_namespaces": preview_namespaces,
         "i64_transaction_snippets": len(i64_snippets),
         "bigint_preview_snippets": len(preview_snippets),
     }
@@ -333,9 +381,17 @@ def main() -> None:
         action="store_true",
         help="fail unless the runtime integer boundary is production bignum-ready",
     )
+    parser.add_argument(
+        "--manifest",
+        default=str(DEFAULT_MANIFEST),
+        help="runtime-surface manifest to validate",
+    )
     args = parser.parse_args()
 
-    manifest = read_json(MANIFEST)
+    manifest_path = Path(args.manifest)
+    if not manifest_path.is_absolute():
+        manifest_path = ROOT / manifest_path
+    manifest = read_json(manifest_path)
     if manifest.get("version") != 1:
         fail("runtime-surface manifest version must be 1")
 
@@ -354,7 +410,7 @@ def main() -> None:
     print(json.dumps({
         "gate": "confidential-runtime-surface",
         "status": "passed",
-        "manifest": str(MANIFEST.relative_to(ROOT)),
+        "manifest": display_path(manifest_path),
         "require_production": args.require_production,
         "summary": summary,
     }, indent=2))

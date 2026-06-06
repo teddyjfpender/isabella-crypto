@@ -270,6 +270,14 @@
     "productionIntegerEncoding": "signed-64-bit-little-endian",
     "requiredProductionEncoding": "sign_u8 || len_i64_le || magnitude_le_minimal",
     "domainRegistry": "tests/fixtures/confidential-domain-registry.json",
+    "productionDomainNamespaces": [
+      "merkle",
+      "transaction"
+    ],
+    "previewDomainNamespaces": [
+      "merkleBignum",
+      "transactionBignum"
+    ],
     "typescriptSdkFile": "isabella.ts/src/index.ts",
     "i64TransactionSnippets": [
       "function merkleLeafPreimage(commitment: IntVec)",
@@ -400,6 +408,7 @@
   "gateWiring": {
     "Makefile": [
       "scripts/check_confidential_runtime_surface.py",
+      "scripts/check_confidential_runtime_surface_regressions.py",
       "--require-production",
       "generate_confidential_bignum_transaction_vectors.mjs",
       "confidential-bignum-transaction"

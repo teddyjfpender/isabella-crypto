@@ -121,6 +121,10 @@ check-confidential-runtime-surface:
 	@echo "Checking confidential runtime surface manifest..."
 	@python3 scripts/check_confidential_runtime_surface.py
 
+check-confidential-runtime-surface-regressions:
+	@echo "Checking confidential runtime surface gate regressions..."
+	@python3 scripts/check_confidential_runtime_surface_regressions.py
+
 check-confidential-side-channel-review:
 	@echo "Checking confidential side-channel review manifest..."
 	@python3 scripts/check_confidential_side_channel_review.py
@@ -203,6 +207,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@node scripts/generate_confidential_transaction_vectors.mjs
 	@$(MAKE) check-confidential-domain-registry
 	@$(MAKE) check-confidential-runtime-surface
+	@$(MAKE) check-confidential-runtime-surface-regressions
 	@$(MAKE) check-confidential-side-channel-review
 	@$(MAKE) check-confidential-failure-semantics
 	@$(MAKE) check-confidential-launch-readiness
@@ -313,6 +318,7 @@ help:
 	@echo "  test-confidential-production Run production-facing confidential-transfer gates"
 	@echo "  check-confidential-domain-registry Check confidential domain/tag registry"
 	@echo "  check-confidential-runtime-surface Check confidential CLI/SDK surface manifest"
+	@echo "  check-confidential-runtime-surface-regressions Check runtime surface gate regressions"
 	@echo "  check-confidential-side-channel-review Check confidential side-channel review manifest"
 	@echo "  check-confidential-failure-semantics Check confidential failure semantics coverage"
 	@echo "  check-confidential-parameter-readiness Run soft confidential parameter honesty gate"
