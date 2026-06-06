@@ -157,6 +157,44 @@ def screen(candidate: Candidate) -> dict[str, Any]:
     }
 
 
+def production_blockers(screened: dict[str, Any], external_estimator: bool) -> list[str]:
+    blockers: list[str] = []
+
+    if screened.get("screening_status") != "production_candidate":
+        blockers.append("screening_status_is_not_production_candidate")
+
+    if not external_estimator:
+        blockers.append("external_lattice_estimator_unavailable")
+
+    if "external_lattice_estimator_report" not in screened:
+        blockers.append("external_lattice_estimator_report_missing")
+
+    if "lazer_parameter_generation_report" not in screened:
+        blockers.append("lazer_parameter_generation_report_missing")
+
+    margins = screened.get("formal_proof_margins", {})
+    if not margins.get("applicable", False):
+        blockers.append("formal_proof_margins_not_applicable")
+        for relation in margins.get("required_relations", []):
+            blockers.append(f"formal_relation_missing:{relation}")
+    else:
+        warnings = margins.get("warnings", [])
+        if warnings:
+            blockers.append(
+                "formal_proof_margin_modulus_failures:" + ",".join(str(warning) for warning in warnings)
+            )
+        checks = margins.get("modulus_checks", {})
+        failed_checks = [
+            name
+            for name, check in checks.items()
+            if not check.get("less_than_modulus", False)
+        ]
+        if failed_checks:
+            blockers.append("sis_bound_checks_failed:" + ",".join(failed_checks))
+
+    return blockers
+
+
 def external_estimator_available() -> bool:
     try:
         __import__("estimator")
@@ -205,15 +243,41 @@ def main() -> None:
         ),
     ]
 
+    estimator_available = external_estimator_available()
+    screened_candidates = []
+    for candidate in candidates:
+        screened = screen(candidate)
+        blockers = production_blockers(screened, estimator_available)
+        screened["production_readiness"] = {
+            "ready": len(blockers) == 0,
+            "blockers": blockers,
+        }
+        screened_candidates.append(screened)
+
+    ready_candidates = [
+        candidate["name"]
+        for candidate in screened_candidates
+        if candidate["production_readiness"]["ready"]
+    ]
+
     output = {
         "tool": "confidential_parameter_screen",
-        "external_lattice_estimator_available": external_estimator_available(),
+        "external_lattice_estimator_available": estimator_available,
         "warning": (
             "This JSON is a deterministic parameter screening artifact. It is not "
             "a production security estimate and does not replace lattice-estimator, "
             "LaZer parameter generation, or implementation benchmarks."
         ),
-        "candidates": [screen(candidate) for candidate in candidates],
+        "launch_readiness": {
+            "ready": len(ready_candidates) > 0,
+            "selected_production_candidate": ready_candidates[0] if len(ready_candidates) == 1 else None,
+            "ready_candidates": ready_candidates,
+            "status": "ready" if ready_candidates else "blocked",
+            "blockers": [] if ready_candidates else [
+                "no_candidate_has_external_estimator_lazer_report_and_passing_formal_margins"
+            ],
+        },
+        "candidates": screened_candidates,
     }
 
     out = Path(args.out)

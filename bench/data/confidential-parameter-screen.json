@@ -2,6 +2,15 @@
   "tool": "confidential_parameter_screen",
   "external_lattice_estimator_available": false,
   "warning": "This JSON is a deterministic parameter screening artifact. It is not a production security estimate and does not replace lattice-estimator, LaZer parameter generation, or implementation benchmarks.",
+  "launch_readiness": {
+    "ready": false,
+    "selected_production_candidate": null,
+    "ready_candidates": [],
+    "status": "blocked",
+    "blockers": [
+      "no_candidate_has_external_estimator_lazer_report_and_passing_formal_margins"
+    ]
+  },
   "candidates": [
     {
       "name": "ct_sis_note_mvp_v0",
@@ -115,7 +124,18 @@
           "sis_nullifier_opening_vs_honest"
         ]
       },
-      "screening_status": "screen_only"
+      "screening_status": "screen_only",
+      "production_readiness": {
+        "ready": false,
+        "blockers": [
+          "screening_status_is_not_production_candidate",
+          "external_lattice_estimator_unavailable",
+          "external_lattice_estimator_report_missing",
+          "lazer_parameter_generation_report_missing",
+          "formal_proof_margin_modulus_failures:balance_extracted_response,range_amount_extracted_response,range_pair_extracted_response,nullifier_extracted_opening,sis_balance_zero_opening_vs_honest,sis_range_amount_residual_vs_honest,sis_range_pair_residual_vs_honest,sis_nullifier_opening_vs_honest",
+          "sis_bound_checks_failed:balance_extracted_response,range_amount_extracted_response,range_pair_extracted_response,nullifier_extracted_opening,sis_balance_zero_opening_vs_honest,sis_range_amount_residual_vs_honest,sis_range_pair_residual_vs_honest,sis_nullifier_opening_vs_honest"
+        ]
+      }
     },
     {
       "name": "rlwe_ahe_transfer_research_v0",
@@ -145,7 +165,21 @@
           "NoiseBoundValid"
         ]
       },
-      "screening_status": "screen_only"
+      "screening_status": "screen_only",
+      "production_readiness": {
+        "ready": false,
+        "blockers": [
+          "screening_status_is_not_production_candidate",
+          "external_lattice_estimator_unavailable",
+          "external_lattice_estimator_report_missing",
+          "lazer_parameter_generation_report_missing",
+          "formal_proof_margins_not_applicable",
+          "formal_relation_missing:EncryptValid",
+          "formal_relation_missing:SamePlaintext",
+          "formal_relation_missing:TransferValid",
+          "formal_relation_missing:NoiseBoundValid"
+        ]
+      }
     }
   ]
 }

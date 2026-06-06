@@ -1,6 +1,6 @@
 {
   "benchmark": "confidential-balance-realistic",
-  "timestamp": "2026-06-06T00:16:54.541Z",
+  "timestamp": "2026-06-06T00:21:40.512Z",
   "warning": "Deterministic structured-key runtime benchmark for ct_sis_note_mvp_v0 dimensions. This is not a lattice security estimate or LaZer parameter report.",
   "environment": {
     "platform": "darwin",
@@ -38,17 +38,17 @@
   },
   "cases": {
     "balance_fs_prove_realistic": {
-      "min_ms": 766.685667,
-      "median_ms": 766.685667,
-      "max_ms": 766.685667,
-      "mean_ms": 766.685667,
+      "min_ms": 3142.611541,
+      "median_ms": 3142.611541,
+      "max_ms": 3142.611541,
+      "mean_ms": 3142.611541,
       "stdev_ms": 0
     },
     "balance_fs_verify_realistic": {
-      "min_ms": 745.265667,
-      "median_ms": 745.265667,
-      "max_ms": 745.265667,
-      "mean_ms": 745.265667,
+      "min_ms": 3176.271709,
+      "median_ms": 3176.271709,
+      "max_ms": 3176.271709,
+      "mean_ms": 3176.271709,
       "stdev_ms": 0
     }
   }
