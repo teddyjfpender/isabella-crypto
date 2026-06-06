@@ -88,7 +88,7 @@ showHelp = do
     putStrLn "  ct-nullifier-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify repeated-round deterministic nullifier proof"
     putStrLn "  ct-member-prove M N2 Q BETA LEDGER C   Build explicit ledger membership proof"
     putStrLn "  ct-member-verify M N2 Q BETA LEDGER C  Verify explicit ledger membership proof"
-    putStrLn "  ct-ledger-step-verify ... Verify semantic ledger-step validity from verified input notes"
+    putStrLn "  ct-ledger-step-verify-scaffold ... Verify scaffold ledger-step validity from verified input notes"
     putStrLn "  ct-prove-scaffold ...  Build scaffold confidential-transaction proof over the algebraic ledger hash"
     putStrLn "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership"
     putStrLn "  ct-verify-scaffold ... Verify scaffold confidential-transaction proof over the algebraic ledger hash"

@@ -729,7 +729,7 @@ let ledger_apply_notes_merkle notes proof c_out1 c_out2 =
 let ledger_apply_spent spent nf1 nf2 =
   nf1 :: nf2 :: spent
 
-let ledger_step_valid p gamma k ck nk notes spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
+let ledger_step_valid_scaffold p gamma k ck nk notes spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
   let pre_root = ledger_root p (commitment_ledger notes) in
   let updated_notes = ledger_apply_notes notes proof c_out1 c_out2 in
   let updated_spent = ledger_apply_spent spent nf1 nf2 in
@@ -738,7 +738,6 @@ let ledger_step_valid p gamma k ck nk notes spent c_in1 c_in2 c_out1 c_out2 nf1 
   transaction_fs_verify p gamma k ck nk pre_root spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof &&
   ledger_valid p gamma k ck post_root updated_notes updated_spent
 
-let ledger_step_valid_scaffold = ledger_step_valid
 let semantic_step_valid_scaffold = ledger_step_valid_scaffold
 
 let ledger_step_valid_merkle p gamma k ck nk notes spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
@@ -750,5 +749,6 @@ let ledger_step_valid_merkle p gamma k ck nk notes spent c_in1 c_in2 c_out1 c_ou
   transaction_fs_verify_merkle p gamma k ck nk pre_root spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof &&
   ledger_valid_merkle p gamma k ck post_root updated_notes updated_spent
 
+let ledger_step_valid = ledger_step_valid_merkle
 let semantic_step_valid_merkle = ledger_step_valid_merkle
 let semantic_step_valid = ledger_step_valid_merkle

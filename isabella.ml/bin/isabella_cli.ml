@@ -1830,7 +1830,7 @@ let cmd_ct_verify_bench_with_usage command prepare args =
 let cmd_ct_verify_bench_scaffold args =
   cmd_ct_verify_bench_with_usage "ct-verify-bench-scaffold" prepare_ct_verify_scaffold args
 
-let cmd_ct_ledger_step_verify args =
+let cmd_ct_ledger_step_verify_scaffold args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; note_commitments_str; note_bits_str; note_comps_str; note_amount_as_str; note_amount_zs_str; note_pair_as_str; note_pair_zs_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str; in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str; balance_as_str; balance_zs_str; out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str; out1_pair_as_str; out1_pair_zs_str; out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str; out2_pair_as_str; out2_pair_zs_str] ->
     (match
@@ -1892,7 +1892,7 @@ let cmd_ct_ledger_step_verify args =
               (Confidential_range.make_range_proof out2_bits out2_comps out2_amount_a out2_amount_z out2_pair_as out2_pair_zs)
           in
           let result =
-            Confidential_transaction.ledger_step_valid
+            Confidential_transaction.ledger_step_valid_scaffold
               params
               gamma
               k
@@ -1908,10 +1908,10 @@ let cmd_ct_ledger_step_verify args =
               nf2
               proof
           in
-          output_result "ledger_step_valid" (if result then "true" else "false")
+          output_result "ledger_step_valid_scaffold" (if result then "true" else "false")
         | _ -> output_error "Expected consistent verified-note inputs and membership proofs for both input commitments")
      | _ -> output_error "Expected params, keys, verified-note ledger fields, nullifiers, and transaction-proof fields")
-  | _ -> output_error "Usage: ct-ledger-step-verify M N2 Q BETA G K CK NK NOTE_COMMITMENTS NOTE_BITS NOTE_COMPS NOTE_AMOUNT_AS NOTE_AMOUNT_ZS NOTE_PAIR_AS NOTE_PAIR_ZS SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+  | _ -> output_error "Usage: ct-ledger-step-verify-scaffold M N2 Q BETA G K CK NK NOTE_COMMITMENTS NOTE_BITS NOTE_COMPS NOTE_AMOUNT_AS NOTE_AMOUNT_ZS NOTE_PAIR_AS NOTE_PAIR_ZS SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
 (** {1 Examples} *)
 
@@ -2114,7 +2114,7 @@ let show_help () =
   print_endline "  ct-nullifier-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify repeated-round deterministic nullifier proof";
   print_endline "  ct-member-prove M N2 Q BETA LEDGER C   Build explicit ledger membership proof";
   print_endline "  ct-member-verify M N2 Q BETA LEDGER C  Verify explicit ledger membership proof";
-  print_endline "  ct-ledger-step-verify ... Verify semantic ledger-step validity from verified input notes";
+  print_endline "  ct-ledger-step-verify-scaffold ... Verify scaffold ledger-step validity from verified input notes";
   print_endline "  ct-prove-scaffold ...  Build scaffold confidential-transaction proof over the algebraic ledger hash";
   print_endline "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify-scaffold ... Verify scaffold confidential-transaction proof over the algebraic ledger hash";
@@ -2213,7 +2213,7 @@ let run_command cmd args =
   | "ct-nullifier-verify" -> cmd_ct_nullifier_verify args
   | "ct-member-prove" -> cmd_ct_member_prove args
   | "ct-member-verify" -> cmd_ct_member_verify args
-  | "ct-ledger-step-verify" -> cmd_ct_ledger_step_verify args
+  | "ct-ledger-step-verify-scaffold" -> cmd_ct_ledger_step_verify_scaffold args
   | "ct-prove-scaffold" -> cmd_ct_prove_scaffold args
   | "ct-prove-merkle" -> cmd_ct_prove_merkle args
   | "ct-verify-scaffold" -> cmd_ct_verify_scaffold args

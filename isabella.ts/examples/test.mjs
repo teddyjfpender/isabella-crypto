@@ -953,6 +953,23 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
     assert.equal(typeof ConfidentialTransaction.ledgerStepValidScaffold, 'function');
     assert.equal(typeof ConfidentialTransaction.semanticStepValidScaffold, 'function');
     assert.equal(typeof ConfidentialTransaction.ledgerStepValidMerkle, 'function');
+
+    const merkleStep = ConfidentialTransaction.ledgerStepValidMerkle(
+      params,
+      gamma,
+      rangeK,
+      ck,
+      nk,
+      notes,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    );
     assert.equal(
       ConfidentialTransaction.semanticStepValid(
         params,
@@ -970,7 +987,10 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
         nf2,
         proof
       ),
-      ConfidentialTransaction.ledgerStepValidMerkle(
+      merkleStep
+    );
+    assert.equal(
+      ConfidentialTransaction.ledgerStepValid(
         params,
         gamma,
         rangeK,
@@ -985,8 +1005,10 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
         nf1,
         nf2,
         proof
-      )
+      ),
+      merkleStep
     );
+
     const scaffoldProof = ConfidentialTransaction.fsProve(
       params,
       gamma,
@@ -1017,6 +1039,22 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
       yOut2,
       yOut2Pairs
     );
+    const scaffoldStep = ConfidentialTransaction.ledgerStepValidScaffold(
+      params,
+      gamma,
+      rangeK,
+      ck,
+      nk,
+      notes,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      scaffoldProof
+    );
     assert.equal(
       ConfidentialTransaction.semanticStepValidScaffold(
         params,
@@ -1034,22 +1072,7 @@ describe('ConfidentialTransaction - Nullifiers, Membership, and Transfer Proofs'
         nf2,
         scaffoldProof
       ),
-      ConfidentialTransaction.ledgerStepValid(
-        params,
-        gamma,
-        rangeK,
-        ck,
-        nk,
-        notes,
-        spent,
-        cIn1,
-        cIn2,
-        cOut1,
-        cOut2,
-        nf1,
-        nf2,
-        scaffoldProof
-      )
+      scaffoldStep
     );
   });
 

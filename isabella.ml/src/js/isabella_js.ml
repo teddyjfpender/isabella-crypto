@@ -849,9 +849,9 @@ let () =
            (js_matrix_to_list spent)
          |> Js.bool
 
-       (** Semantic ledger-step validity from a concrete pre-state *)
-       method ctLedgerStepValid params gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
-         Confidential_transaction.ledger_step_valid
+       (** Scaffold ledger-step validity from a concrete pre-state *)
+       method ctLedgerStepValidScaffold params gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+         Confidential_transaction.ledger_step_valid_scaffold
            (cb_params_of_js params)
            (int_of_float (Js.to_float gamma))
            (int_of_float (Js.to_float k))

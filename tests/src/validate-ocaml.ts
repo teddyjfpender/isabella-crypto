@@ -902,7 +902,7 @@ assert.equal(
 logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
-assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'scaffold ledger-step compatibility export');
+assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'Merkle ledger-step export');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValidScaffold, 'function', 'explicit scaffold ledger-step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidScaffold, 'function', 'explicit scaffold semantic-step export');
 

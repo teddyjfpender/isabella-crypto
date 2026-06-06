@@ -79,9 +79,9 @@ benchmarks are independently checked.
   lemmas. OCaml, Haskell, and TypeScript expose matching Merkle transaction
   prover/verifier APIs; the SDK-equivalence harnesses now cover native Merkle
   transaction proving and verification for OCaml and Haskell, and TypeScript
-  has a focused test for root/path tampering. The stable semantic ledger-step
-  API now defaults to the Merkle-backed verifier, with algebraic scaffold
-  calls exposed only through explicit compatibility names.
+  has a focused test for root/path tampering. Stable semantic/ledger-step APIs
+  now default to the Merkle-backed verifier, with algebraic scaffold calls
+  exposed only through explicit scaffold names.
 - `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
   contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
   asset IDs, version contexts, wallet proof generation, and failure semantics.
@@ -109,9 +109,10 @@ benchmarks are independently checked.
   The envelope path intentionally rejects nonzero public fees until the balance
   relation is extended to account for fees.
 - OCaml and Haskell expose explicit `ct-prove-scaffold`,
-  `ct-verify-scaffold`, and `ct-verify-bench-scaffold` commands for the
-  algebraic ledger path. The ambiguous native aliases `ct-prove`, `ct-verify`,
-  and `ct-verify-bench` have been removed. `scripts/check_confidential_scaffold_quarantine.py`
+  `ct-verify-scaffold`, `ct-verify-bench-scaffold`, and
+  `ct-ledger-step-verify-scaffold` commands for the algebraic ledger path. The
+  ambiguous native aliases `ct-prove`, `ct-verify`, `ct-verify-bench`, and
+  `ct-ledger-step-verify` have been removed. `scripts/check_confidential_scaffold_quarantine.py`
   is wired into CI and `make test-confidential-production`; it rejects
   production-facing uses of those legacy names, verifies the native CLIs do not
   dispatch them, and checks the local TypeScript CLI helper has no ambiguous

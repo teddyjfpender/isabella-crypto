@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 LEGACY_COMMAND_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9_-])(ct-prove|ct-verify|ct-verify-bench)(?![A-Za-z0-9_-])"
+    r"(?<![A-Za-z0-9_-])(ct-prove|ct-verify|ct-verify-bench|ct-ledger-step-verify)(?![A-Za-z0-9_-])"
 )
 
 
@@ -80,6 +80,7 @@ def main() -> None:
     haskell_commands = ROOT / "isabella.hs" / "app" / "CLI" / "Commands.hs"
     haskell_main = ROOT / "isabella.hs" / "app" / "Main.hs"
     ts_cli = ROOT / "tests" / "src" / "isabella-cli.ts"
+    ts_sdk = ROOT / "isabella.ts" / "src" / "index.ts"
     makefile = ROOT / "Makefile"
     ci = ROOT / ".github" / "workflows" / "ci.yml"
 
@@ -87,9 +88,11 @@ def main() -> None:
         require_snippet(path, "ct-prove-scaffold")
         require_snippet(path, "ct-verify-scaffold")
         require_snippet(path, "ct-verify-bench-scaffold")
+        require_snippet(path, "ct-ledger-step-verify-scaffold")
         forbid_snippet(path, '"ct-prove"')
         forbid_snippet(path, '"ct-verify"')
         forbid_snippet(path, '"ct-verify-bench"')
+        forbid_snippet(path, '"ct-ledger-step-verify"')
 
     for path in (ocaml_cli, haskell_main):
         require_snippet(path, "algebraic ledger hash")
@@ -101,6 +104,9 @@ def main() -> None:
     require_snippet(ts_cli, "'ct-verify-scaffold'")
     forbid_snippet(ts_cli, "export const ctProve =")
     forbid_snippet(ts_cli, "export const ctVerify =")
+    require_snippet(ts_sdk, "export function ledgerStepValidScaffold")
+    require_snippet(ts_sdk, "export function ledgerStepValid")
+    forbid_snippet(ts_sdk, "ctLedgerStepValid(")
     require_snippet(makefile, "scripts/check_confidential_scaffold_quarantine.py")
     require_snippet(ci, "scripts/check_confidential_scaffold_quarantine.py")
 

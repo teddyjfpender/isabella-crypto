@@ -799,31 +799,6 @@ ledgerValidMerkle p gamma k ck root notes spent =
     (\note -> ConfidentialRange.rangeFsVerify p gamma k ck (note_commitment note) (note_range_proof note))
     notes
 
-ledgerStepValid ::
-  Commit.CommitParams ->
-  Int ->
-  Int ->
-  [[Int]] ->
-  [[Int]] ->
-  [VerifiedNote] ->
-  [[Int]] ->
-  [Int] ->
-  [Int] ->
-  [Int] ->
-  [Int] ->
-  [Int] ->
-  [Int] ->
-  TransactionProof ->
-  Bool
-ledgerStepValid p gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
-  let preRoot = ledgerRoot p (commitmentLedger notes)
-      updatedNotes = ledgerApplyNotes notes proof cOut1 cOut2
-      updatedSpent = ledgerApplySpent spent nf1 nf2
-      postRoot = ledgerRoot p (commitmentLedger updatedNotes)
-   in ledgerValid p gamma k ck preRoot notes spent &&
-      transactionFsVerify p gamma k ck nk preRoot spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof &&
-      ledgerValid p gamma k ck postRoot updatedNotes updatedSpent
-
 ledgerStepValidScaffold ::
   Commit.CommitParams ->
   Int ->
@@ -840,7 +815,14 @@ ledgerStepValidScaffold ::
   [Int] ->
   TransactionProof ->
   Bool
-ledgerStepValidScaffold = ledgerStepValid
+ledgerStepValidScaffold p gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+  let preRoot = ledgerRoot p (commitmentLedger notes)
+      updatedNotes = ledgerApplyNotes notes proof cOut1 cOut2
+      updatedSpent = ledgerApplySpent spent nf1 nf2
+      postRoot = ledgerRoot p (commitmentLedger updatedNotes)
+   in ledgerValid p gamma k ck preRoot notes spent &&
+      transactionFsVerify p gamma k ck nk preRoot spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof &&
+      ledgerValid p gamma k ck postRoot updatedNotes updatedSpent
 
 semanticStepValidScaffold ::
   Commit.CommitParams ->
@@ -884,6 +866,24 @@ ledgerStepValidMerkle p gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 
    in ledgerValidMerkle p gamma k ck preRoot notes spent &&
       transactionFsVerifyMerkle p gamma k ck nk preRoot spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof &&
       ledgerValidMerkle p gamma k ck postRoot updatedNotes updatedSpent
+
+ledgerStepValid ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  [VerifiedNote] ->
+  [[Int]] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  Bool
+ledgerStepValid = ledgerStepValidMerkle
 
 semanticStepValidMerkle ::
   Commit.CommitParams ->

@@ -37,6 +37,7 @@ data ConfidentialTransactionFixture = ConfidentialTransactionFixture
     , fixtureNf1 :: [Int]
     , fixtureNf2 :: [Int]
     , fixtureProof :: ConfidentialTransaction.TransactionProof
+    , fixtureMerkleProof :: ConfidentialTransaction.MerkleTransactionProof
     , fixtureNotes :: [ConfidentialTransaction.VerifiedNote]
     }
 
@@ -98,6 +99,11 @@ confidentialTransactionFixture =
             opIn1 opIn2 opOut1 opOut2
             out1Bits out1Comps out2Bits out2Comps
             yIn1 yIn2 yBalance yOut1 yOut1Pairs yOut2 yOut2Pairs
+        merkleProof <- ConfidentialTransaction.transactionFsProveMerkle
+            params gamma rangeK ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2
+            opIn1 opIn2 opOut1 opOut2
+            out1Bits out1Comps out2Bits out2Comps
+            yIn1 yIn2 yBalance yOut1 yOut1Pairs yOut2 yOut2Pairs
         pure ConfidentialTransactionFixture
             { fixtureParams = params
             , fixtureCk = ck
@@ -112,6 +118,7 @@ confidentialTransactionFixture =
             , fixtureNf1 = nf1
             , fixtureNf2 = nf2
             , fixtureProof = proof
+            , fixtureMerkleProof = merkleProof
             , fixtureNotes =
                 [ ConfidentialTransaction.makeVerifiedNote cIn1 in1Range
                 , ConfidentialTransaction.makeVerifiedNote cIn2 in2Range
@@ -502,7 +509,27 @@ tests =
                    updatedSpent
             Nothing -> False
 
-    , test "Confidential transaction ledger-step validity holds for verified-note pre-state" $
+    , test "Confidential transaction scaffold ledger-step validity holds for verified-note pre-state" $
+        case confidentialTransactionFixture of
+            Just fixture ->
+              ConfidentialTransaction.ledgerStepValidScaffold
+                (fixtureParams fixture)
+                (fixtureGamma fixture)
+                (fixtureRangeK fixture)
+                (fixtureCk fixture)
+                (fixtureNk fixture)
+                (fixtureNotes fixture)
+                (fixtureSpent fixture)
+                (fixtureCIn1 fixture)
+                (fixtureCIn2 fixture)
+                (fixtureCOut1 fixture)
+                (fixtureCOut2 fixture)
+                (fixtureNf1 fixture)
+                (fixtureNf2 fixture)
+                (fixtureProof fixture)
+            _ -> False
+
+    , test "Confidential transaction ledger-step validity defaults to Merkle verifier" $
         case confidentialTransactionFixture of
             Just fixture ->
               ConfidentialTransaction.ledgerStepValid
@@ -519,7 +546,37 @@ tests =
                 (fixtureCOut2 fixture)
                 (fixtureNf1 fixture)
                 (fixtureNf2 fixture)
-                (fixtureProof fixture)
+                (fixtureMerkleProof fixture) &&
+              ConfidentialTransaction.ledgerStepValid
+                (fixtureParams fixture)
+                (fixtureGamma fixture)
+                (fixtureRangeK fixture)
+                (fixtureCk fixture)
+                (fixtureNk fixture)
+                (fixtureNotes fixture)
+                (fixtureSpent fixture)
+                (fixtureCIn1 fixture)
+                (fixtureCIn2 fixture)
+                (fixtureCOut1 fixture)
+                (fixtureCOut2 fixture)
+                (fixtureNf1 fixture)
+                (fixtureNf2 fixture)
+                (fixtureMerkleProof fixture) ==
+              ConfidentialTransaction.ledgerStepValidMerkle
+                (fixtureParams fixture)
+                (fixtureGamma fixture)
+                (fixtureRangeK fixture)
+                (fixtureCk fixture)
+                (fixtureNk fixture)
+                (fixtureNotes fixture)
+                (fixtureSpent fixture)
+                (fixtureCIn1 fixture)
+                (fixtureCIn2 fixture)
+                (fixtureCOut1 fixture)
+                (fixtureCOut2 fixture)
+                (fixtureNf1 fixture)
+                (fixtureNf2 fixture)
+                (fixtureMerkleProof fixture)
             _ -> False
 
     , test "valid_vec true" $

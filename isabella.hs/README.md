@@ -36,8 +36,9 @@ Compatibility note:
   or explicit list fields
   `{ aCommits, aNullifiers, zMsgs, zRands, challenges = [...] }`.
 - Validation harnesses should treat snapshot `ledgerValid` separately from the
-  semantic ledger-step verifier, exported on the TS surface as
-  `ConfidentialTransaction.semanticStepValid`.
+  Merkle-backed ledger-step verifier, exported on the TS surface as
+  `ConfidentialTransaction.semanticStepValid` and
+  `ConfidentialTransaction.ledgerStepValid`.
 
 ## Installation
 

@@ -434,7 +434,7 @@ interface IsabellaRuntime {
     notes: VerifiedNote[],
     spent: number[][]
   ): boolean;
-  ctLedgerStepValid(
+  ctLedgerStepValidScaffold(
     params: ScalarCommitParams,
     gamma: number,
     k: number,
@@ -2511,9 +2511,9 @@ export namespace ConfidentialTransaction {
     cOut2: IntVec,
     nf1: IntVec,
     nf2: IntVec,
-    proof: TransactionProof
+    proof: MerkleTransactionProof
   ): boolean {
-    return Isabella.ctLedgerStepValid(
+    return ledgerStepValidMerkle(
       params,
       gamma,
       k,
@@ -2547,7 +2547,7 @@ export namespace ConfidentialTransaction {
     nf2: IntVec,
     proof: TransactionProof
   ): boolean {
-    return ledgerStepValid(
+    return Isabella.ctLedgerStepValidScaffold(
       params,
       gamma,
       k,
@@ -2602,10 +2602,10 @@ export namespace ConfidentialTransaction {
   /**
    * Stable semantic ledger-step validation.
    *
-   * The semantic default is the cryptographic Merkle-root path. The generated
-   * `ledgerStepValid` scaffold remains available for compatibility, with
-   * `ledgerStepValidScaffold` / `semanticStepValidScaffold` naming that makes
-   * the non-production boundary explicit.
+   * The semantic default is the cryptographic Merkle-root path. Scaffold
+   * validation remains available only through
+   * `ledgerStepValidScaffold` / `semanticStepValidScaffold`, making the
+   * non-production boundary explicit.
    */
   export function semanticStepValid(
     params: ScalarCommitParams,

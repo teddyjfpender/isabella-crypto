@@ -78,7 +78,7 @@ runCommand format cmd args = case cmd of
     "ct-nullifier-verify" -> cmdCtNullifierVerify format args
     "ct-member-prove" -> cmdCtMemberProve format args
     "ct-member-verify" -> cmdCtMemberVerify format args
-    "ct-ledger-step-verify" -> cmdCtLedgerStepVerify format args
+    "ct-ledger-step-verify-scaffold" -> cmdCtLedgerStepVerifyScaffold format args
     "ct-prove-scaffold" -> cmdCtProveScaffold format args
     "ct-prove-merkle" -> cmdCtProveMerkle format args
     "ct-verify-scaffold" -> cmdCtVerifyScaffold format args
@@ -1472,8 +1472,8 @@ cmdCtMemberVerify format [mStr, n2Str, qStr, betaStr, ledgerStr, cStr] =
 cmdCtMemberVerify format _ =
     outputUsage format "Usage: ct-member-verify M N2 Q BETA \"[[c1],[c2],...]\" \"[c]\""
 
-cmdCtLedgerStepVerify :: OutputFormat -> [String] -> IO ()
-cmdCtLedgerStepVerify format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, noteCommitmentsStr, noteBitsStr, noteCompsStr, noteAmountAsStr, noteAmountZsStr, notePairAsStr, notePairZsStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
+cmdCtLedgerStepVerifyScaffold :: OutputFormat -> [String] -> IO ()
+cmdCtLedgerStepVerifyScaffold format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, noteCommitmentsStr, noteBitsStr, noteCompsStr, noteAmountAsStr, noteAmountZsStr, notePairAsStr, notePairZsStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
     case
         ( parseCbParams mStr n2Str qStr betaStr
         , parseInt gammaStr
@@ -1532,13 +1532,13 @@ cmdCtLedgerStepVerify format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr,
                                 (ConfidentialBalance.makeBalanceProof balanceAs balanceZs)
                                 (ConfidentialRange.makeRangeProof out1Bits out1Comps out1AmountA out1AmountZ out1PairAs out1PairZs)
                                 (ConfidentialRange.makeRangeProof out2Bits out2Comps out2AmountA out2AmountZ out2PairAs out2PairZs)
-                     in outputBoolResult format "ledger_step_valid = "
-                            (ConfidentialTransaction.ledgerStepValid
+                     in outputBoolResult format "ledger_step_valid_scaffold = "
+                            (ConfidentialTransaction.ledgerStepValidScaffold
                                 params gamma k ck nk notes spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
                 _ -> outputError format "Expected consistent verified-note inputs and membership proofs for both input commitments"
         _ -> outputError format "Expected params, keys, verified-note ledger fields, nullifiers, and transaction-proof fields"
-cmdCtLedgerStepVerify format _ =
-    outputUsage format "Usage: ct-ledger-step-verify M N2 Q BETA G K CK NK NOTE_COMMITMENTS NOTE_BITS NOTE_COMPS NOTE_AMOUNT_AS NOTE_AMOUNT_ZS NOTE_PAIR_AS NOTE_PAIR_ZS SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_A OUT1_AMOUNT_Z OUT1_PAIR_AS OUT1_PAIR_ZS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_A OUT2_AMOUNT_Z OUT2_PAIR_AS OUT2_PAIR_ZS"
+cmdCtLedgerStepVerifyScaffold format _ =
+    outputUsage format "Usage: ct-ledger-step-verify-scaffold M N2 Q BETA G K CK NK NOTE_COMMITMENTS NOTE_BITS NOTE_COMPS NOTE_AMOUNT_AS NOTE_AMOUNT_ZS NOTE_PAIR_AS NOTE_PAIR_ZS SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_A OUT1_AMOUNT_Z OUT1_PAIR_AS OUT1_PAIR_ZS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_A OUT2_AMOUNT_Z OUT2_PAIR_AS OUT2_PAIR_ZS"
 
 cmdCtProveWithUsage :: String -> OutputFormat -> [String] -> IO ()
 cmdCtProveWithUsage command format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1AmountStr, in1RandStr, in2AmountStr, in2RandStr, out1AmountStr, out1RandStr, out2AmountStr, out2RandStr, out1BitsStr, out1BitRandsStr, out1CompsStr, out1CompRandsStr, out2BitsStr, out2BitRandsStr, out2CompsStr, out2CompRandsStr, yIn1MsgsStr, yIn1RandsStr, yIn2MsgsStr, yIn2RandsStr, yBalanceStr, yOut1AmountsStr, yOut1PairssStr, yOut2AmountsStr, yOut2PairssStr] =

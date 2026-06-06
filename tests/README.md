@@ -102,8 +102,9 @@ The harnesses are repair-aware:
 - The CLI shim in `tests/src/isabella-cli.ts` serializes these repeated proof
   objects explicitly instead of silently flattening them into the legacy single-round record.
 - Snapshot well-formedness (`ledgerValid`) is treated separately from the
-  semantic ledger-step verifier, exported on the TS SDK as
-  `ConfidentialTransaction.semanticStepValid`.
+  Merkle-backed ledger-step verifier, exported on the TS SDK as
+  `ConfidentialTransaction.semanticStepValid` and
+  `ConfidentialTransaction.ledgerStepValid`.
 - The confidential transaction context vector pins public replay context
   bytes plus canonical Merkle-proof and envelope preimage/digest bytes. The
   TS envelope verifier checks the context digest and expected network/asset/root

@@ -784,9 +784,10 @@ Validation note:
   them silently.
 - Snapshot well-formedness (`ledgerValid`) is tracked separately from the
   semantic ledger-step verifier, exported on the stable TypeScript surface as
-  Merkle-backed `ConfidentialTransaction.semanticStepValid`. The algebraic
-  scaffold path remains available as `ledgerStepValid`,
-  `ledgerStepValidScaffold`, and `semanticStepValidScaffold` for compatibility.
+  Merkle-backed `ConfidentialTransaction.semanticStepValid` and
+  `ConfidentialTransaction.ledgerStepValid`. The algebraic scaffold path
+  remains available only through the explicit
+  `ledgerStepValidScaffold` and `semanticStepValidScaffold` names.
 
 ```typescript
 const params = ConfidentialBalance.makeParams(2, 2, 17, 3);
