@@ -763,6 +763,10 @@ Current status and roadmap:
   blockers. Native OCaml/Haskell transaction CLIs reject non-canonical
   encodings and integer values outside the shared safe protocol range on the
   covered production-facing context/proof/envelope surfaces.
+- `tests/fixtures/confidential-domain-registry.json` pins the Fiat-Shamir,
+  Merkle, and transaction-envelope domains/tags, and
+  `scripts/check_confidential_domain_registry.py` checks those values against
+  fixtures plus OCaml/Haskell/TypeScript runtime constants.
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.

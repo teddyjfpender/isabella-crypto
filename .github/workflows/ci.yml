@@ -325,6 +325,9 @@ jobs:
           node scripts/generate_confidential_transaction_vectors.mjs
           git diff --exit-code -- tests/fixtures/confidential-transaction-vectors.json
 
+      - name: Check confidential domain registry
+        run: python3 scripts/check_confidential_domain_registry.py
+
       - name: Check confidential parameter screen artifact
         run: |
           python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json

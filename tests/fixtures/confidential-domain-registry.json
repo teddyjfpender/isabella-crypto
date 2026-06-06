@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "integerEncoding": "signed-64-bit-little-endian",
+  "namespaces": {
+    "fiatShamir": {
+      "dst": "ISABELLA-CT-FS-v1",
+      "rounds": 128,
+      "challengeExpansion": "SHA3-256-counter-mode-low-bit",
+      "domains": {
+        "balance": 1001,
+        "range": 2001,
+        "nullifier": 3001
+      }
+    },
+    "merkle": {
+      "dst": "ISABELLA-CT-MERKLE-v1",
+      "hash": "SHA3-256",
+      "tags": {
+        "leaf": 0,
+        "node": 1,
+        "empty": 2
+      }
+    },
+    "transaction": {
+      "dst": "ISABELLA-CT-TX-v1",
+      "protocolId": "ISABELLA-CT-SIS-NOTE",
+      "hash": "SHA3-256",
+      "tags": {
+        "context": 0,
+        "merkleProof": 1,
+        "envelope": 2,
+        "walletProofRequest": 3
+      }
+    }
+  }
+}

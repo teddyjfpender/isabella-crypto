@@ -60,6 +60,10 @@ benchmarks are independently checked.
   in `tests/fixtures/confidential-transcript-vectors.json`.
 - Balance, range, and nullifier proofs now have separate transcript domains and
   public transcript-field encoders.
+- `tests/fixtures/confidential-domain-registry.json` records the active
+  Fiat-Shamir, Merkle, and transaction-envelope domains/tags. The
+  `scripts/check_confidential_domain_registry.py` gate checks uniqueness and
+  fixture/source agreement across OCaml, Haskell, TypeScript, and generators.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
   assumptions for HVZK, and a theorem reducing verified opening collisions to
@@ -250,6 +254,7 @@ Completed:
 - `cd tests && bun test confidential-transaction`
 - `node scripts/check_confidential_bench_budgets.mjs`
 - `python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json`
+- `python3 scripts/check_confidential_domain_registry.py`
 
 Important validation caveats:
 
