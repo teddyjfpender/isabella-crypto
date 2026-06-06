@@ -25,11 +25,36 @@
         "empty": 2
       }
     },
+    "merkleBignum": {
+      "dst": "ISABELLA-CT-MERKLE-BIGNUM-v1",
+      "hash": "SHA3-256",
+      "integerEncoding": "sign_u8 || len_i64_le || magnitude_le_minimal",
+      "digestEncoding": "len_i64_le || 32 raw digest bytes",
+      "tags": {
+        "leaf": 0,
+        "node": 1,
+        "empty": 2
+      }
+    },
     "transaction": {
       "dst": "ISABELLA-CT-TX-v1",
       "protocolId": "ISABELLA-CT-SIS-NOTE",
       "hash": "SHA3-256",
       "integerEncoding": "signed-64-bit-little-endian",
+      "tags": {
+        "context": 0,
+        "merkleProof": 1,
+        "envelope": 2,
+        "walletProofRequest": 3,
+        "acceptedRootWindow": 4
+      }
+    },
+    "transactionBignum": {
+      "dst": "ISABELLA-CT-TX-BIGNUM-v1",
+      "protocolId": "ISABELLA-CT-SIS-NOTE",
+      "hash": "SHA3-256",
+      "integerEncoding": "sign_u8 || len_i64_le || magnitude_le_minimal",
+      "digestEncoding": "len_i64_le || 32 raw digest bytes",
       "tags": {
         "context": 0,
         "merkleProof": 1,

@@ -95,6 +95,12 @@ export interface BigIntBalanceProof {
   zs: BigIntMatrix;
 }
 
+/** Input form accepted by bignum transaction digest helpers for balance proofs */
+export interface BigIntBalanceProofInput {
+  as: BigIntMatrixInput;
+  zs: BigIntMatrixInput;
+}
+
 /** BigInt SIS commitment opening for widened reference helpers */
 export interface BigIntCommitOpening {
   msg: BigIntVec;
@@ -111,12 +117,30 @@ export interface BigIntRangeProof {
   pairZss: BigIntMatrix[];
 }
 
+/** Input form accepted by bignum transaction digest helpers for range proofs */
+export interface BigIntRangeProofInput {
+  bits: BigIntMatrixInput;
+  comps: BigIntMatrixInput;
+  amountAs: BigIntMatrixInput;
+  amountZs: BigIntMatrixInput;
+  pairAss: readonly BigIntMatrixInput[];
+  pairZss: readonly BigIntMatrixInput[];
+}
+
 /** BigInt Fiat-Shamir proof object for confidential nullifiers */
 export interface BigIntNullifierProof {
   aCommits: BigIntMatrix;
   aNullifiers: BigIntMatrix;
   zMsgs: BigIntMatrix;
   zRands: BigIntMatrix;
+}
+
+/** Input form accepted by bignum transaction digest helpers for nullifier proofs */
+export interface BigIntNullifierProofInput {
+  aCommits: BigIntMatrixInput;
+  aNullifiers: BigIntMatrixInput;
+  zMsgs: BigIntMatrixInput;
+  zRands: BigIntMatrixInput;
 }
 
 /** Deterministic Fiat-Shamir proof object for confidential range */
@@ -281,6 +305,22 @@ export interface ConfidentialTransactionContext {
   nf2: IntVec;
 }
 
+/** Public bignum transaction context for widened SIS-note parameters */
+export interface BigIntConfidentialTransactionContext {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  root: MerkleAcceptedRoot;
+  publicFee: ConfidentialBigIntInput;
+  cIn1: BigIntVecInput;
+  cIn2: BigIntVecInput;
+  cOut1: BigIntVecInput;
+  cOut2: BigIntVecInput;
+  nf1: BigIntVecInput;
+  nf2: BigIntVecInput;
+}
+
 /** Verifier-facing transaction envelope that binds a proof to public context bytes */
 export interface ConfidentialTransactionEnvelope {
   context: ConfidentialTransactionContext;
@@ -288,11 +328,36 @@ export interface ConfidentialTransactionEnvelope {
   proof: MerkleTransactionProof;
 }
 
+/** Bignum transaction proof with cryptographic Merkle membership */
+export interface BigIntMerkleTransactionProof {
+  in1Member: MerkleMembershipProof;
+  in2Member: MerkleMembershipProof;
+  in1Nullifier: BigIntNullifierProofInput;
+  in2Nullifier: BigIntNullifierProofInput;
+  balance: BigIntBalanceProofInput;
+  out1Range: BigIntRangeProofInput;
+  out2Range: BigIntRangeProofInput;
+}
+
+/** Bignum transaction envelope that binds a proof to public context bytes */
+export interface BigIntConfidentialTransactionEnvelope {
+  context: BigIntConfidentialTransactionContext;
+  contextDigest: MerkleDigest;
+  proof: BigIntMerkleTransactionProof;
+}
+
 /** Public wallet proof request snapshot bound before local proof generation */
 export interface ConfidentialWalletProofRequest {
   context: ConfidentialTransactionContext;
   acceptedRoots: MerkleAcceptedRoot[];
   spentNullifiers: IntMatrix;
+}
+
+/** Bignum wallet proof request snapshot bound before local proof generation */
+export interface BigIntConfidentialWalletProofRequest {
+  context: BigIntConfidentialTransactionContext;
+  acceptedRoots: MerkleAcceptedRoot[];
+  spentNullifiers: readonly BigIntVecInput[];
 }
 
 /** Local policy expected by a verifier before accepting a transaction envelope */
@@ -1071,12 +1136,14 @@ function normalizeMerkleTransactionProof(
 }
 
 const CT_MERKLE_DST = 'ISABELLA-CT-MERKLE-v1';
+const CT_MERKLE_BIGNUM_DST = 'ISABELLA-CT-MERKLE-BIGNUM-v1';
 const CT_MERKLE_TAGS = {
   leaf: 0,
   node: 1,
   empty: 2,
 } as const;
 const CT_TRANSACTION_DST = 'ISABELLA-CT-TX-v1';
+const CT_TRANSACTION_BIGNUM_DST = 'ISABELLA-CT-TX-BIGNUM-v1';
 const CT_TRANSACTION_PROTOCOL_ID = 'ISABELLA-CT-SIS-NOTE';
 const CT_TRANSACTION_TAGS = {
   context: 0,
@@ -1311,6 +1378,22 @@ function encodeIntMatrixArray(mats: IntMatrix[], label: string): Buffer {
   ]);
 }
 
+function encodeBigIntMatrix(rows: BigIntMatrixInput, label: string): Buffer {
+  const normalized = normalizeBigIntMatrix(rows, label);
+  return Buffer.concat([
+    encodeI64LE(normalized.length, `${label}.length`),
+    ...normalized.map((row, index) => encodeConfidentialBigIntVector(row, `${label}[${index}]`)),
+  ]);
+}
+
+function encodeBigIntMatrixArray(mats: readonly BigIntMatrixInput[], label: string): Buffer {
+  assertNonNegativeSafeI64(mats.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(mats.length, `${label}.length`),
+    ...mats.map((mat, index) => encodeBigIntMatrix(mat, `${label}[${index}]`)),
+  ]);
+}
+
 function encodeAsciiString(value: string, label: string): Buffer {
   const bytes = [...value].map((char, index) => {
     const code = char.charCodeAt(0);
@@ -1426,6 +1509,19 @@ function compareIntVectors(left: IntVec, right: IntVec): number {
   return Math.sign(left.length - right.length);
 }
 
+function compareBigIntVectors(left: readonly bigint[], right: readonly bigint[]): number {
+  const width = Math.min(left.length, right.length);
+  for (let index = 0; index < width; index += 1) {
+    if (left[index] < right[index]) {
+      return -1;
+    }
+    if (left[index] > right[index]) {
+      return 1;
+    }
+  }
+  return Math.sign(left.length - right.length);
+}
+
 function compareAcceptedRoots(left: MerkleAcceptedRoot, right: MerkleAcceptedRoot): number {
   if (left.digest < right.digest) {
     return -1;
@@ -1519,9 +1615,34 @@ function assertCanonicalIntMatrixSet(rows: IntMatrix, label: string): void {
   }
 }
 
+function assertCanonicalBigIntMatrixSet(rows: readonly BigIntVecInput[], label: string): BigIntMatrix {
+  if (!Array.isArray(rows)) {
+    throw new Error(`${label} must be an array`);
+  }
+  assertNonNegativeSafeI64(rows.length, `${label}.length`);
+  const normalized = normalizeBigIntMatrix(rows, label);
+  let previous: BigIntVec | null = null;
+  for (let rowIndex = 0; rowIndex < normalized.length; rowIndex += 1) {
+    const row = normalized[rowIndex];
+    if (previous !== null && compareBigIntVectors(previous, row) >= 0) {
+      throw new Error(`${label} must be sorted lexicographically with no duplicates`);
+    }
+    previous = row;
+  }
+  return normalized;
+}
+
 function merklePreimage(tag: number, body: Buffer): Buffer {
   return Buffer.concat([
     Buffer.from(CT_MERKLE_DST, 'ascii'),
+    encodeI64LE(tag, 'merkle tag'),
+    body,
+  ]);
+}
+
+function merkleBignumPreimage(tag: number, body: Buffer): Buffer {
+  return Buffer.concat([
+    Buffer.from(CT_MERKLE_BIGNUM_DST, 'ascii'),
     encodeI64LE(tag, 'merkle tag'),
     body,
   ]);
@@ -1546,9 +1667,21 @@ function merkleLeafPreimage(commitment: IntVec): Buffer {
   return merklePreimage(CT_MERKLE_TAGS.leaf, encodeIntVector(commitment, 'commitment'));
 }
 
+function merkleBignumLeafPreimage(commitment: BigIntVecInput): Buffer {
+  return merkleBignumPreimage(
+    CT_MERKLE_TAGS.leaf,
+    encodeConfidentialBigIntVector(commitment, 'commitment')
+  );
+}
+
 function merkleEmptyPreimage(width: number): Buffer {
   assertNonNegativeSafeI64(width, 'width');
   return merklePreimage(CT_MERKLE_TAGS.empty, encodeI64LE(width, 'width'));
+}
+
+function merkleBignumEmptyPreimage(width: number): Buffer {
+  assertNonNegativeSafeI64(width, 'width');
+  return merkleBignumPreimage(CT_MERKLE_TAGS.empty, encodeI64LE(width, 'width'));
 }
 
 function merkleNodePreimage(left: MerkleDigest, right: MerkleDigest): Buffer {
@@ -1561,16 +1694,38 @@ function merkleNodePreimage(left: MerkleDigest, right: MerkleDigest): Buffer {
   );
 }
 
+function merkleBignumNodePreimage(left: MerkleDigest, right: MerkleDigest): Buffer {
+  return merkleBignumPreimage(
+    CT_MERKLE_TAGS.node,
+    Buffer.concat([
+      encodeDigest(left, 'left'),
+      encodeDigest(right, 'right'),
+    ])
+  );
+}
+
 function merkleHashLeaf(commitment: IntVec): MerkleDigest {
   return sha3Hex(merkleLeafPreimage(commitment));
+}
+
+function merkleBignumHashLeaf(commitment: BigIntVecInput): MerkleDigest {
+  return sha3Hex(merkleBignumLeafPreimage(commitment));
 }
 
 function merkleHashEmpty(width: number): MerkleDigest {
   return sha3Hex(merkleEmptyPreimage(width));
 }
 
+function merkleBignumHashEmpty(width: number): MerkleDigest {
+  return sha3Hex(merkleBignumEmptyPreimage(width));
+}
+
 function merkleHashNode(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
   return sha3Hex(merkleNodePreimage(left, right));
+}
+
+function merkleBignumHashNode(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
+  return sha3Hex(merkleBignumNodePreimage(left, right));
 }
 
 function transactionContextPreimage(context: ConfidentialTransactionContext): Buffer {
@@ -1636,6 +1791,242 @@ function transactionAcceptedRootWindowPreimage(
       encodeI64LE(window.assetId, 'acceptedRootWindow.assetId'),
       encodeI64LE(window.ledgerEpoch, 'acceptedRootWindow.ledgerEpoch'),
       encodeAcceptedRootWindowEntryVector(window.roots, 'acceptedRootWindow.roots'),
+    ])
+  );
+}
+
+function transactionBignumTaggedPreimage(tag: number, body: Buffer): Buffer {
+  return Buffer.concat([
+    Buffer.from(CT_TRANSACTION_BIGNUM_DST, 'ascii'),
+    encodeI64LE(tag, 'transaction tag'),
+    encodeAsciiString(CT_TRANSACTION_PROTOCOL_ID, 'protocolId'),
+    body,
+  ]);
+}
+
+function transactionBignumContextPreimage(context: BigIntConfidentialTransactionContext): Buffer {
+  assertExactObjectKeys(
+    context,
+    [
+      'protocolVersion',
+      'networkId',
+      'assetId',
+      'ledgerEpoch',
+      'root',
+      'publicFee',
+      'cIn1',
+      'cIn2',
+      'cOut1',
+      'cOut2',
+      'nf1',
+      'nf2',
+    ],
+    'context'
+  );
+  assertNonNegativeSafeI64(context.protocolVersion, 'protocolVersion');
+  assertNonNegativeSafeI64(context.assetId, 'assetId');
+  assertNonNegativeSafeI64(context.ledgerEpoch, 'ledgerEpoch');
+  return Buffer.concat([
+    Buffer.from(CT_TRANSACTION_BIGNUM_DST, 'ascii'),
+    encodeI64LE(CT_TRANSACTION_TAGS.context, 'transaction tag'),
+    encodeAsciiString(CT_TRANSACTION_PROTOCOL_ID, 'protocolId'),
+    encodeI64LE(context.protocolVersion, 'protocolVersion'),
+    encodeAsciiString(context.networkId, 'networkId'),
+    encodeI64LE(context.assetId, 'assetId'),
+    encodeI64LE(context.ledgerEpoch, 'ledgerEpoch'),
+    encodeAcceptedRoot(context.root, 'root'),
+    encodeConfidentialBigInt(context.publicFee, 'publicFee'),
+    encodeConfidentialBigIntVector(context.cIn1, 'cIn1'),
+    encodeConfidentialBigIntVector(context.cIn2, 'cIn2'),
+    encodeConfidentialBigIntVector(context.cOut1, 'cOut1'),
+    encodeConfidentialBigIntVector(context.cOut2, 'cOut2'),
+    encodeConfidentialBigIntVector(context.nf1, 'nf1'),
+    encodeConfidentialBigIntVector(context.nf2, 'nf2'),
+  ]);
+}
+
+function transactionBignumAcceptedRootWindowPreimage(
+  window: ConfidentialAcceptedRootWindow
+): Buffer {
+  assertCanonicalAcceptedRootWindow(window);
+  return transactionBignumTaggedPreimage(
+    CT_TRANSACTION_TAGS.acceptedRootWindow,
+    Buffer.concat([
+      encodeI64LE(window.protocolVersion, 'acceptedRootWindow.protocolVersion'),
+      encodeAsciiString(window.networkId, 'acceptedRootWindow.networkId'),
+      encodeI64LE(window.assetId, 'acceptedRootWindow.assetId'),
+      encodeI64LE(window.ledgerEpoch, 'acceptedRootWindow.ledgerEpoch'),
+      encodeAcceptedRootWindowEntryVector(window.roots, 'acceptedRootWindow.roots'),
+    ])
+  );
+}
+
+function normalizeBigIntBalanceProofInput(
+  proof: BigIntBalanceProofInput,
+  label: string
+): BigIntBalanceProof {
+  assertExactObjectKeys(proof, ['as', 'zs'], label);
+  return {
+    as: normalizeBigIntMatrix(proof.as, `${label}.as`),
+    zs: normalizeBigIntMatrix(proof.zs, `${label}.zs`),
+  };
+}
+
+function normalizeBigIntNullifierProofInput(
+  proof: BigIntNullifierProofInput,
+  label: string
+): BigIntNullifierProof {
+  assertExactObjectKeys(proof, ['aCommits', 'aNullifiers', 'zMsgs', 'zRands'], label);
+  return {
+    aCommits: normalizeBigIntMatrix(proof.aCommits, `${label}.aCommits`),
+    aNullifiers: normalizeBigIntMatrix(proof.aNullifiers, `${label}.aNullifiers`),
+    zMsgs: normalizeBigIntMatrix(proof.zMsgs, `${label}.zMsgs`),
+    zRands: normalizeBigIntMatrix(proof.zRands, `${label}.zRands`),
+  };
+}
+
+function normalizeBigIntRangeProofInput(
+  proof: BigIntRangeProofInput,
+  label: string
+): BigIntRangeProof {
+  assertExactObjectKeys(proof, ['bits', 'comps', 'amountAs', 'amountZs', 'pairAss', 'pairZss'], label);
+  assertNonNegativeSafeI64(proof.pairAss.length, `${label}.pairAss.length`);
+  assertNonNegativeSafeI64(proof.pairZss.length, `${label}.pairZss.length`);
+  return {
+    bits: normalizeBigIntMatrix(proof.bits, `${label}.bits`),
+    comps: normalizeBigIntMatrix(proof.comps, `${label}.comps`),
+    amountAs: normalizeBigIntMatrix(proof.amountAs, `${label}.amountAs`),
+    amountZs: normalizeBigIntMatrix(proof.amountZs, `${label}.amountZs`),
+    pairAss: proof.pairAss.map((mat, index) => normalizeBigIntMatrix(mat, `${label}.pairAss[${index}]`)),
+    pairZss: proof.pairZss.map((mat, index) => normalizeBigIntMatrix(mat, `${label}.pairZss[${index}]`)),
+  };
+}
+
+function transactionBignumMembershipPreimage(
+  proof: MerkleMembershipProof,
+  label: string
+): Buffer {
+  proof = normalizeMerkleMembershipProof(proof);
+  if (proof.siblings.length !== proof.directions.length) {
+    throw new Error(`${label}.siblings and ${label}.directions must have the same length`);
+  }
+  assertNonNegativeSafeI64(proof.index, `${label}.index`);
+  return Buffer.concat([
+    encodeI64LE(proof.index, `${label}.index`),
+    encodeDigest(proof.root, `${label}.root`),
+    encodeDigestVector(proof.siblings, `${label}.siblings`),
+    encodeBoolVector(proof.directions, `${label}.directions`),
+  ]);
+}
+
+function transactionBignumNullifierProofPreimage(
+  proof: BigIntNullifierProofInput,
+  label: string
+): Buffer {
+  const normalized = normalizeBigIntNullifierProofInput(proof, label);
+  return Buffer.concat([
+    encodeBigIntMatrix(normalized.aCommits, `${label}.aCommits`),
+    encodeBigIntMatrix(normalized.aNullifiers, `${label}.aNullifiers`),
+    encodeBigIntMatrix(normalized.zMsgs, `${label}.zMsgs`),
+    encodeBigIntMatrix(normalized.zRands, `${label}.zRands`),
+  ]);
+}
+
+function transactionBignumBalanceProofPreimage(
+  proof: BigIntBalanceProofInput,
+  label: string
+): Buffer {
+  const normalized = normalizeBigIntBalanceProofInput(proof, label);
+  return Buffer.concat([
+    encodeBigIntMatrix(normalized.as, `${label}.as`),
+    encodeBigIntMatrix(normalized.zs, `${label}.zs`),
+  ]);
+}
+
+function transactionBignumRangeProofPreimage(
+  proof: BigIntRangeProofInput,
+  label: string
+): Buffer {
+  const normalized = normalizeBigIntRangeProofInput(proof, label);
+  return Buffer.concat([
+    encodeBigIntMatrix(normalized.bits, `${label}.bits`),
+    encodeBigIntMatrix(normalized.comps, `${label}.comps`),
+    encodeBigIntMatrix(normalized.amountAs, `${label}.amountAs`),
+    encodeBigIntMatrix(normalized.amountZs, `${label}.amountZs`),
+    encodeBigIntMatrixArray(normalized.pairAss, `${label}.pairAss`),
+    encodeBigIntMatrixArray(normalized.pairZss, `${label}.pairZss`),
+  ]);
+}
+
+function transactionBignumMerkleProofPreimage(proof: BigIntMerkleTransactionProof): Buffer {
+  assertExactObjectKeys(
+    proof,
+    ['in1Member', 'in2Member', 'in1Nullifier', 'in2Nullifier', 'balance', 'out1Range', 'out2Range'],
+    'proof'
+  );
+  return transactionBignumTaggedPreimage(
+    CT_TRANSACTION_TAGS.merkleProof,
+    Buffer.concat([
+      transactionBignumMembershipPreimage(proof.in1Member, 'in1Member'),
+      transactionBignumMembershipPreimage(proof.in2Member, 'in2Member'),
+      transactionBignumNullifierProofPreimage(proof.in1Nullifier, 'in1Nullifier'),
+      transactionBignumNullifierProofPreimage(proof.in2Nullifier, 'in2Nullifier'),
+      transactionBignumBalanceProofPreimage(proof.balance, 'balance'),
+      transactionBignumRangeProofPreimage(proof.out1Range, 'out1Range'),
+      transactionBignumRangeProofPreimage(proof.out2Range, 'out2Range'),
+    ])
+  );
+}
+
+function transactionBignumEnvelopePreimage(
+  envelope: BigIntConfidentialTransactionEnvelope
+): Buffer {
+  assertExactObjectKeys(envelope, ['context', 'contextDigest', 'proof'], 'envelope');
+  const contextDigest = sha3Hex(transactionBignumContextPreimage(envelope.context));
+  if (envelope.contextDigest !== contextDigest) {
+    throw new Error('contextDigest does not match canonical bignum transaction context');
+  }
+  return transactionBignumTaggedPreimage(
+    CT_TRANSACTION_TAGS.envelope,
+    Buffer.concat([
+      encodeDigest(contextDigest, 'contextDigest'),
+      encodeDigest(sha3Hex(transactionBignumMerkleProofPreimage(envelope.proof)), 'proofDigest'),
+    ])
+  );
+}
+
+function sameBigIntVec(left: readonly bigint[], right: readonly bigint[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function containsBigIntVec(rows: readonly (readonly bigint[])[], target: readonly bigint[]): boolean {
+  return rows.some((row) => sameBigIntVec(row, target));
+}
+
+function transactionBignumWalletProofRequestPreimage(
+  request: BigIntConfidentialWalletProofRequest
+): Buffer {
+  assertExactObjectKeys(request, ['context', 'acceptedRoots', 'spentNullifiers'], 'walletProofRequest');
+  assertCanonicalAcceptedRootSet(request.acceptedRoots, 'acceptedRoots');
+  const spentNullifiers = assertCanonicalBigIntMatrixSet(request.spentNullifiers, 'spentNullifiers');
+  const contextDigest = sha3Hex(transactionBignumContextPreimage(request.context));
+  const nf1 = normalizeBigIntVec(request.context.nf1, 'context.nf1');
+  const nf2 = normalizeBigIntVec(request.context.nf2, 'context.nf2');
+  if (!request.acceptedRoots.some((root) => sameAcceptedRoot(root, request.context.root))) {
+    throw new Error('context.root must be inside acceptedRoots');
+  }
+  if (sameBigIntVec(nf1, nf2)) {
+    throw new Error('context nullifiers must be distinct');
+  }
+  if (containsBigIntVec(spentNullifiers, nf1) || containsBigIntVec(spentNullifiers, nf2)) {
+    throw new Error('context nullifiers must be absent from spentNullifiers');
+  }
+  return transactionBignumTaggedPreimage(
+    CT_TRANSACTION_TAGS.walletProofRequest,
+    Buffer.concat([
+      encodeDigest(contextDigest, 'contextDigest'),
+      encodeAcceptedRootVector(request.acceptedRoots, 'acceptedRoots'),
+      encodeBigIntMatrix(spentNullifiers, 'spentNullifiers'),
     ])
   );
 }
@@ -1822,6 +2213,23 @@ function merkleCompressLevel(width: number, level: MerkleDigest[]): MerkleDigest
   return out;
 }
 
+function merkleBignumCompressLevel(width: number, level: MerkleDigest[]): MerkleDigest[] {
+  if (level.length === 0) {
+    return [];
+  }
+  if (level.length === 1) {
+    return level.slice();
+  }
+  const out: MerkleDigest[] = [];
+  const empty = merkleBignumHashEmpty(width);
+  for (let index = 0; index < level.length; index += 2) {
+    const left = level[index];
+    const right = index + 1 < level.length ? level[index + 1] : empty;
+    out.push(merkleBignumHashNode(left, right));
+  }
+  return out;
+}
+
 function merkleIndexDirections(depth: number, index: number): boolean[] {
   assertNonNegativeSafeI64(depth, 'depth');
   assertNonNegativeSafeI64(index, 'index');
@@ -1840,6 +2248,16 @@ function assertMerkleCommitmentWidths(commitments: IntMatrix, width: number): vo
       throw new Error('Merkle commitments must all have the selected width');
     }
   }
+}
+
+function assertBigIntMerkleCommitmentWidths(commitments: readonly BigIntVecInput[], width: number): BigIntMatrix {
+  const normalized = normalizeBigIntMatrix(commitments, 'commitments');
+  for (let index = 0; index < normalized.length; index += 1) {
+    if (normalized[index].length !== width) {
+      throw new Error('Merkle commitments must all have the selected width');
+    }
+  }
+  return normalized;
 }
 
 /**
@@ -4065,6 +4483,138 @@ export namespace ConfidentialMerkle {
 }
 
 /**
+ * Versioned bignum Merkle helpers for widened confidential-note commitments.
+ *
+ * This namespace is intentionally separate from `ConfidentialMerkle`: it hashes
+ * note commitments with the canonical confidential bignum codec and a distinct
+ * DST so q83-compatible leaves do not silently collide with the existing
+ * signed-64 transaction/Merkle encoding.
+ */
+export namespace ConfidentialMerkleBigInt {
+  export const dst = CT_MERKLE_BIGNUM_DST;
+  export const tags = CT_MERKLE_TAGS;
+  export const integerEncoding = CT_BIGNUM_ENCODING;
+  export const digestEncoding = 'len_i64_le || 32 raw digest bytes';
+
+  export function encodeLeaf(commitment: BigIntVecInput): string {
+    return merkleBignumLeafPreimage(commitment).toString('hex');
+  }
+
+  export function encodeEmpty(width: number): string {
+    return merkleBignumEmptyPreimage(width).toString('hex');
+  }
+
+  export function encodeNode(left: MerkleDigest, right: MerkleDigest): string {
+    return merkleBignumNodePreimage(left, right).toString('hex');
+  }
+
+  export function leaf(commitment: BigIntVecInput): MerkleDigest {
+    return merkleBignumHashLeaf(commitment);
+  }
+
+  export function empty(width: number): MerkleDigest {
+    return merkleBignumHashEmpty(width);
+  }
+
+  export function node(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
+    return merkleBignumHashNode(left, right);
+  }
+
+  export function root(commitments: readonly BigIntVecInput[], emptyWidth?: number): MerkleDigest {
+    const width = emptyWidth ?? commitments[0]?.length ?? 0;
+    assertNonNegativeSafeI64(width, 'emptyWidth');
+    const normalized = assertBigIntMerkleCommitmentWidths(commitments, width);
+    if (normalized.length === 0) {
+      return merkleBignumHashEmpty(width);
+    }
+    let level = normalized.map(merkleBignumHashLeaf);
+    while (level.length > 1) {
+      level = merkleBignumCompressLevel(width, level);
+    }
+    return level[0];
+  }
+
+  export function pathRoot(
+    commitment: BigIntVecInput,
+    siblings: MerkleDigest[],
+    directions: boolean[]
+  ): MerkleDigest {
+    if (siblings.length !== directions.length) {
+      throw new Error('Merkle siblings and directions must have the same length');
+    }
+    let acc = merkleBignumHashLeaf(commitment);
+    for (let index = 0; index < siblings.length; index += 1) {
+      const sibling = siblings[index];
+      acc = directions[index]
+        ? merkleBignumHashNode(sibling, acc)
+        : merkleBignumHashNode(acc, sibling);
+    }
+    return acc;
+  }
+
+  export function membershipProve(
+    commitments: readonly BigIntVecInput[],
+    commitment: BigIntVecInput
+  ): MerkleMembershipProof | null {
+    const normalizedCommitments = normalizeBigIntMatrix(commitments, 'commitments');
+    const normalizedCommitment = normalizeBigIntVec(commitment, 'commitment');
+    const index = normalizedCommitments.findIndex((entry) => sameBigIntVec(entry, normalizedCommitment));
+    if (index < 0) {
+      return null;
+    }
+
+    const width = normalizedCommitments[0]?.length ?? normalizedCommitment.length;
+    const checkedCommitments = assertBigIntMerkleCommitmentWidths(normalizedCommitments, width);
+    let level = checkedCommitments.map(merkleBignumHashLeaf);
+    const siblings: MerkleDigest[] = [];
+    const directions: boolean[] = [];
+    let current = index;
+
+    while (level.length > 1) {
+      const isRight = current % 2 === 1;
+      directions.push(isRight);
+      siblings.push(
+        isRight
+          ? level[current - 1]
+          : current + 1 < level.length
+            ? level[current + 1]
+            : merkleBignumHashEmpty(width)
+      );
+      level = merkleBignumCompressLevel(width, level);
+      current = Math.floor(current / 2);
+    }
+
+    return {
+      index,
+      root: level[0],
+      siblings,
+      directions,
+    };
+  }
+
+  export function membershipVerify(
+    commitment: BigIntVecInput,
+    proof: MerkleMembershipProof
+  ): boolean {
+    try {
+      if (proof.siblings.length !== proof.directions.length) {
+        return false;
+      }
+      if (
+        JSON.stringify(proof.directions) !==
+        JSON.stringify(merkleIndexDirections(proof.siblings.length, proof.index))
+      ) {
+        return false;
+      }
+      assertDigestHex(proof.root, 'root');
+      return pathRoot(commitment, proof.siblings, proof.directions) === proof.root;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
  * Confidential-transaction proof helpers over SIS commitments.
  *
  * This composes deterministic nullifiers, explicit membership proofs,
@@ -5100,6 +5650,146 @@ export namespace ConfidentialTransaction {
     nf2: IntVec
   ): IntMatrix {
     return normalizeMat(Isabella.ctLedgerApplySpent(spent, nf1, nf2));
+  }
+}
+
+/**
+ * Versioned bignum transaction digest helpers for widened SIS-note parameters.
+ *
+ * These helpers intentionally do not replace `ConfidentialTransaction` yet:
+ * they bind q83-scale commitments, nullifiers, fees, spent snapshots, and proof
+ * responses with the canonical bignum codec under `ISABELLA-CT-TX-BIGNUM-v1`.
+ */
+export namespace ConfidentialTransactionBigInt {
+  export const transactionDst = CT_TRANSACTION_BIGNUM_DST;
+  export const merkleDst = CT_MERKLE_BIGNUM_DST;
+  export const transactionProtocolId = CT_TRANSACTION_PROTOCOL_ID;
+  export const transactionTags = CT_TRANSACTION_TAGS;
+  export const integerEncoding = CT_BIGNUM_ENCODING;
+  export const digestEncoding = 'len_i64_le || 32 raw digest bytes';
+
+  export function transactionContextPreimageHex(
+    context: BigIntConfidentialTransactionContext
+  ): string {
+    return transactionBignumContextPreimage(context).toString('hex');
+  }
+
+  export function transactionContextDigest(
+    context: BigIntConfidentialTransactionContext
+  ): MerkleDigest {
+    return sha3Hex(transactionBignumContextPreimage(context));
+  }
+
+  export function transactionMerkleProofPreimageHex(
+    proof: BigIntMerkleTransactionProof
+  ): string {
+    return transactionBignumMerkleProofPreimage(proof).toString('hex');
+  }
+
+  export function transactionMerkleProofDigest(
+    proof: BigIntMerkleTransactionProof
+  ): MerkleDigest {
+    return sha3Hex(transactionBignumMerkleProofPreimage(proof));
+  }
+
+  export function transactionEnvelopePreimageHex(
+    envelope: BigIntConfidentialTransactionEnvelope
+  ): string {
+    return transactionBignumEnvelopePreimage(envelope).toString('hex');
+  }
+
+  export function transactionEnvelopeDigest(
+    envelope: BigIntConfidentialTransactionEnvelope
+  ): MerkleDigest {
+    return sha3Hex(transactionBignumEnvelopePreimage(envelope));
+  }
+
+  export function transactionWalletProofRequestPreimageHex(
+    request: BigIntConfidentialWalletProofRequest
+  ): string {
+    return transactionBignumWalletProofRequestPreimage(request).toString('hex');
+  }
+
+  export function transactionWalletProofRequestDigest(
+    request: BigIntConfidentialWalletProofRequest
+  ): MerkleDigest {
+    return sha3Hex(transactionBignumWalletProofRequestPreimage(request));
+  }
+
+  export function transactionAcceptedRootWindowPreimageHex(
+    window: ConfidentialAcceptedRootWindow
+  ): string {
+    return transactionBignumAcceptedRootWindowPreimage(window).toString('hex');
+  }
+
+  export function transactionAcceptedRootWindowDigest(
+    window: ConfidentialAcceptedRootWindow
+  ): MerkleDigest {
+    return sha3Hex(transactionBignumAcceptedRootWindowPreimage(window));
+  }
+
+  export function transactionAcceptedRootWindowRoots(
+    window: ConfidentialAcceptedRootWindow
+  ): MerkleAcceptedRoot[] {
+    transactionBignumAcceptedRootWindowPreimage(window);
+    return window.roots.map((entry) => entry.root);
+  }
+
+  export function transactionContextMatchesAcceptedRootWindow(
+    context: BigIntConfidentialTransactionContext,
+    window: ConfidentialAcceptedRootWindow
+  ): boolean {
+    try {
+      transactionBignumContextPreimage(context);
+      transactionBignumAcceptedRootWindowPreimage(window);
+      return (
+        context.protocolVersion === window.protocolVersion &&
+        context.networkId === window.networkId &&
+        context.assetId === window.assetId &&
+        context.ledgerEpoch === window.ledgerEpoch &&
+        window.roots.some((entry) => sameAcceptedRoot(entry.root, context.root))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function transactionWalletProofRequestFromWindow(
+    context: BigIntConfidentialTransactionContext,
+    window: ConfidentialAcceptedRootWindow,
+    spentNullifiers: readonly BigIntVecInput[]
+  ): BigIntConfidentialWalletProofRequest {
+    if (!transactionContextMatchesAcceptedRootWindow(context, window)) {
+      throw new Error('context does not match accepted-root window');
+    }
+    const request = {
+      context,
+      acceptedRoots: transactionAcceptedRootWindowRoots(window),
+      spentNullifiers,
+    };
+    transactionBignumWalletProofRequestPreimage(request);
+    return request;
+  }
+
+  export function merkleLedgerRoot(
+    commitments: readonly BigIntVecInput[],
+    emptyWidth?: number
+  ): MerkleDigest {
+    return ConfidentialMerkleBigInt.root(commitments, emptyWidth);
+  }
+
+  export function merkleMembershipProve(
+    commitments: readonly BigIntVecInput[],
+    commitment: BigIntVecInput
+  ): MerkleMembershipProof | null {
+    return ConfidentialMerkleBigInt.membershipProve(commitments, commitment);
+  }
+
+  export function merkleMembershipVerify(
+    commitment: BigIntVecInput,
+    proof: MerkleMembershipProof
+  ): boolean {
+    return ConfidentialMerkleBigInt.membershipVerify(commitment, proof);
   }
 }
 

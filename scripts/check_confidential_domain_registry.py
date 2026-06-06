@@ -19,6 +19,7 @@ REGISTRY = ROOT / "tests/fixtures/confidential-domain-registry.json"
 TRANSCRIPT_VECTORS = ROOT / "tests/fixtures/confidential-transcript-vectors.json"
 MERKLE_VECTORS = ROOT / "tests/fixtures/confidential-merkle-vectors.json"
 TRANSACTION_VECTORS = ROOT / "tests/fixtures/confidential-transaction-vectors.json"
+BIGNUM_TRANSACTION_VECTORS = ROOT / "tests/fixtures/confidential-bignum-transaction-vectors.json"
 
 
 def fail(message: str) -> None:
@@ -94,7 +95,7 @@ def check_registry_shape(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
         fail("integerEncoding must be namespace-specific")
 
     namespaces = require_object(registry.get("namespaces"), "namespaces")
-    required = {"fiatShamir", "merkle", "transaction"}
+    required = {"fiatShamir", "merkle", "merkleBignum", "transaction", "transactionBignum"}
     missing = required - set(namespaces)
     if missing:
         fail(f"missing namespace(s): {sorted(missing)}")
@@ -134,7 +135,20 @@ def check_registry_shape(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
         }
         require_unique_values(tags, f"{namespace_name} tags")
 
+    for namespace_name in ["merkleBignum", "transactionBignum"]:
+        namespace = require_object(namespaces[namespace_name], f"namespaces.{namespace_name}")
+        if require_string(namespace.get("integerEncoding"), f"namespaces.{namespace_name}.integerEncoding") != "sign_u8 || len_i64_le || magnitude_le_minimal":
+            fail(f"{namespace_name} integer encoding must be the confidential bignum codec")
+        if require_string(namespace.get("digestEncoding"), f"namespaces.{namespace_name}.digestEncoding") != "len_i64_le || 32 raw digest bytes":
+            fail(f"{namespace_name} digest encoding must be len_i64_le || 32 raw digest bytes")
+        tags = {
+            name: require_int(value, f"namespaces.{namespace_name}.tags.{name}")
+            for name, value in require_object(namespace.get("tags"), f"namespaces.{namespace_name}.tags").items()
+        }
+        require_unique_values(tags, f"{namespace_name} tags")
+
     require_string(namespaces["transaction"].get("protocolId"), "namespaces.transaction.protocolId")
+    require_string(namespaces["transactionBignum"].get("protocolId"), "namespaces.transactionBignum.protocolId")
     return namespaces
 
 
@@ -182,11 +196,43 @@ def check_fixtures(namespaces: dict[str, dict[str, Any]]) -> None:
     if transaction_vectors.get("tags") != transaction["tags"]:
         fail("confidential-transaction-vectors tags disagree with registry")
 
+    merkle_bignum = namespaces["merkleBignum"]
+    transaction_bignum = namespaces["transactionBignum"]
+    bignum_transaction_vectors = load_json(BIGNUM_TRANSACTION_VECTORS)
+    bignum_merkle_vectors = require_object(
+        bignum_transaction_vectors.get("merkle"),
+        "confidential-bignum-transaction-vectors merkle",
+    )
+    bignum_tx_vectors = require_object(
+        bignum_transaction_vectors.get("transaction"),
+        "confidential-bignum-transaction-vectors transaction",
+    )
+    if bignum_merkle_vectors.get("dst") != merkle_bignum["dst"]:
+        fail("confidential-bignum-transaction-vectors Merkle dst disagrees with registry")
+    if bignum_merkle_vectors.get("integerEncoding") != merkle_bignum["integerEncoding"]:
+        fail("confidential-bignum-transaction-vectors Merkle integer encoding disagrees with registry")
+    if bignum_merkle_vectors.get("digestEncoding") != merkle_bignum["digestEncoding"]:
+        fail("confidential-bignum-transaction-vectors Merkle digest encoding disagrees with registry")
+    if bignum_merkle_vectors.get("tags") != merkle_bignum["tags"]:
+        fail("confidential-bignum-transaction-vectors Merkle tags disagree with registry")
+    if bignum_tx_vectors.get("dst") != transaction_bignum["dst"]:
+        fail("confidential-bignum-transaction-vectors transaction dst disagrees with registry")
+    if bignum_tx_vectors.get("integerEncoding") != transaction_bignum["integerEncoding"]:
+        fail("confidential-bignum-transaction-vectors transaction integer encoding disagrees with registry")
+    if bignum_tx_vectors.get("digestEncoding") != transaction_bignum["digestEncoding"]:
+        fail("confidential-bignum-transaction-vectors transaction digest encoding disagrees with registry")
+    if bignum_tx_vectors.get("protocolId") != transaction_bignum["protocolId"]:
+        fail("confidential-bignum-transaction-vectors transaction protocolId disagrees with registry")
+    if bignum_tx_vectors.get("tags") != transaction_bignum["tags"]:
+        fail("confidential-bignum-transaction-vectors transaction tags disagree with registry")
+
 
 def check_source_constants(namespaces: dict[str, dict[str, Any]]) -> None:
     fs = namespaces["fiatShamir"]
     merkle = namespaces["merkle"]
+    merkle_bignum = namespaces["merkleBignum"]
     transaction = namespaces["transaction"]
+    transaction_bignum = namespaces["transactionBignum"]
     fs_domains = fs["domains"]
     merkle_tags = merkle["tags"]
     transaction_tags = transaction["tags"]
@@ -197,12 +243,17 @@ def check_source_constants(namespaces: dict[str, dict[str, Any]]) -> None:
         ("isabella.hs/src/Canon/ZK/Internal/RepeatedFS.hs", fs["dst"], "Haskell Fiat-Shamir DST"),
         ("scripts/generate_confidential_merkle_vectors.mjs", merkle["dst"], "Merkle generator DST"),
         ("isabella.ts/src/index.ts", merkle["dst"], "TypeScript Merkle DST"),
+        ("isabella.ts/src/index.ts", merkle_bignum["dst"], "TypeScript bignum Merkle DST"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", merkle_bignum["dst"], "bignum transaction generator Merkle DST"),
         ("isabella.ml/src/canon/confidential_merkle.ml", merkle["dst"], "OCaml Merkle DST"),
         ("isabella.hs/src/Canon/ZK/Confidential_Merkle.hs", merkle["dst"], "Haskell Merkle DST"),
         ("scripts/generate_confidential_transaction_vectors.mjs", transaction["dst"], "transaction generator DST"),
         ("scripts/generate_confidential_transaction_vectors.mjs", transaction["protocolId"], "transaction generator protocol id"),
         ("isabella.ts/src/index.ts", transaction["dst"], "TypeScript transaction DST"),
+        ("isabella.ts/src/index.ts", transaction_bignum["dst"], "TypeScript bignum transaction DST"),
         ("isabella.ts/src/index.ts", transaction["protocolId"], "TypeScript transaction protocol id"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", transaction_bignum["dst"], "bignum transaction generator DST"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", transaction_bignum["protocolId"], "bignum transaction generator protocol id"),
         ("isabella.ml/src/canon/confidential_transaction.ml", transaction["dst"], "OCaml transaction DST"),
         ("isabella.ml/src/canon/confidential_transaction.ml", transaction["protocolId"], "OCaml transaction protocol id"),
         ("isabella.hs/src/Canon/ZK/Confidential_Transaction.hs", transaction["dst"], "Haskell transaction DST"),
@@ -231,6 +282,14 @@ def check_source_constants(namespaces: dict[str, dict[str, Any]]) -> None:
         ("scripts/generate_confidential_transaction_vectors.mjs", r"envelope:\s*{},", transaction_tags["envelope"], "transaction generator envelope tag"),
         ("scripts/generate_confidential_transaction_vectors.mjs", r"walletProofRequest:\s*{},", transaction_tags["walletProofRequest"], "transaction generator wallet proof request tag"),
         ("scripts/generate_confidential_transaction_vectors.mjs", r"acceptedRootWindow:\s*{},", transaction_tags["acceptedRootWindow"], "transaction generator accepted root window tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"context:\s*{},", transaction_tags["context"], "bignum transaction generator context tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"merkleProof:\s*{},", transaction_tags["merkleProof"], "bignum transaction generator Merkle proof tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"envelope:\s*{},", transaction_tags["envelope"], "bignum transaction generator envelope tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"walletProofRequest:\s*{},", transaction_tags["walletProofRequest"], "bignum transaction generator wallet proof request tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"acceptedRootWindow:\s*{},", transaction_tags["acceptedRootWindow"], "bignum transaction generator accepted root window tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"leaf:\s*{},", merkle_tags["leaf"], "bignum transaction generator Merkle leaf tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"node:\s*{},", merkle_tags["node"], "bignum transaction generator Merkle node tag"),
+        ("scripts/generate_confidential_bignum_transaction_vectors.mjs", r"empty:\s*{},", merkle_tags["empty"], "bignum transaction generator Merkle empty tag"),
         ("isabella.ml/src/canon/confidential_merkle.ml", r"let\s+merkle_leaf_tag\s*=\s*{}", merkle_tags["leaf"], "OCaml Merkle leaf tag"),
         ("isabella.ml/src/canon/confidential_merkle.ml", r"let\s+merkle_node_tag\s*=\s*{}", merkle_tags["node"], "OCaml Merkle node tag"),
         ("isabella.ml/src/canon/confidential_merkle.ml", r"let\s+merkle_empty_tag\s*=\s*{}", merkle_tags["empty"], "OCaml Merkle empty tag"),
