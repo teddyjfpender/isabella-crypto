@@ -111,6 +111,14 @@ export interface BigIntRangeProof {
   pairZss: BigIntMatrix[];
 }
 
+/** BigInt Fiat-Shamir proof object for confidential nullifiers */
+export interface BigIntNullifierProof {
+  aCommits: BigIntMatrix;
+  aNullifiers: BigIntMatrix;
+  zMsgs: BigIntMatrix;
+  zRands: BigIntMatrix;
+}
+
 /** Deterministic Fiat-Shamir proof object for confidential range */
 export interface RangeProof {
   bits: IntMatrix;
@@ -1080,6 +1088,7 @@ const CT_TRANSACTION_TAGS = {
 const CT_FS_DST = 'ISABELLA-CT-FS-v1';
 const CT_FS_BALANCE_DOMAIN = 1001;
 const CT_FS_RANGE_DOMAIN = 2001;
+const CT_FS_NULLIFIER_DOMAIN = 3001;
 const CT_FS_ROUNDS = 128;
 const CT_BIGNUM_DST = 'ISABELLA-CT-BIGNUM-v1';
 const CT_BIGNUM_ENCODING = 'sign_u8 || len_i64_le || magnitude_le_minimal';
@@ -3461,6 +3470,305 @@ export namespace ConfidentialRangeBigInt {
           )
         )
       );
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * BigInt reference implementation for the confidential-nullifier proof slice.
+ *
+ * This tracks the q83 widened arithmetic path for note nullifiers. It is a
+ * reference/preview surface until every production proof API and transaction
+ * field has canonical bignum integration.
+ */
+export namespace ConfidentialNullifierBigInt {
+  export const transcriptDst = CT_FS_DST;
+  export const fsDomain = CT_FS_NULLIFIER_DOMAIN;
+  export const fieldEncoding = CT_BIGNUM_ENCODING;
+
+  type OpeningInput = {
+    msg: BigIntVecInput;
+    rand: BigIntVecInput;
+  };
+
+  function normalizeOpening(opening: OpeningInput, label: string): BigIntCommitOpening {
+    return {
+      msg: normalizeBigIntVec(opening.msg, `${label}.msg`),
+      rand: normalizeBigIntVec(opening.rand, `${label}.rand`),
+    };
+  }
+
+  function validOpening(params: BigIntScalarCommitParams, opening: OpeningInput): boolean {
+    try {
+      const normalized = normalizeOpening(opening, 'opening');
+      return (
+        validOpeningShape(params, normalized) &&
+        bigintAllBounded(normalized.msg, params.beta) &&
+        bigintAllBounded(normalized.rand, params.beta)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function validOpeningShape(params: BigIntScalarCommitParams, opening: OpeningInput): boolean {
+    try {
+      const normalized = normalizeOpening(opening, 'opening');
+      return (
+        ConfidentialBalanceBigInt.validScalarParams(params) &&
+        normalized.msg.length === params.n1 &&
+        normalized.rand.length === params.n2
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function commit(
+    params: BigIntScalarCommitParams,
+    key: BigIntMatrixInput,
+    opening: OpeningInput
+  ): BigIntVec {
+    const normalized = normalizeOpening(opening, 'opening');
+    if (!validOpeningShape(params, normalized) || !ConfidentialBalanceBigInt.validCommitKey(params, key)) {
+      throw new Error('invalid nullifier commitment input');
+    }
+    return bigintMatVecMultMod(
+      normalizeBigIntMatrix(key, 'key'),
+      [...normalized.msg, ...normalized.rand],
+      params.q
+    );
+  }
+
+  export function nullifier(
+    params: BigIntScalarCommitParams,
+    nk: BigIntMatrixInput,
+    opening: OpeningInput
+  ): BigIntVec {
+    return commit(params, nk, opening);
+  }
+
+  function validMask(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    y: OpeningInput
+  ): boolean {
+    try {
+      const bound = normalizeConfidentialBigInt(gamma, 'gamma');
+      const mask = normalizeOpening(y, 'y');
+      return (
+        ConfidentialBalanceBigInt.validScalarParams(params) &&
+        mask.msg.length === params.n1 &&
+        mask.rand.length === params.n2 &&
+        bigintAllBounded(mask.msg, bound) &&
+        bigintAllBounded(mask.rand, bound)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function responseBound(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    challenge: number
+  ): bigint {
+    if (challenge !== 0 && challenge !== 1) {
+      throw new Error('challenge must be binary');
+    }
+    return normalizeConfidentialBigInt(gamma, 'gamma') + BigInt(challenge) * params.beta;
+  }
+
+  function validResponse(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    challenge: number,
+    z: OpeningInput
+  ): boolean {
+    try {
+      const response = normalizeOpening(z, 'z');
+      const bound = responseBound(params, gamma, challenge);
+      return (
+        response.msg.length === params.n1 &&
+        response.rand.length === params.n2 &&
+        bigintAllBounded(response.msg, bound) &&
+        bigintAllBounded(response.rand, bound)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function sigmaRespond(
+    op: BigIntCommitOpening,
+    y: BigIntCommitOpening,
+    challenge: number
+  ): BigIntCommitOpening {
+    return {
+      msg: bigintVecAdd(y.msg, bigintScalarMult(BigInt(challenge), op.msg)),
+      rand: bigintVecAdd(y.rand, bigintScalarMult(BigInt(challenge), op.rand)),
+    };
+  }
+
+  function relation(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    c: BigIntVecInput,
+    nf: BigIntVecInput,
+    opening: OpeningInput
+  ): boolean {
+    try {
+      const commitment = normalizeBigIntVec(c, 'c');
+      const nullifierValue = normalizeBigIntVec(nf, 'nf');
+      const cComputed = commit(params, ck, opening);
+      const nfComputed = nullifier(params, nk, opening);
+      return (
+        commitment.length === params.m &&
+        nullifierValue.length === params.m &&
+        cComputed.every((value, index) => value === commitment[index]) &&
+        nfComputed.every((value, index) => value === nullifierValue[index])
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function fsRounds(): number {
+    return CT_FS_ROUNDS;
+  }
+
+  export function fsFields(
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    c: BigIntVecInput,
+    nf: BigIntVecInput,
+    aCommits: BigIntMatrixInput,
+    aNullifiers: BigIntMatrixInput
+  ): BigIntVec {
+    return [
+      bigintMatrixSum(normalizeBigIntMatrix(ck, 'ck')),
+      bigintMatrixSum(normalizeBigIntMatrix(nk, 'nk')),
+      bigintSum(normalizeBigIntVec(c, 'c')),
+      bigintSum(normalizeBigIntVec(nf, 'nf')),
+      bigintMatrixSum(normalizeBigIntMatrix(aCommits, 'aCommits')),
+      bigintMatrixSum(normalizeBigIntMatrix(aNullifiers, 'aNullifiers')),
+    ];
+  }
+
+  export function fsChallenges(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    c: BigIntVecInput,
+    nf: BigIntVecInput,
+    aCommits: BigIntMatrixInput,
+    aNullifiers: BigIntMatrixInput,
+    rounds: number = CT_FS_ROUNDS
+  ): number[] {
+    assertSafeArrayLength(rounds, 'rounds');
+    if (!ConfidentialBalanceBigInt.validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    const fields = fsFields(ck, nk, c, nf, aCommits, aNullifiers);
+    return Array.from({ length: rounds }, (_, round) =>
+      binaryFsChallenge(CT_FS_NULLIFIER_DOMAIN, fields, round)
+    );
+  }
+
+  export function fsProve(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    c: BigIntVecInput,
+    nf: BigIntVecInput,
+    opening: OpeningInput,
+    ys: readonly OpeningInput[]
+  ): BigIntNullifierProof | null {
+    try {
+      const normalizedOpening = normalizeOpening(opening, 'opening');
+      const masks = ys.map((mask, index) => normalizeOpening(mask, `ys[${index}]`));
+      if (
+        masks.length !== CT_FS_ROUNDS ||
+        !ConfidentialBalanceBigInt.validCommitKey(params, ck) ||
+        !ConfidentialBalanceBigInt.validCommitKey(params, nk) ||
+        !validOpening(params, normalizedOpening) ||
+        !relation(params, ck, nk, c, nf, normalizedOpening) ||
+        !masks.every((mask) => validMask(params, gamma, mask))
+      ) {
+        return null;
+      }
+
+      const aCommits = masks.map((mask) => commit(params, ck, mask));
+      const aNullifiers = masks.map((mask) => nullifier(params, nk, mask));
+      const challenges = fsChallenges(params, ck, nk, c, nf, aCommits, aNullifiers);
+      const zs = masks.map((mask, index) => sigmaRespond(normalizedOpening, mask, challenges[index]));
+      if (!zs.every((response, index) => validResponse(params, gamma, challenges[index], response))) {
+        return null;
+      }
+      return {
+        aCommits,
+        aNullifiers,
+        zMsgs: zs.map((response) => response.msg),
+        zRands: zs.map((response) => response.rand),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  export function fsVerify(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    c: BigIntVecInput,
+    nf: BigIntVecInput,
+    proof: BigIntNullifierProof
+  ): boolean {
+    try {
+      const aCommits = normalizeBigIntMatrix(proof.aCommits, 'proof.aCommits');
+      const aNullifiers = normalizeBigIntMatrix(proof.aNullifiers, 'proof.aNullifiers');
+      const zMsgs = normalizeBigIntMatrix(proof.zMsgs, 'proof.zMsgs');
+      const zRands = normalizeBigIntMatrix(proof.zRands, 'proof.zRands');
+      if (
+        aCommits.length !== CT_FS_ROUNDS ||
+        aNullifiers.length !== CT_FS_ROUNDS ||
+        zMsgs.length !== CT_FS_ROUNDS ||
+        zRands.length !== CT_FS_ROUNDS ||
+        !ConfidentialBalanceBigInt.validCommitKey(params, ck) ||
+        !ConfidentialBalanceBigInt.validCommitKey(params, nk)
+      ) {
+        return false;
+      }
+      const commitment = normalizeBigIntVec(c, 'c');
+      const nullifierValue = normalizeBigIntVec(nf, 'nf');
+      if (commitment.length !== params.m || nullifierValue.length !== params.m) {
+        return false;
+      }
+      const challenges = fsChallenges(params, ck, nk, commitment, nullifierValue, aCommits, aNullifiers);
+      return aCommits.every((aCommit, index) => {
+        const z = { msg: zMsgs[index], rand: zRands[index] };
+        const challenge = challenges[index];
+        const expectedCommit = bigintVecMod(
+          bigintVecAdd(aCommit, bigintScalarMult(BigInt(challenge), commitment)),
+          params.q
+        );
+        const expectedNullifier = bigintVecMod(
+          bigintVecAdd(aNullifiers[index], bigintScalarMult(BigInt(challenge), nullifierValue)),
+          params.q
+        );
+        const responseCommit = commit(params, ck, z);
+        const responseNullifier = nullifier(params, nk, z);
+        return (
+          validResponse(params, gamma, challenge, z) &&
+          responseCommit.every((value, coord) => value === expectedCommit[coord]) &&
+          responseNullifier.every((value, coord) => value === expectedNullifier[coord])
+        );
+      });
     } catch {
       return false;
     }

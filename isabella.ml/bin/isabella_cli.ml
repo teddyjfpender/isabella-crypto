@@ -576,6 +576,14 @@ let json_of_bigint_range_proof bits comps amount_as amount_zs pair_ass pair_zss 
     (json_of_bigint_cube pair_ass)
     (json_of_bigint_cube pair_zss)
 
+let json_of_bigint_nullifier_proof a_commits a_nullifiers z_msgs z_rands =
+  Printf.sprintf
+    "{\"aCommits\":%s,\"aNullifiers\":%s,\"zMsgs\":%s,\"zRands\":%s}"
+    (json_of_bigint_mat a_commits)
+    (json_of_bigint_mat a_nullifiers)
+    (json_of_bigint_mat z_msgs)
+    (json_of_bigint_mat z_rands)
+
 type big_cb_params = {
   big_cb_n1 : int;
   big_cb_n2 : int;
@@ -591,6 +599,7 @@ type big_opening = {
 
 let big_cb_fs_domain = 1001
 let big_cr_fs_domain = 2001
+let big_nf_fs_domain = 3001
 let big_cb_fs_rounds = 128
 let big_cb_transcript_dst = "ISABELLA-CT-FS-v1"
 
@@ -755,10 +764,13 @@ let big_fs_verify params gamma ck c as_ zs =
 let big_opening msg rand =
   { big_open_msg = msg; big_open_rand = rand }
 
-let valid_big_opening params opening =
+let valid_big_opening_shape params opening =
   valid_big_cb_params params &&
   valid_big_vec params.big_cb_n1 opening.big_open_msg &&
-  valid_big_vec params.big_cb_n2 opening.big_open_rand &&
+  valid_big_vec params.big_cb_n2 opening.big_open_rand
+
+let valid_big_opening params opening =
+  valid_big_opening_shape params opening &&
   bigint_all_bounded opening.big_open_msg params.big_cb_beta &&
   bigint_all_bounded opening.big_open_rand params.big_cb_beta
 
@@ -1012,6 +1024,102 @@ let big_cr_fs_verify params gamma k ck c_amount bits comps amount_as amount_zs p
            (List.combine pairs round_zs))
       pair_ass
       (List.combine challenges pair_zss)
+  with Invalid_argument _ -> false
+
+let valid_big_nf_mask params gamma opening =
+  valid_big_opening_shape params opening &&
+  bigint_all_bounded opening.big_open_msg gamma &&
+  bigint_all_bounded opening.big_open_rand gamma
+
+let big_nf_response_bound params gamma challenge =
+  bigint_add gamma (bigint_mul_small params.big_cb_beta challenge)
+
+let valid_big_nf_response params gamma challenge opening =
+  (challenge = 0 || challenge = 1) &&
+  valid_big_opening_shape params opening &&
+  bigint_all_bounded opening.big_open_msg (big_nf_response_bound params gamma challenge) &&
+  bigint_all_bounded opening.big_open_rand (big_nf_response_bound params gamma challenge)
+
+let big_nf_sigma_respond opening mask challenge =
+  { big_open_msg = big_sigma_respond opening.big_open_msg mask.big_open_msg challenge;
+    big_open_rand = big_sigma_respond opening.big_open_rand mask.big_open_rand challenge }
+
+let big_nf_relation params ck nk c nf opening =
+  try
+    valid_big_cb_params params &&
+    valid_big_commit_key params ck &&
+    valid_big_commit_key params nk &&
+    valid_big_vec params.big_cb_m c &&
+    valid_big_vec params.big_cb_m nf &&
+    valid_big_opening params opening &&
+    big_commit params ck opening = c &&
+    big_commit params nk opening = nf
+  with Invalid_argument _ -> false
+
+let big_nf_fs_fields ck nk c nf a_commits a_nullifiers =
+  [ bigint_matrix_sum ck;
+    bigint_matrix_sum nk;
+    bigint_sum c;
+    bigint_sum nf;
+    bigint_matrix_sum a_commits;
+    bigint_matrix_sum a_nullifiers ]
+
+let big_nf_fs_challenges ck nk c nf a_commits a_nullifiers rounds =
+  let fields = big_nf_fs_fields ck nk c nf a_commits a_nullifiers in
+  List.init rounds (fun round -> big_binary_fs_challenge big_nf_fs_domain fields round)
+
+let big_nf_sigma_verify params gamma key target announcement challenge response =
+  try
+    valid_big_commit_key params key &&
+    valid_big_vec params.big_cb_m target &&
+    valid_big_vec params.big_cb_m announcement &&
+    valid_big_nf_response params gamma challenge response &&
+    big_commit params key response =
+      bigint_vec_mod
+        (bigint_vec_add announcement (bigint_scalar_mult (bigint_of_int challenge) target))
+        params.big_cb_q
+  with Invalid_argument _ -> false
+
+let big_nf_fs_prove params gamma ck nk c nf opening masks =
+  try
+    let a_commits = List.map (big_commit params ck) masks in
+    let a_nullifiers = List.map (big_commit params nk) masks in
+    let challenges = big_nf_fs_challenges ck nk c nf a_commits a_nullifiers big_cb_fs_rounds in
+    let responses = List.map2 (big_nf_sigma_respond opening) masks challenges in
+    if List.length masks = big_cb_fs_rounds &&
+       big_nf_relation params ck nk c nf opening &&
+       List.for_all (valid_big_nf_mask params gamma) masks &&
+       List.for_all2 (valid_big_nf_response params gamma) challenges responses
+    then Some
+      ( a_commits,
+        a_nullifiers,
+        List.map (fun response -> response.big_open_msg) responses,
+        List.map (fun response -> response.big_open_rand) responses )
+    else None
+  with Invalid_argument _ -> None
+
+let big_nf_fs_verify params gamma ck nk c nf a_commits a_nullifiers z_msgs z_rands =
+  try
+    let challenges = big_nf_fs_challenges ck nk c nf a_commits a_nullifiers big_cb_fs_rounds in
+    let responses = List.map2 big_opening z_msgs z_rands in
+    valid_big_cb_params params &&
+    valid_big_commit_key params ck &&
+    valid_big_commit_key params nk &&
+    valid_big_vec params.big_cb_m c &&
+    valid_big_vec params.big_cb_m nf &&
+    List.length a_commits = big_cb_fs_rounds &&
+    List.length a_nullifiers = big_cb_fs_rounds &&
+    List.length z_msgs = big_cb_fs_rounds &&
+    List.length z_rands = big_cb_fs_rounds &&
+    List.for_all2
+      (fun a_commit (a_nullifier, challenge, response) ->
+         big_nf_sigma_verify params gamma ck c a_commit challenge response &&
+         big_nf_sigma_verify params gamma nk nf a_nullifier challenge response)
+      a_commits
+      (List.map2
+         (fun a_nullifier (challenge, response) -> (a_nullifier, challenge, response))
+         a_nullifiers
+         (List.combine challenges responses))
   with Invalid_argument _ -> false
 
 let hex_of_bytes bytes =
@@ -2181,6 +2289,127 @@ let cmd_ct_range_bigint_verify args =
      | _ -> output_error "Expected params, gamma, BigInt commitment key, amount commitment, and proof fields")
   | _ -> output_error "Usage: ct-range-bigint-verify M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
 
+let cmd_ct_nullifier_bigint args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; nk_str; amount_str; rand_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint_mat nk_str,
+       parse_canonical_bigint amount_str,
+       parse_canonical_bigint_vec rand_str
+     with
+     | Some params, Some nk, Some amount, Some rand
+       when valid_big_commit_key params nk && valid_big_opening params (big_opening [amount] rand) ->
+         let result = big_commit params nk (big_opening [amount] rand) in
+         (match !output_format with
+          | Human -> Printf.printf "ct_nullifier_bigint = %s\n" (bigint_vec_text result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_bigint_vec result))
+     | _ -> output_error "Expected params, BigInt nullifier key, scalar amount, and randomness vector")
+  | _ -> output_error "Usage: ct-nullifier-bigint M N2 Q BETA \"[[nk]]\" AMOUNT \"[rand]\""
+
+let cmd_ct_nullifier_bigint_fs_fields args =
+  match args with
+  | [ck_str; nk_str; c_str; nf_str; a_commits_str; a_nullifiers_str] ->
+    (match
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_mat nk_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_vec nf_str,
+       parse_canonical_bigint_mat a_commits_str,
+       parse_canonical_bigint_mat a_nullifiers_str
+     with
+     | Some ck, Some nk, Some c, Some nf, Some a_commits, Some a_nullifiers ->
+         let result = big_nf_fs_fields ck nk c nf a_commits a_nullifiers in
+         (match !output_format with
+          | Human -> Printf.printf "ct_nullifier_bigint_fs_fields = %s\n" (bigint_vec_text result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_bigint_vec result))
+     | _ -> output_error "Expected BigInt keys, commitment, nullifier, commitment announcements, and nullifier announcements")
+  | _ -> output_error "Usage: ct-nullifier-bigint-fs-fields \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[[aCommits]]\" \"[[aNullifiers]]\""
+
+let cmd_ct_nullifier_bigint_fs_challenges args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; ck_str; nk_str; c_str; nf_str; a_commits_str; a_nullifiers_str; rounds_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_mat nk_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_vec nf_str,
+       parse_canonical_bigint_mat a_commits_str,
+       parse_canonical_bigint_mat a_nullifiers_str,
+       parse_canonical_int rounds_str
+     with
+     | Some params, Some ck, Some nk, Some c, Some nf, Some a_commits, Some a_nullifiers, Some rounds
+       when valid_big_cb_params params &&
+            valid_big_commit_key params ck &&
+            valid_big_commit_key params nk &&
+            valid_big_vec params.big_cb_m c &&
+            valid_big_vec params.big_cb_m nf &&
+            rounds >= 0 ->
+         let result = big_nf_fs_challenges ck nk c nf a_commits a_nullifiers rounds in
+         output_result "ct_nullifier_bigint_fs_challenges"
+           ("[" ^ String.concat "," (List.map string_of_int result) ^ "]")
+     | _ -> output_error "Expected params, BigInt nullifier transcript fields, and round count")
+  | _ -> output_error "Usage: ct-nullifier-bigint-fs-challenges M N2 Q BETA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[[aCommits]]\" \"[[aNullifiers]]\" ROUNDS"
+
+let cmd_ct_nullifier_bigint_prove args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; ck_str; nk_str; c_str; nf_str; amount_str; rand_str; y_msgs_str; y_rands_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_mat nk_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_vec nf_str,
+       parse_canonical_bigint amount_str,
+       parse_canonical_bigint_vec rand_str,
+       parse_canonical_bigint_vec y_msgs_str,
+       parse_canonical_bigint_mat y_rands_str
+     with
+     | Some params, Some gamma, Some ck, Some nk, Some c, Some nf, Some amount, Some rand, Some y_msgs, Some y_rands ->
+       (match make_big_scalar_openings y_msgs y_rands with
+        | Some masks ->
+          (match big_nf_fs_prove params gamma ck nk c nf (big_opening [amount] rand) masks with
+           | Some (a_commits, a_nullifiers, z_msgs, z_rands) ->
+             (match !output_format with
+              | Human ->
+                Printf.printf
+                  "ct_nullifier_bigint_proof = %s\n"
+                  (json_of_bigint_nullifier_proof a_commits a_nullifiers z_msgs z_rands)
+              | Json ->
+                Printf.printf
+                  "{\"result\":%s}\n"
+                  (json_of_bigint_nullifier_proof a_commits a_nullifiers z_msgs z_rands))
+           | None ->
+             (match !output_format with
+              | Human -> print_endline "ct_nullifier_bigint_proof = null"
+              | Json -> print_endline "{\"result\":null}"))
+        | _ -> output_error "Nullifier-mask counts must match their randomness matrices")
+     | _ -> output_error "Expected params, gamma, BigInt keys, commitment, nullifier, opening, and masks")
+  | _ -> output_error "Usage: ct-nullifier-bigint-prove M N2 Q BETA GAMMA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" AMOUNT \"[rand]\" \"[yMsgs]\" \"[[yRands]]\""
+
+let cmd_ct_nullifier_bigint_verify args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; ck_str; nk_str; c_str; nf_str; a_commits_str; a_nullifiers_str; z_msgs_str; z_rands_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_mat nk_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_vec nf_str,
+       parse_canonical_bigint_mat a_commits_str,
+       parse_canonical_bigint_mat a_nullifiers_str,
+       parse_canonical_bigint_mat z_msgs_str,
+       parse_canonical_bigint_mat z_rands_str
+     with
+     | Some params, Some gamma, Some ck, Some nk, Some c, Some nf, Some a_commits, Some a_nullifiers, Some z_msgs, Some z_rands ->
+         let result = big_nf_fs_verify params gamma ck nk c nf a_commits a_nullifiers z_msgs z_rands in
+         output_result "ct_nullifier_bigint_verify" (if result then "true" else "false")
+     | _ -> output_error "Expected params, gamma, BigInt keys, commitment, nullifier, and proof fields")
+  | _ -> output_error "Usage: ct-nullifier-bigint-verify M N2 Q BETA GAMMA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[[aCommits]]\" \"[[aNullifiers]]\" \"[[zMsgs]]\" \"[[zRands]]\""
+
 (** {1 Confidential Range Commands} *)
 
 let cmd_cr_amount_commitment args =
@@ -3290,6 +3519,11 @@ let show_help () =
   print_endline "  ct-range-bigint-fs-challenges M N2 Q BETA CK C BITS COMPS AMOUNT_AS PAIR_ASS ROUNDS  Expand widened range challenges";
   print_endline "  ct-range-bigint-prove M N2 Q BETA G K CK C AMOUNT RAND BITS BIT_RANDS COMPS COMP_RANDS YAMOUNTS YPAIRSS  Build widened range proof";
   print_endline "  ct-range-bigint-verify M N2 Q BETA G K CK C BITS COMPS AMOUNT_AS AMOUNT_ZS PAIR_ASS PAIR_ZSS  Verify widened range proof";
+  print_endline "  ct-nullifier-bigint M N2 Q BETA NK AMOUNT RAND  Compute a widened note nullifier";
+  print_endline "  ct-nullifier-bigint-fs-fields CK NK C NF ACOMMITS ANULLIFIERS  Compute widened nullifier Fiat-Shamir fields";
+  print_endline "  ct-nullifier-bigint-fs-challenges M N2 Q BETA CK NK C NF ACOMMITS ANULLIFIERS ROUNDS  Expand widened nullifier challenges";
+  print_endline "  ct-nullifier-bigint-prove M N2 Q BETA G CK NK C NF AMOUNT RAND YMSGS YRANDS  Build widened nullifier proof";
+  print_endline "  ct-nullifier-bigint-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify widened nullifier proof";
   print_endline "";
   print_endline "Confidential Range Commands:";
   print_endline "  cr-amount-commitment M N2 Q BETA CK C BITS  Build the amount residual commitment";
@@ -3408,6 +3642,11 @@ let run_command cmd args =
   | "ct-range-bigint-fs-challenges" -> cmd_ct_range_bigint_fs_challenges args
   | "ct-range-bigint-prove" -> cmd_ct_range_bigint_prove args
   | "ct-range-bigint-verify" -> cmd_ct_range_bigint_verify args
+  | "ct-nullifier-bigint" -> cmd_ct_nullifier_bigint args
+  | "ct-nullifier-bigint-fs-fields" -> cmd_ct_nullifier_bigint_fs_fields args
+  | "ct-nullifier-bigint-fs-challenges" -> cmd_ct_nullifier_bigint_fs_challenges args
+  | "ct-nullifier-bigint-prove" -> cmd_ct_nullifier_bigint_prove args
+  | "ct-nullifier-bigint-verify" -> cmd_ct_nullifier_bigint_verify args
   | "cr-amount-commitment" -> cmd_cr_amount_commitment args
   | "cr-prove" -> cmd_cr_prove args
   | "cr-verify" -> cmd_cr_verify args

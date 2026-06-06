@@ -332,6 +332,11 @@ jobs:
           node scripts/generate_confidential_bigint_range_vectors.mjs
           git diff --exit-code -- tests/fixtures/confidential-bigint-range-vectors.json
 
+      - name: Check confidential BigInt nullifier vectors
+        run: |
+          node scripts/generate_confidential_bigint_nullifier_vectors.mjs
+          git diff --exit-code -- tests/fixtures/confidential-bigint-nullifier-vectors.json
+
       - name: Check confidential Merkle vectors
         run: |
           node scripts/generate_confidential_merkle_vectors.mjs

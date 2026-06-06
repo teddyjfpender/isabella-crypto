@@ -102,7 +102,7 @@
       "id": "runtime_bignum_representation",
       "category": "implementation_boundary",
       "status": "open",
-      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec; TypeScript has q83 BigInt balance and 64-bit range reference paths; balance and range now have OCaml/Haskell preview parity. Every production proof API and transaction/runtime integer field still needs multiprecision integration before launch.",
+      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec; TypeScript has q83 BigInt balance, 64-bit range, and nullifier reference paths; balance, range, and nullifier now have OCaml/Haskell preview parity. Every production proof API and transaction/runtime integer field still needs multiprecision integration before launch.",
       "acceptanceGate": "Move every production proof API, proof arithmetic path, and transaction/runtime integer field that can carry widened parameter values to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
       "evidence": [
         {
@@ -127,6 +127,14 @@
             "typescript-reference-with-native-preview-parity",
             "q83-range-64bit-residual",
             "OCaml and Haskell preview commands rebuild and verify the compact proof commitment"
+          ]
+        },
+        {
+          "file": "tests/fixtures/confidential-bigint-nullifier-vectors.json",
+          "snippets": [
+            "typescript-reference-with-native-preview-parity",
+            "q83-nullifier-basic",
+            "OCaml and Haskell preview commands rebuild and verify this fixture with multiprecision arithmetic"
           ]
         },
         {

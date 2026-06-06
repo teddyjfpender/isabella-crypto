@@ -39,7 +39,12 @@
       "ct-range-bigint-fs-fields",
       "ct-range-bigint-fs-challenges",
       "ct-range-bigint-prove",
-      "ct-range-bigint-verify"
+      "ct-range-bigint-verify",
+      "ct-nullifier-bigint",
+      "ct-nullifier-bigint-fs-fields",
+      "ct-nullifier-bigint-fs-challenges",
+      "ct-nullifier-bigint-prove",
+      "ct-nullifier-bigint-verify"
     ],
     "ocamlPreviewCommands": [
       "ct-balance-bigint-rand-commit",
@@ -50,7 +55,12 @@
       "ct-range-bigint-fs-fields",
       "ct-range-bigint-fs-challenges",
       "ct-range-bigint-prove",
-      "ct-range-bigint-verify"
+      "ct-range-bigint-verify",
+      "ct-nullifier-bigint",
+      "ct-nullifier-bigint-fs-fields",
+      "ct-nullifier-bigint-fs-challenges",
+      "ct-nullifier-bigint-prove",
+      "ct-nullifier-bigint-verify"
     ],
     "scaffoldCommands": [
       "ct-member-prove",
@@ -154,6 +164,15 @@
         "fsProve",
         "fsVerify"
       ],
+      "ConfidentialNullifierBigInt": [
+        "nullifier",
+        "responseBound",
+        "fsRounds",
+        "fsFields",
+        "fsChallenges",
+        "fsProve",
+        "fsVerify"
+      ],
       "ConfidentialTransaction": [
         "transactionContextDigest",
         "transactionMerkleProofDigest",
@@ -209,6 +228,15 @@
       "ct-balance-bigint-fs-challenges",
       "ct-balance-bigint-prove",
       "ct-balance-bigint-verify",
+      "ct-range-bigint-fs-fields",
+      "ct-range-bigint-fs-challenges",
+      "ct-range-bigint-prove",
+      "ct-range-bigint-verify",
+      "ct-nullifier-bigint",
+      "ct-nullifier-bigint-fs-fields",
+      "ct-nullifier-bigint-fs-challenges",
+      "ct-nullifier-bigint-prove",
+      "ct-nullifier-bigint-verify",
       "ct-transaction-context",
       "ct-wallet-proof-request-digest",
       "ct-sample-opening",
@@ -241,6 +269,15 @@
       "ct-balance-bigint-fs-challenges",
       "ct-balance-bigint-prove",
       "ct-balance-bigint-verify",
+      "ct-range-bigint-fs-fields",
+      "ct-range-bigint-fs-challenges",
+      "ct-range-bigint-prove",
+      "ct-range-bigint-verify",
+      "ct-nullifier-bigint",
+      "ct-nullifier-bigint-fs-fields",
+      "ct-nullifier-bigint-fs-challenges",
+      "ct-nullifier-bigint-prove",
+      "ct-nullifier-bigint-verify",
       "ct-transaction-context",
       "ct-wallet-proof-request-digest",
       "ct-sample-opening",

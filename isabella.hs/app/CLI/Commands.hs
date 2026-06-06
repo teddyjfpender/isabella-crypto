@@ -15,7 +15,7 @@ import qualified Canon.ZK.Internal.RepeatedFS as RepeatedFS
 import qualified Canon.Zq as Zq
 import Data.Bits ((.&.))
 import Data.Char (ord)
-import Data.List (intercalate, sort)
+import Data.List (intercalate, sort, zip4)
 import GHC.Clock (getMonotonicTimeNSec)
 import Text.Read (readMaybe)
 
@@ -67,6 +67,11 @@ runCommand format cmd args = case cmd of
     "ct-range-bigint-fs-challenges" -> cmdCtRangeBigintFsChallenges format args
     "ct-range-bigint-prove" -> cmdCtRangeBigintProve format args
     "ct-range-bigint-verify" -> cmdCtRangeBigintVerify format args
+    "ct-nullifier-bigint" -> cmdCtNullifierBigint format args
+    "ct-nullifier-bigint-fs-fields" -> cmdCtNullifierBigintFsFields format args
+    "ct-nullifier-bigint-fs-challenges" -> cmdCtNullifierBigintFsChallenges format args
+    "ct-nullifier-bigint-prove" -> cmdCtNullifierBigintProve format args
+    "ct-nullifier-bigint-verify" -> cmdCtNullifierBigintVerify format args
     "cr-amount-commitment" -> cmdCrAmountCommitment format args
     "cr-prove" -> cmdCrProve format args
     "cr-verify" -> cmdCrVerify format args
@@ -463,6 +468,13 @@ data BigCrProof = BigCrProof
   , bigCrPairZss :: [[[Integer]]]
   }
 
+data BigNfProof = BigNfProof
+  { bigNfACommits :: [[Integer]]
+  , bigNfANullifiers :: [[Integer]]
+  , bigNfZMsgs :: [[Integer]]
+  , bigNfZRands :: [[Integer]]
+  }
+
 jsonBigCbProof :: BigCbProof -> String
 jsonBigCbProof proof =
     jsonObject
@@ -481,11 +493,23 @@ jsonBigCrProof proof =
         , ("pairZss", jsonIntegerCube (bigCrPairZss proof))
         ]
 
+jsonBigNfProof :: BigNfProof -> String
+jsonBigNfProof proof =
+    jsonObject
+        [ ("aCommits", jsonIntegerMat (bigNfACommits proof))
+        , ("aNullifiers", jsonIntegerMat (bigNfANullifiers proof))
+        , ("zMsgs", jsonIntegerMat (bigNfZMsgs proof))
+        , ("zRands", jsonIntegerMat (bigNfZRands proof))
+        ]
+
 bigCbFsDomain :: Int
 bigCbFsDomain = 1001
 
 bigCrFsDomain :: Int
 bigCrFsDomain = 2001
+
+bigNfFsDomain :: Int
+bigNfFsDomain = 3001
 
 bigCbFsRounds :: Int
 bigCbFsRounds = 128
@@ -639,11 +663,15 @@ bigOpening = BigOpening
 
 validBigOpening :: BigCbParams -> BigOpening -> Bool
 validBigOpening params opening =
-    validBigCbParams params &&
-    validBigVec (bigCbN1 params) (bigOpenMsg opening) &&
-    validBigVec (bigCbN2 params) (bigOpenRand opening) &&
+    validBigOpeningShape params opening &&
     bigAllBounded (bigOpenMsg opening) (bigCbBeta params) &&
     bigAllBounded (bigOpenRand opening) (bigCbBeta params)
+
+validBigOpeningShape :: BigCbParams -> BigOpening -> Bool
+validBigOpeningShape params opening =
+    validBigCbParams params &&
+    validBigVec (bigCbN1 params) (bigOpenMsg opening) &&
+    validBigVec (bigCbN2 params) (bigOpenRand opening)
 
 validBigBitOpening :: BigCbParams -> BigOpening -> Bool
 validBigBitOpening params opening =
@@ -888,6 +916,100 @@ bigCrFsVerify params gamma k ck cAmount proof =
               (validBigCrPairResponse params gamma)
           | (roundAss, challenge, roundZss) <- zip3 pairAss challenges pairZss
           , (bitIndex, a, z) <- zip3 [0 :: Int ..] roundAss roundZss
+          ]
+
+validBigNfMask :: BigCbParams -> Integer -> BigOpening -> Bool
+validBigNfMask params gamma opening =
+    validBigOpeningShape params opening &&
+    bigAllBounded (bigOpenMsg opening) gamma &&
+    bigAllBounded (bigOpenRand opening) gamma
+
+bigNfResponseBound :: BigCbParams -> Integer -> Int -> Integer
+bigNfResponseBound params gamma challenge =
+    gamma + toInteger challenge * bigCbBeta params
+
+validBigNfResponse :: BigCbParams -> Integer -> Int -> BigOpening -> Bool
+validBigNfResponse params gamma challenge opening =
+    (challenge == 0 || challenge == 1) &&
+    validBigOpeningShape params opening &&
+    bigAllBounded (bigOpenMsg opening) (bigNfResponseBound params gamma challenge) &&
+    bigAllBounded (bigOpenRand opening) (bigNfResponseBound params gamma challenge)
+
+bigNfSigmaRespond :: BigOpening -> BigOpening -> Int -> BigOpening
+bigNfSigmaRespond opening mask challenge =
+    BigOpening
+        (bigSigmaRespond (bigOpenMsg opening) (bigOpenMsg mask) challenge)
+        (bigSigmaRespond (bigOpenRand opening) (bigOpenRand mask) challenge)
+
+bigNfRelation :: BigCbParams -> [[Integer]] -> [[Integer]] -> [Integer] -> [Integer] -> BigOpening -> Bool
+bigNfRelation params ck nk c nf opening =
+    validBigCbParams params &&
+    validBigCommitKey params ck &&
+    validBigCommitKey params nk &&
+    validBigVec (bigCbM params) c &&
+    validBigVec (bigCbM params) nf &&
+    validBigOpening params opening &&
+    bigCommit params ck opening == c &&
+    bigCommit params nk opening == nf
+
+bigNfFsFields :: [[Integer]] -> [[Integer]] -> [Integer] -> [Integer] -> [[Integer]] -> [[Integer]] -> [Integer]
+bigNfFsFields ck nk c nf aCommits aNullifiers =
+    [ sum (concat ck)
+    , sum (concat nk)
+    , sum c
+    , sum nf
+    , sum (concat aCommits)
+    , sum (concat aNullifiers)
+    ]
+
+bigNfFsChallenges :: [[Integer]] -> [[Integer]] -> [Integer] -> [Integer] -> [[Integer]] -> [[Integer]] -> Int -> [Int]
+bigNfFsChallenges ck nk c nf aCommits aNullifiers rounds =
+    let fields = bigNfFsFields ck nk c nf aCommits aNullifiers
+     in [bigBinaryFsChallenge bigNfFsDomain fields roundIndex | roundIndex <- [0 .. rounds - 1]]
+
+bigNfSigmaVerify :: BigCbParams -> Integer -> [[Integer]] -> [Integer] -> [Integer] -> Int -> BigOpening -> Bool
+bigNfSigmaVerify params gamma key target announcement challenge response =
+    validBigCommitKey params key &&
+    validBigVec (bigCbM params) target &&
+    validBigVec (bigCbM params) announcement &&
+    validBigNfResponse params gamma challenge response &&
+    bigCommit params key response ==
+        bigVecMod (bigVecAdd announcement (bigScalarMult (toInteger challenge) target)) (bigCbQ params)
+
+bigNfFsProve :: BigCbParams -> Integer -> [[Integer]] -> [[Integer]] -> [Integer] -> [Integer] -> BigOpening -> [BigOpening] -> Maybe BigNfProof
+bigNfFsProve params gamma ck nk c nf opening masks =
+    let aCommits = map (bigCommit params ck) masks
+        aNullifiers = map (bigCommit params nk) masks
+        challenges = bigNfFsChallenges ck nk c nf aCommits aNullifiers bigCbFsRounds
+        responses = zipWith (bigNfSigmaRespond opening) masks challenges
+     in if length masks == bigCbFsRounds &&
+           bigNfRelation params ck nk c nf opening &&
+           all (validBigNfMask params gamma) masks &&
+           and (zipWith (validBigNfResponse params gamma) challenges responses)
+        then Just (BigNfProof aCommits aNullifiers (map bigOpenMsg responses) (map bigOpenRand responses))
+        else Nothing
+
+bigNfFsVerify :: BigCbParams -> Integer -> [[Integer]] -> [[Integer]] -> [Integer] -> [Integer] -> BigNfProof -> Bool
+bigNfFsVerify params gamma ck nk c nf proof =
+    let aCommits = bigNfACommits proof
+        aNullifiers = bigNfANullifiers proof
+        zMsgs = bigNfZMsgs proof
+        zRands = bigNfZRands proof
+        challenges = bigNfFsChallenges ck nk c nf aCommits aNullifiers bigCbFsRounds
+        responses = zipWith BigOpening zMsgs zRands
+     in validBigCbParams params &&
+        validBigCommitKey params ck &&
+        validBigCommitKey params nk &&
+        validBigVec (bigCbM params) c &&
+        validBigVec (bigCbM params) nf &&
+        length aCommits == bigCbFsRounds &&
+        length aNullifiers == bigCbFsRounds &&
+        length zMsgs == bigCbFsRounds &&
+        length zRands == bigCbFsRounds &&
+        and
+          [ bigNfSigmaVerify params gamma ck c aCommit challenge response &&
+            bigNfSigmaVerify params gamma nk nf aNullifier challenge response
+          | (aCommit, aNullifier, challenge, response) <- zip4 aCommits aNullifiers challenges responses
           ]
 
 jsonCrProof :: ConfidentialRange.RangeProof -> String
@@ -1844,6 +1966,124 @@ cmdCtRangeBigintVerify format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr
         _ -> outputError format "Expected params, gamma, BigInt commitment key, amount commitment, and proof fields"
 cmdCtRangeBigintVerify format _ =
     outputUsage format "Usage: ct-range-bigint-verify M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
+
+cmdCtNullifierBigint :: OutputFormat -> [String] -> IO ()
+cmdCtNullifierBigint format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalIntegerMat nkStr
+        , parseCanonicalInteger amountStr
+        , parseCanonicalIntegerVec randStr
+        )
+    of
+        (Just params, Just nk, Just amount, Just rand)
+            | validBigCommitKey params nk && validBigOpening params (bigOpening [amount] rand) ->
+                let result = bigCommit params nk (bigOpening [amount] rand)
+                 in case format of
+                        Human -> putStrLn $ "ct_nullifier_bigint = " ++ show result
+                        Json -> putStrLn $ "{\"result\":" ++ jsonIntegerVec result ++ "}"
+        _ -> outputError format "Expected params, BigInt nullifier key, scalar amount, and randomness vector"
+cmdCtNullifierBigint format _ =
+    outputUsage format "Usage: ct-nullifier-bigint M N2 Q BETA \"[[nk]]\" AMOUNT \"[rand]\""
+
+cmdCtNullifierBigintFsFields :: OutputFormat -> [String] -> IO ()
+cmdCtNullifierBigintFsFields format [ckStr, nkStr, cStr, nfStr, aCommitsStr, aNullifiersStr] =
+    case
+        ( parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerMat nkStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerVec nfStr
+        , parseCanonicalIntegerMat aCommitsStr
+        , parseCanonicalIntegerMat aNullifiersStr
+        )
+    of
+        (Just ck, Just nk, Just c, Just nf, Just aCommits, Just aNullifiers) ->
+            case format of
+                Human -> putStrLn $ "ct_nullifier_bigint_fs_fields = " ++ show (bigNfFsFields ck nk c nf aCommits aNullifiers)
+                Json -> putStrLn $ "{\"result\":" ++ jsonIntegerVec (bigNfFsFields ck nk c nf aCommits aNullifiers) ++ "}"
+        _ -> outputError format "Expected BigInt keys, commitment, nullifier, commitment announcements, and nullifier announcements"
+cmdCtNullifierBigintFsFields format _ =
+    outputUsage format "Usage: ct-nullifier-bigint-fs-fields \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[[aCommits]]\" \"[[aNullifiers]]\""
+
+cmdCtNullifierBigintFsChallenges :: OutputFormat -> [String] -> IO ()
+cmdCtNullifierBigintFsChallenges format [mStr, n2Str, qStr, betaStr, ckStr, nkStr, cStr, nfStr, aCommitsStr, aNullifiersStr, roundsStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerMat nkStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerVec nfStr
+        , parseCanonicalIntegerMat aCommitsStr
+        , parseCanonicalIntegerMat aNullifiersStr
+        , parseCanonicalInt roundsStr
+        )
+    of
+        (Just params, Just ck, Just nk, Just c, Just nf, Just aCommits, Just aNullifiers, Just rounds)
+            | validBigCbParams params &&
+              validBigCommitKey params ck &&
+              validBigCommitKey params nk &&
+              validBigVec (bigCbM params) c &&
+              validBigVec (bigCbM params) nf &&
+              rounds >= 0 ->
+                outputVecResult format "ct_nullifier_bigint_fs_challenges = "
+                    (bigNfFsChallenges ck nk c nf aCommits aNullifiers rounds)
+        _ -> outputError format "Expected params, BigInt nullifier transcript fields, and round count"
+cmdCtNullifierBigintFsChallenges format _ =
+    outputUsage format "Usage: ct-nullifier-bigint-fs-challenges M N2 Q BETA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[[aCommits]]\" \"[[aNullifiers]]\" ROUNDS"
+
+cmdCtNullifierBigintProve :: OutputFormat -> [String] -> IO ()
+cmdCtNullifierBigintProve format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, nkStr, cStr, nfStr, amountStr, randStr, yMsgsStr, yRandsStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInteger gammaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerMat nkStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerVec nfStr
+        , parseCanonicalInteger amountStr
+        , parseCanonicalIntegerVec randStr
+        , parseCanonicalIntegerVec yMsgsStr
+        , parseCanonicalIntegerMat yRandsStr
+        )
+    of
+        (Just params, Just gamma, Just ck, Just nk, Just c, Just nf, Just amount, Just rand, Just yMsgs, Just yRands) ->
+            case makeBigScalarOpenings yMsgs yRands of
+                Just masks ->
+                    case bigNfFsProve params gamma ck nk c nf (bigOpening [amount] rand) masks of
+                        Just proof ->
+                            case format of
+                                Human -> putStrLn $ "ct_nullifier_bigint_proof = " ++ jsonBigNfProof proof
+                                Json -> putStrLn $ "{\"result\":" ++ jsonBigNfProof proof ++ "}"
+                        Nothing ->
+                            case format of
+                                Human -> putStrLn "ct_nullifier_bigint_proof = null"
+                                Json -> putStrLn "{\"result\":null}"
+                Nothing -> outputError format "Nullifier-mask counts must match their randomness matrices"
+        _ -> outputError format "Expected params, gamma, BigInt keys, commitment, nullifier, opening, and masks"
+cmdCtNullifierBigintProve format _ =
+    outputUsage format "Usage: ct-nullifier-bigint-prove M N2 Q BETA GAMMA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" AMOUNT \"[rand]\" \"[yMsgs]\" \"[[yRands]]\""
+
+cmdCtNullifierBigintVerify :: OutputFormat -> [String] -> IO ()
+cmdCtNullifierBigintVerify format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, nkStr, cStr, nfStr, aCommitsStr, aNullifiersStr, zMsgsStr, zRandsStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInteger gammaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerMat nkStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerVec nfStr
+        , parseCanonicalIntegerMat aCommitsStr
+        , parseCanonicalIntegerMat aNullifiersStr
+        , parseCanonicalIntegerMat zMsgsStr
+        , parseCanonicalIntegerMat zRandsStr
+        )
+    of
+        (Just params, Just gamma, Just ck, Just nk, Just c, Just nf, Just aCommits, Just aNullifiers, Just zMsgs, Just zRands) ->
+            outputBoolResult format "ct_nullifier_bigint_verify = "
+                (bigNfFsVerify params gamma ck nk c nf (BigNfProof aCommits aNullifiers zMsgs zRands))
+        _ -> outputError format "Expected params, gamma, BigInt keys, commitment, nullifier, and proof fields"
+cmdCtNullifierBigintVerify format _ =
+    outputUsage format "Usage: ct-nullifier-bigint-verify M N2 Q BETA GAMMA \"[[ck]]\" \"[[nk]]\" \"[c]\" \"[nf]\" \"[[aCommits]]\" \"[[aNullifiers]]\" \"[[zMsgs]]\" \"[[zRands]]\""
 
 cmdCrAmountCommitment :: OutputFormat -> [String] -> IO ()
 cmdCrAmountCommitment format [mStr, n2Str, qStr, betaStr, ckStr, cAmountStr, cBitsStr] =

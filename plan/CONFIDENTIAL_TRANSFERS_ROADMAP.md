@@ -91,6 +91,11 @@ benchmarks are independently checked.
   `2^64 * beta` amount witness bound that drives the q83 runtime-integer
   blocker, and OCaml/Haskell multiprecision preview commands rebuild and verify
   its compact proof commitment.
+- `tests/fixtures/confidential-bigint-nullifier-vectors.json` now pins a q83
+  confidential-nullifier reference path showing the same bounded opening maps
+  to both a note commitment and nullifier under separate SIS keys, with
+  OCaml/Haskell multiprecision preview commands rebuilding and verifying the
+  proof.
   These are concrete progress on widened execution semantics, but they are not
   launch parity: the preview commands are not production APIs, full native
   launch integration and every widened transaction/runtime integer field remain
@@ -335,9 +340,10 @@ this check: the 64-bit range proof response/SIS bounds exceed both
 additionally exceeds those limits at the modulus itself. Production for these
 parameters therefore needs BigInt or multiprecision proof arithmetic across
 TypeScript, OCaml, and Haskell. The balance slice now has a q83 BigInt
-reference vector with OCaml/Haskell multiprecision preview parity, and the range
+reference vector with OCaml/Haskell multiprecision preview parity, the range
 slice now has a q83 `k = 64` BigInt reference vector with OCaml/Haskell
-multiprecision preview parity, but production still needs full native launch
+multiprecision preview parity, and the nullifier slice now has q83 BigInt
+reference and native preview parity, but production still needs full native launch
 parity, canonical bignum serialization for every proof API and
 transaction/runtime integer field that can carry widened values, and regenerated
 parity vectors.

@@ -32,6 +32,7 @@ const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
 const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
 const bigintBalanceVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-balance-vectors.json');
 const bigintRangeVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-range-vectors.json');
+const bigintNullifierVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-nullifier-vectors.json');
 const ghcFallbackBinary = path.join('/tmp', `isabella-hs-validate-cli-${process.pid}`);
 const ghcFallbackBuildDir = path.join('/tmp', `isabella-hs-validate-build-${process.pid}`);
 let cachedHaskellCli: string | null | undefined;
@@ -46,6 +47,12 @@ type BigintRangeProofJson = {
   amountZs: string[][];
   pairAss: string[][][];
   pairZss: string[][][];
+};
+type BigintNullifierProofJson = {
+  aCommits: string[][];
+  aNullifiers: string[][];
+  zMsgs: string[][];
+  zRands: string[][];
 };
 
 function ensureFileExists(filePath: string, hint: string): void {
@@ -363,6 +370,22 @@ const bigintRangeVectors = JSON.parse(fs.readFileSync(bigintRangeVectorsPath, 'u
   };
 };
 
+const bigintNullifierVectors = JSON.parse(fs.readFileSync(bigintNullifierVectorsPath, 'utf8')) as {
+  status: string;
+  params: { m: number; n2: number; q: string; beta: string; gamma: string };
+  transcript: { fields: string[]; firstRounds: Array<{ round: number; challenge: number }> };
+  case: {
+    name: string;
+    commitmentKey: string[][];
+    nullifierKey: string[][];
+    opening: DecimalOpening;
+    commitment: string[];
+    nullifier: string[];
+    masks: DecimalOpening[];
+    proof: BigintNullifierProofJson;
+  };
+};
+
 const bigParamsArgs = [
   bigintBalanceVectors.params.m.toString(),
   bigintBalanceVectors.params.n2.toString(),
@@ -573,6 +596,143 @@ assert.equal(
   `ct-range-bigint-verify Haskell rejects tampered q83 amount commitment for ${bigintRangeVectors.case.name}`
 );
 console.log('validate-haskell: confidential BigInt range q83 preview surface passed');
+
+const bigNullifierParamsArgs = [
+  bigintNullifierVectors.params.m.toString(),
+  bigintNullifierVectors.params.n2.toString(),
+  bigintNullifierVectors.params.q,
+  bigintNullifierVectors.params.beta,
+];
+const bigNullifierGamma = bigintNullifierVectors.params.gamma;
+const bigNullifierCommitmentKey = integerMatText(bigintNullifierVectors.case.commitmentKey);
+const bigNullifierKey = integerMatText(bigintNullifierVectors.case.nullifierKey);
+const bigNullifierCommitment = integerVecText(bigintNullifierVectors.case.commitment);
+const bigNullifier = integerVecText(bigintNullifierVectors.case.nullifier);
+const bigNullifierAmount = bigintNullifierVectors.case.opening.msg[0];
+const bigNullifierRand = integerVecText(bigintNullifierVectors.case.opening.rand);
+const bigNullifierYMsgs = integerVecText(bigintNullifierVectors.case.masks.map((entry) => entry.msg[0]));
+const bigNullifierYRands = integerMatText(bigintNullifierVectors.case.masks.map((entry) => entry.rand));
+const bigNullifierProof = bigintNullifierVectors.case.proof;
+const bigNullifierACommits = integerMatText(bigNullifierProof.aCommits);
+const bigNullifierANullifiers = integerMatText(bigNullifierProof.aNullifiers);
+const bigNullifierZMsgs = integerMatText(bigNullifierProof.zMsgs);
+const bigNullifierZRands = integerMatText(bigNullifierProof.zRands);
+
+assert.equal(bigintNullifierVectors.status, 'typescript-reference-with-native-preview-parity');
+assert.deepEqual(
+  parseResult<string[]>(runHaskell([
+    'ct-nullifier-bigint',
+    ...bigNullifierParamsArgs,
+    bigNullifierKey,
+    bigNullifierAmount,
+    bigNullifierRand,
+  ])),
+  bigintNullifierVectors.case.nullifier,
+  `ct-nullifier-bigint Haskell/fixture parity for ${bigintNullifierVectors.case.name}`
+);
+assert.deepEqual(
+  parseResult<string[]>(runHaskell([
+    'ct-nullifier-bigint-fs-fields',
+    bigNullifierCommitmentKey,
+    bigNullifierKey,
+    bigNullifierCommitment,
+    bigNullifier,
+    bigNullifierACommits,
+    bigNullifierANullifiers,
+  ])),
+  bigintNullifierVectors.transcript.fields,
+  `ct-nullifier-bigint-fs-fields Haskell/fixture parity for ${bigintNullifierVectors.case.name}`
+);
+assert.deepEqual(
+  parseResult<number[]>(runHaskell([
+    'ct-nullifier-bigint-fs-challenges',
+    ...bigNullifierParamsArgs,
+    bigNullifierCommitmentKey,
+    bigNullifierKey,
+    bigNullifierCommitment,
+    bigNullifier,
+    bigNullifierACommits,
+    bigNullifierANullifiers,
+    bigintNullifierVectors.transcript.firstRounds.length.toString(),
+  ])),
+  bigintNullifierVectors.transcript.firstRounds.map((entry) => entry.challenge),
+  `ct-nullifier-bigint-fs-challenges Haskell/fixture parity for ${bigintNullifierVectors.case.name}`
+);
+assert.deepEqual(
+  parseResult<BigintNullifierProofJson>(runHaskell([
+    'ct-nullifier-bigint-prove',
+    ...bigNullifierParamsArgs,
+    bigNullifierGamma,
+    bigNullifierCommitmentKey,
+    bigNullifierKey,
+    bigNullifierCommitment,
+    bigNullifier,
+    bigNullifierAmount,
+    bigNullifierRand,
+    bigNullifierYMsgs,
+    bigNullifierYRands,
+  ])),
+  bigNullifierProof,
+  `ct-nullifier-bigint-prove Haskell/fixture parity for ${bigintNullifierVectors.case.name}`
+);
+assert.equal(
+  parseResult<boolean>(runHaskell([
+    'ct-nullifier-bigint-verify',
+    ...bigNullifierParamsArgs,
+    bigNullifierGamma,
+    bigNullifierCommitmentKey,
+    bigNullifierKey,
+    bigNullifierCommitment,
+    bigNullifier,
+    bigNullifierACommits,
+    bigNullifierANullifiers,
+    bigNullifierZMsgs,
+    bigNullifierZRands,
+  ])),
+  true,
+  `ct-nullifier-bigint-verify Haskell accepts ${bigintNullifierVectors.case.name}`
+);
+assert.equal(
+  parseResult<boolean>(runHaskell([
+    'ct-nullifier-bigint-verify',
+    ...bigNullifierParamsArgs,
+    bigNullifierGamma,
+    bigNullifierCommitmentKey,
+    bigNullifierKey,
+    integerVecText([
+      (BigInt(bigintNullifierVectors.case.commitment[0]) + 1n).toString(),
+      ...bigintNullifierVectors.case.commitment.slice(1),
+    ]),
+    bigNullifier,
+    bigNullifierACommits,
+    bigNullifierANullifiers,
+    bigNullifierZMsgs,
+    bigNullifierZRands,
+  ])),
+  false,
+  `ct-nullifier-bigint-verify Haskell rejects tampered q83 commitment for ${bigintNullifierVectors.case.name}`
+);
+assert.equal(
+  parseResult<boolean>(runHaskell([
+    'ct-nullifier-bigint-verify',
+    ...bigNullifierParamsArgs,
+    bigNullifierGamma,
+    bigNullifierCommitmentKey,
+    bigNullifierKey,
+    bigNullifierCommitment,
+    integerVecText([
+      (BigInt(bigintNullifierVectors.case.nullifier[0]) + 1n).toString(),
+      ...bigintNullifierVectors.case.nullifier.slice(1),
+    ]),
+    bigNullifierACommits,
+    bigNullifierANullifiers,
+    bigNullifierZMsgs,
+    bigNullifierZRands,
+  ])),
+  false,
+  `ct-nullifier-bigint-verify Haskell rejects tampered q83 nullifier for ${bigintNullifierVectors.case.name}`
+);
+console.log('validate-haskell: confidential BigInt nullifier q83 preview surface passed');
 
 const modCenteredCases = [
   { x: 7, q: 5 },
