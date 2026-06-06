@@ -85,8 +85,11 @@ it is a runtime/proof-size benchmark, not a lattice security estimate.
 Pair the runtime artifact with `bench/data/confidential-parameter-screen.json`
 before drawing production conclusions. The current `ct_sis_note_mvp_v0`
 parameter screen records `q = 8380417` (23 bits) but an 82-bit aggregate formal
-minimum modulus requirement for the SIS proof margins, so this baseline remains
-blocked even when runtime budgets pass.
+minimum modulus requirement for the SIS proof margins. Its exact estimator
+request is `SIS.Parameters(n=1024, m=1025, q=8380417, length_bound=2417851639229258382966784,
+norm=infinity)`, but the request remains `blocked_by_formal_modulus` because
+`2 * length_bound < q - 1` is false. This baseline remains blocked even when
+runtime budgets pass.
 
 ### Function-Specific Examples
 

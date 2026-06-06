@@ -114,6 +114,29 @@ def main() -> None:
         write_report(mismatched_lazer_path, mismatched_lazer)
         expect_checker_failure(mismatched_lazer_path, "parameter_set.fs_rounds must equal")
 
+        mismatched_estimator_request = copy.deepcopy(base_report)
+        request_mapping = mismatched_estimator_request["candidates"][0][
+            "external_lattice_estimator_request"
+        ]["parameter_mapping"]
+        request_mapping["n"] = request_mapping["n"] + 1
+        mismatched_request_path = tmpdir / "mismatched-estimator-request.json"
+        write_report(mismatched_request_path, mismatched_estimator_request)
+        expect_checker_failure(
+            mismatched_request_path,
+            "external_lattice_estimator_request.parameter_mapping.n must equal candidate.m",
+        )
+
+        mismatched_estimator_status = copy.deepcopy(base_report)
+        mismatched_estimator_status["candidates"][0][
+            "external_lattice_estimator_request"
+        ]["status"] = "ready_for_external_estimator"
+        mismatched_status_path = tmpdir / "mismatched-estimator-status.json"
+        write_report(mismatched_status_path, mismatched_estimator_status)
+        expect_checker_failure(
+            mismatched_status_path,
+            "external_lattice_estimator_request.status must be blocked_by_formal_modulus",
+        )
+
     print(json.dumps({"gate": "confidential-parameter-readiness-regressions", "status": "passed"}))
 
 

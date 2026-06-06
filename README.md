@@ -773,11 +773,14 @@ Current status and roadmap:
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.
   `bench/data/confidential-parameter-screen.json` records the local estimator
-  import probe and exact formal modulus shortfalls. For the current SIS-note
-  MVP, `q = 8380417` is only 23 bits while the proof-margin aggregate requires
-  an 82-bit minimum modulus, so the report remains blocked until structured
-  external-estimator and LaZer parameter-generation reports pass the readiness
-  checker and the formal margin gap is closed. The soft honesty gate is
+  import probe, exact formal modulus shortfalls, and the exact SIS estimator
+  request. For the current SIS-note MVP, `q = 8380417` is only 23 bits while
+  the proof-margin aggregate requires an 82-bit minimum modulus; the requested
+  `SIS.Parameters(n=1024, m=1025, q=8380417, length_bound=2417851639229258382966784,
+  norm=infinity)` is therefore marked `blocked_by_formal_modulus` because
+  `2 * length_bound < q - 1` is false. The report remains blocked until
+  structured external-estimator and LaZer parameter-generation reports pass the
+  readiness checker and the formal margin gap is closed. The soft honesty gate is
   `make check-confidential-parameter-readiness`; the strict launch gate is
   `make check-confidential-production-readiness` and is wired to manual CI runs
   that set `require_confidential_production` plus `confidential-transfers-*`

@@ -207,6 +207,42 @@
           "sis_nullifier_opening_vs_honest"
         ]
       },
+      "external_lattice_estimator_request": {
+        "applicable": true,
+        "tool_family": "malb/lattice-estimator",
+        "problem": "SIS",
+        "estimator_api": {
+          "module": "estimator",
+          "constructor": "SIS.Parameters",
+          "estimate_calls": [
+            "SIS.estimate",
+            "SIS.estimate.rough"
+          ]
+        },
+        "parameter_mapping": {
+          "n": 1024,
+          "m": 1025,
+          "q": 8380417,
+          "norm": "infinity",
+          "length_bound": 2417851639229258382966784
+        },
+        "source_bound": {
+          "name": "sis_range_amount_residual_vs_honest",
+          "value": 2417851639229258382966784,
+          "formal_source": "Canon/Crypto/Commit_SIS.thy: commit_collision_yields_sis_bound"
+        },
+        "estimator_preconditions": {
+          "length_bound_lt_half_modulus": false,
+          "comparison": "2 * length_bound < q - 1",
+          "q_minus_one": 8380416,
+          "twice_length_bound": 4835703278458516765933568,
+          "half_modulus": 4190208.0,
+          "current_q_bits": 23,
+          "length_bound_bits": 82
+        },
+        "status": "blocked_by_formal_modulus",
+        "notes": "Pass this SIS instance to lattice-estimator with norm=+Infinity only after the formal response/SIS bound is below (q - 1) / 2."
+      },
       "screening_status": "screen_only",
       "production_readiness": {
         "ready": false,
@@ -241,6 +277,16 @@
       "balance_response_volume_bits": 51245.81,
       "fiat_shamir_soundness_bits": 128,
       "formal_proof_margins": {
+        "applicable": false,
+        "reason": "Current formal extraction/SIS-margin theorems apply to the SIS note/nullifier MVP. The RLWE/AHE layer needs separate EncryptValid, SamePlaintext, TransferValid, and NoiseBoundValid relations before analogous proof margins can be computed.",
+        "required_relations": [
+          "EncryptValid",
+          "SamePlaintext",
+          "TransferValid",
+          "NoiseBoundValid"
+        ]
+      },
+      "external_lattice_estimator_request": {
         "applicable": false,
         "reason": "Current formal extraction/SIS-margin theorems apply to the SIS note/nullifier MVP. The RLWE/AHE layer needs separate EncryptValid, SamePlaintext, TransferValid, and NoiseBoundValid relations before analogous proof margins can be computed.",
         "required_relations": [

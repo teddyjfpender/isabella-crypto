@@ -254,6 +254,127 @@ def validate_formal_modulus_requirements(
         fail(f"{candidate_id}.minimum_modulus_requirement.blocking_checks must match failed modulus checks")
 
 
+def validate_external_estimator_request(candidate: dict[str, Any], margins: dict[str, Any]) -> None:
+    candidate_id = candidate_name(candidate)
+    request = require_object(
+        candidate.get("external_lattice_estimator_request"),
+        f"{candidate_id}.external_lattice_estimator_request",
+    )
+    applicable = request.get("applicable")
+    if not isinstance(applicable, bool):
+        fail(f"{candidate_id}.external_lattice_estimator_request.applicable must be a boolean")
+
+    if not margins.get("applicable", False):
+        if applicable:
+            fail(f"{candidate_id}.external_lattice_estimator_request must not be applicable without SIS margins")
+        required_relations = require_list(
+            request.get("required_relations"),
+            f"{candidate_id}.external_lattice_estimator_request.required_relations",
+        )
+        margins_relations = margins.get("required_relations", [])
+        if required_relations != margins_relations:
+            fail(f"{candidate_id}.external_lattice_estimator_request.required_relations must match margins")
+        return
+
+    if not applicable:
+        fail(f"{candidate_id}.external_lattice_estimator_request must be applicable when SIS margins are applicable")
+    if require_string(request.get("problem"), f"{candidate_id}.external_lattice_estimator_request.problem") != "SIS":
+        fail(f"{candidate_id}.external_lattice_estimator_request.problem must be SIS")
+    require_string(request.get("tool_family"), f"{candidate_id}.external_lattice_estimator_request.tool_family")
+    api = require_object(
+        request.get("estimator_api"),
+        f"{candidate_id}.external_lattice_estimator_request.estimator_api",
+    )
+    if require_string(api.get("module"), f"{candidate_id}.external_lattice_estimator_request.estimator_api.module") != "estimator":
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_api.module must be estimator")
+    require_string(
+        api.get("constructor"),
+        f"{candidate_id}.external_lattice_estimator_request.estimator_api.constructor",
+    )
+    estimate_calls = require_list(
+        api.get("estimate_calls"),
+        f"{candidate_id}.external_lattice_estimator_request.estimator_api.estimate_calls",
+    )
+    if not estimate_calls or not all(isinstance(call, str) and call for call in estimate_calls):
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_api.estimate_calls must contain strings")
+
+    q = require_positive_int(candidate.get("q"), f"{candidate_id}.q")
+    n1 = require_positive_int(candidate.get("n1"), f"{candidate_id}.n1")
+    n2 = require_positive_int(candidate.get("n2"), f"{candidate_id}.n2")
+    rows = require_positive_int(candidate.get("m"), f"{candidate_id}.m")
+    mapping = require_object(
+        request.get("parameter_mapping"),
+        f"{candidate_id}.external_lattice_estimator_request.parameter_mapping",
+    )
+    if mapping.get("n") != rows:
+        fail(f"{candidate_id}.external_lattice_estimator_request.parameter_mapping.n must equal candidate.m")
+    if mapping.get("m") != n1 + n2:
+        fail(f"{candidate_id}.external_lattice_estimator_request.parameter_mapping.m must equal candidate.n1 + candidate.n2")
+    if mapping.get("q") != q:
+        fail(f"{candidate_id}.external_lattice_estimator_request.parameter_mapping.q must equal candidate.q")
+    if mapping.get("norm") != "infinity":
+        fail(f"{candidate_id}.external_lattice_estimator_request.parameter_mapping.norm must be infinity")
+
+    sis_bounds = require_object(
+        margins.get("sis_comparison_bounds"),
+        f"{candidate_id}.formal_proof_margins.sis_comparison_bounds",
+    )
+    source_bound_name = ""
+    source_length_bound = -1
+    for raw_name, raw_bound in sis_bounds.items():
+        if not isinstance(raw_name, str) or not raw_name:
+            fail(f"{candidate_id}.formal_proof_margins.sis_comparison_bounds keys must be non-empty strings")
+        bound = require_positive_int(raw_bound, f"{candidate_id}.sis_comparison_bounds.{raw_name}")
+        if bound > source_length_bound:
+            source_bound_name = raw_name
+            source_length_bound = bound
+    if mapping.get("length_bound") != source_length_bound:
+        fail(f"{candidate_id}.external_lattice_estimator_request.parameter_mapping.length_bound must equal max SIS comparison bound")
+
+    source = require_object(
+        request.get("source_bound"),
+        f"{candidate_id}.external_lattice_estimator_request.source_bound",
+    )
+    if source.get("name") != f"sis_{source_bound_name}":
+        fail(f"{candidate_id}.external_lattice_estimator_request.source_bound.name must identify max SIS bound")
+    if source.get("value") != source_length_bound:
+        fail(f"{candidate_id}.external_lattice_estimator_request.source_bound.value must equal length_bound")
+    require_string(
+        source.get("formal_source"),
+        f"{candidate_id}.external_lattice_estimator_request.source_bound.formal_source",
+    )
+
+    preconditions = require_object(
+        request.get("estimator_preconditions"),
+        f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions",
+    )
+    expected_q_minus_one = q - 1
+    expected_twice_length_bound = 2 * source_length_bound
+    expected_precondition = expected_twice_length_bound < expected_q_minus_one
+    if preconditions.get("length_bound_lt_half_modulus") != expected_precondition:
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.length_bound_lt_half_modulus is inconsistent")
+    if preconditions.get("comparison") != "2 * length_bound < q - 1":
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.comparison is inconsistent")
+    if preconditions.get("q_minus_one") != expected_q_minus_one:
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.q_minus_one is inconsistent")
+    if preconditions.get("twice_length_bound") != expected_twice_length_bound:
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.twice_length_bound is inconsistent")
+    half_modulus = require_positive_number(
+        preconditions.get("half_modulus"),
+        f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.half_modulus",
+    )
+    if half_modulus != expected_q_minus_one / 2:
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.half_modulus is inconsistent with q")
+    if preconditions.get("current_q_bits") != q.bit_length():
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.current_q_bits is inconsistent with q")
+    if preconditions.get("length_bound_bits") != source_length_bound.bit_length():
+        fail(f"{candidate_id}.external_lattice_estimator_request.estimator_preconditions.length_bound_bits is inconsistent")
+
+    expected_status = "ready_for_external_estimator" if expected_precondition else "blocked_by_formal_modulus"
+    if request.get("status") != expected_status:
+        fail(f"{candidate_id}.external_lattice_estimator_request.status must be {expected_status}")
+
+
 def validate_candidate(candidate: dict[str, Any], external_estimator_available: bool) -> bool:
     name = candidate_name(candidate)
     readiness = require_object(candidate.get("production_readiness"), f"{name}.production_readiness")
@@ -272,6 +393,7 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
         fail(f"{name}.formal_proof_margins.warnings must be a list when present")
     if margins.get("applicable", False):
         validate_formal_modulus_requirements(candidate, margins, warnings)
+    validate_external_estimator_request(candidate, margins)
 
     estimator_report = candidate.get("external_lattice_estimator_report")
     if estimator_report is not None:

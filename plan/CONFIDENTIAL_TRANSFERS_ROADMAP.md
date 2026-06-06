@@ -261,6 +261,18 @@ minimum modulus, dominated by the `sis_range_amount_residual_vs_honest` bound.
 That gap is surfaced as the machine-readable blocker
 `formal_minimum_q_bits_required:82`.
 
+The same artifact now records the exact SIS request to pass to an external
+lattice-estimator run once the formal precondition is satisfied:
+`SIS.Parameters(n=1024, m=1025, q=8380417, length_bound=2417851639229258382966784,
+norm=infinity)`. The selected length bound comes from
+`sis_range_amount_residual_vs_honest`. The request is intentionally marked
+`blocked_by_formal_modulus` because the integer precondition
+`2 * length_bound < q - 1` is false:
+`twice_length_bound = 4835703278458516765933568`, while
+`q_minus_one = 8380416`. The RLWE/AHE research candidate has no estimator
+request yet because its `EncryptValid`, `SamePlaintext`, `TransferValid`, and
+`NoiseBoundValid` relations remain unformalized.
+
 ## Validation Plan
 
 Fast checks:

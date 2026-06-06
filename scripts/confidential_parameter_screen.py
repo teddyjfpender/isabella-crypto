@@ -162,11 +162,79 @@ def proof_margins(candidate: Candidate) -> dict[str, Any]:
     }
 
 
+def external_lattice_estimator_request(candidate: Candidate, margins: dict[str, Any]) -> dict[str, Any]:
+    if not margins.get("applicable", False):
+        return {
+            "applicable": False,
+            "reason": margins.get("reason", "formal SIS margins are not available for this candidate"),
+            "required_relations": margins.get("required_relations", []),
+        }
+
+    sis_bounds = margins.get("sis_comparison_bounds", {})
+    if not isinstance(sis_bounds, dict) or not sis_bounds:
+        return {
+            "applicable": False,
+            "reason": "formal SIS comparison bounds are missing",
+        }
+
+    source_bound_name, length_bound = max(
+        ((str(name), int(bound)) for name, bound in sis_bounds.items()),
+        key=lambda item: item[1],
+    )
+    q_minus_one = candidate.q - 1
+    twice_length_bound = 2 * length_bound
+    half_modulus = q_minus_one / 2
+    length_bound_lt_half_modulus = twice_length_bound < q_minus_one
+    total_dim = candidate.n1 + candidate.n2
+
+    return {
+        "applicable": True,
+        "tool_family": "malb/lattice-estimator",
+        "problem": "SIS",
+        "estimator_api": {
+            "module": "estimator",
+            "constructor": "SIS.Parameters",
+            "estimate_calls": ["SIS.estimate", "SIS.estimate.rough"],
+        },
+        "parameter_mapping": {
+            "n": candidate.m,
+            "m": total_dim,
+            "q": candidate.q,
+            "norm": "infinity",
+            "length_bound": length_bound,
+        },
+        "source_bound": {
+            "name": f"sis_{source_bound_name}",
+            "value": length_bound,
+            "formal_source": "Canon/Crypto/Commit_SIS.thy: commit_collision_yields_sis_bound",
+        },
+        "estimator_preconditions": {
+            "length_bound_lt_half_modulus": length_bound_lt_half_modulus,
+            "comparison": "2 * length_bound < q - 1",
+            "q_minus_one": q_minus_one,
+            "twice_length_bound": twice_length_bound,
+            "half_modulus": half_modulus,
+            "current_q_bits": candidate.q.bit_length(),
+            "length_bound_bits": length_bound.bit_length(),
+        },
+        "status": (
+            "ready_for_external_estimator"
+            if length_bound_lt_half_modulus
+            else "blocked_by_formal_modulus"
+        ),
+        "notes": (
+            "Pass this SIS instance to lattice-estimator with norm=+Infinity only "
+            "after the formal response/SIS bound is below (q - 1) / 2."
+        ),
+    }
+
+
 def screen(candidate: Candidate) -> dict[str, Any]:
     total_dim = candidate.n1 + candidate.n2
     syndrome_bits = candidate.m * log2(candidate.q)
     opening_bits = total_dim * log2(2 * candidate.beta + 1)
     response_bits = candidate.n2 * log2(2 * (candidate.gamma + 4 * candidate.beta) + 1)
+    margins = proof_margins(candidate)
     return {
         **asdict(candidate),
         "total_opening_dimension": total_dim,
@@ -175,7 +243,8 @@ def screen(candidate: Candidate) -> dict[str, Any]:
         "capacity_minus_opening_bits": round(syndrome_bits - opening_bits, 2),
         "balance_response_volume_bits": round(response_bits, 2),
         "fiat_shamir_soundness_bits": candidate.fs_rounds,
-        "formal_proof_margins": proof_margins(candidate),
+        "formal_proof_margins": margins,
+        "external_lattice_estimator_request": external_lattice_estimator_request(candidate, margins),
         "screening_status": "screen_only",
     }
 
