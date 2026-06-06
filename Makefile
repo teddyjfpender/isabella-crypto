@@ -6,6 +6,7 @@
         build-cool build-balanced build-fast build-export \
         test-sdk-equivalence test-confidential-production \
         check-confidential-domain-registry \
+        check-confidential-runtime-surface \
         check-confidential-parameter-readiness \
         check-confidential-production-readiness \
         run-confidential-lattice-estimator \
@@ -111,6 +112,10 @@ check-confidential-domain-registry:
 	@echo "Checking confidential domain-separation registry..."
 	@python3 scripts/check_confidential_domain_registry.py
 
+check-confidential-runtime-surface:
+	@echo "Checking confidential runtime surface manifest..."
+	@python3 scripts/check_confidential_runtime_surface.py
+
 check-confidential-parameter-readiness:
 	@echo "Screening confidential transfer parameters..."
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
@@ -143,6 +148,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@echo "Generating confidential transaction context vectors..."
 	@node scripts/generate_confidential_transaction_vectors.mjs
 	@$(MAKE) check-confidential-domain-registry
+	@$(MAKE) check-confidential-runtime-surface
 	@$(MAKE) check-confidential-parameter-readiness
 	@echo "Checking confidential scaffold quarantine..."
 	@python3 scripts/check_confidential_scaffold_quarantine.py
@@ -239,6 +245,7 @@ help:
 	@echo "  test-sdk-equivalence Run Haskell/OCaml/TypeScript shared-surface checks"
 	@echo "  test-confidential-production Run production-facing confidential-transfer gates"
 	@echo "  check-confidential-domain-registry Check confidential domain/tag registry"
+	@echo "  check-confidential-runtime-surface Check confidential CLI/SDK surface manifest"
 	@echo "  check-confidential-parameter-readiness Run soft confidential parameter honesty gate"
 	@echo "  check-confidential-production-readiness Run strict launch parameter gate"
 	@echo "  run-confidential-lattice-estimator Generate external lattice-estimator report collection"

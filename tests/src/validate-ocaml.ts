@@ -401,6 +401,26 @@ assert.equal(ocamlSampleOpening.rand.length, cbParamsCase.n2, 'ct-sample-opening
 assert.ok(allBounded(ocamlSampleOpening.msg, cbParamsCase.gamma), 'ct-sample-opening msg bound');
 assert.ok(allBounded(ocamlSampleOpening.rand, cbParamsCase.gamma), 'ct-sample-opening rand bound');
 
+const ocamlSampleOpenings = parseCliResult<{ result: SampleOpening[] }>(
+  runCli([
+    'ct-sample-openings',
+    '4',
+    '1',
+    cbParamsCase.n2.toString(),
+    cbParamsCase.gamma.toString(),
+  ])
+).result;
+assert.equal(ocamlSampleOpenings.length, 4, 'ct-sample-openings count');
+assert.ok(
+  ocamlSampleOpenings.every(mask =>
+    mask.msg.length === 1 &&
+    mask.rand.length === cbParamsCase.n2 &&
+    allBounded(mask.msg, cbParamsCase.gamma) &&
+    allBounded(mask.rand, cbParamsCase.gamma)
+  ),
+  'ct-sample-openings shape and bound'
+);
+
 const ocamlSampleNullifierMask = parseCliResult<{ result: SampleOpening }>(
   runCli([
     'ct-sample-nullifier-mask',

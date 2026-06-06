@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "nativeCli": {
+    "ocamlDispatch": "isabella.ml/bin/isabella_cli.ml",
+    "haskellDispatch": "isabella.hs/app/CLI/Commands.hs",
+    "haskellHelp": "isabella.hs/app/Main.hs",
+    "productionCommands": [
+      "ct-merkle-leaf",
+      "ct-merkle-empty",
+      "ct-merkle-node",
+      "ct-merkle-root",
+      "ct-merkle-member-prove",
+      "ct-merkle-member-verify",
+      "ct-transaction-context",
+      "ct-merkle-proof-digest",
+      "ct-merkle-envelope-digest",
+      "ct-wallet-proof-request-digest",
+      "ct-sample-opening",
+      "ct-sample-openings",
+      "ct-nullifier",
+      "ct-sample-nullifier-mask",
+      "ct-sample-nullifier-masks",
+      "ct-nullifier-canonical-challenge",
+      "ct-nullifier-prove",
+      "ct-nullifier-verify",
+      "ct-prove-merkle",
+      "ct-verify-merkle",
+      "ct-verify-merkle-envelope"
+    ],
+    "scaffoldCommands": [
+      "ct-member-prove",
+      "ct-member-verify",
+      "ct-ledger-step-verify-scaffold",
+      "ct-prove-scaffold",
+      "ct-verify-scaffold",
+      "ct-verify-bench-scaffold"
+    ],
+    "retiredCommands": [
+      "ct-prove",
+      "ct-verify",
+      "ct-verify-bench",
+      "ct-ledger-step-verify"
+    ]
+  },
+  "typescriptCliHarness": {
+    "file": "tests/src/isabella-cli.ts",
+    "requiredExports": [
+      "ctNullifier",
+      "ctNullifierCanonicalChallenge",
+      "ctNullifierProve",
+      "ctNullifierVerify",
+      "ctLedgerRoot",
+      "ctMemberProve",
+      "ctMemberVerify",
+      "ctMerkleLeaf",
+      "ctMerkleEmpty",
+      "ctMerkleNode",
+      "ctMerkleRoot",
+      "ctMerkleMemberProve",
+      "ctMerkleMemberVerify",
+      "ctTransactionContext",
+      "ctWalletProofRequestDigest",
+      "ctProveScaffold",
+      "ctProveMerkle",
+      "ctMerkleProofDigest",
+      "ctMerkleEnvelopeDigest",
+      "ctVerifyScaffold",
+      "ctVerifyMerkle",
+      "ctVerifyMerkleEnvelope"
+    ],
+    "forbiddenExports": [
+      "ctProve",
+      "ctVerify"
+    ]
+  },
+  "typescriptSdk": {
+    "file": "isabella.ts/src/index.ts",
+    "namespaces": {
+      "ConfidentialSampling": [
+        "boundedInt",
+        "intVector",
+        "opening",
+        "openings"
+      ],
+      "ConfidentialBalance": [
+        "sampleMask",
+        "sampleMasks"
+      ],
+      "ConfidentialTransaction": [
+        "transactionContextDigest",
+        "transactionMerkleProofDigest",
+        "transactionEnvelopeDigest",
+        "transactionWalletProofRequestDigest",
+        "transactionContextMatchesPolicy",
+        "transactionContextPolicyIsComplete",
+        "sampleNullifierMask",
+        "sampleNullifierMasks",
+        "merkleLedgerRoot",
+        "merkleMembershipProve",
+        "merkleMembershipVerify",
+        "ledgerValidMerkle",
+        "ledgerStepValid",
+        "ledgerStepValidMerkle",
+        "ledgerStepValidScaffold",
+        "semanticStepValid",
+        "semanticStepValidMerkle",
+        "semanticStepValidScaffold",
+        "fsProveMerkle",
+        "fsProveMerkleWithFee",
+        "fsVerifyMerkle",
+        "fsVerifyMerkleWithFee",
+        "fsVerifyMerkleEnvelope"
+      ]
+    },
+    "requiredSnippets": [
+      "return ledgerStepValidMerkle(",
+      "transactionContextPolicyIsComplete(policy)",
+      "envelope.contextDigest === contextDigest",
+      "fsVerifyMerkleWithFee("
+    ],
+    "forbiddenSnippets": [
+      "ctLedgerStepValid("
+    ]
+  },
+  "validators": {
+    "tests/src/validate-ocaml.ts": [
+      "ct-merkle-leaf",
+      "ct-merkle-empty",
+      "ct-merkle-node",
+      "ct-merkle-root",
+      "ct-merkle-member-prove",
+      "ct-merkle-member-verify",
+      "ct-transaction-context",
+      "ct-wallet-proof-request-digest",
+      "ct-sample-opening",
+      "ct-sample-openings",
+      "ct-sample-nullifier-mask",
+      "ct-sample-nullifier-masks",
+      "ct-nullifier-canonical-challenge",
+      "ct-nullifier-verify",
+      "ct-member-prove",
+      "ct-member-verify",
+      "ct-prove-merkle",
+      "ct-merkle-proof-digest",
+      "ct-merkle-envelope-digest",
+      "ct-verify-merkle",
+      "ct-verify-merkle-envelope",
+      "ct-verify-scaffold"
+    ],
+    "tests/src/validate-haskell.ts": [
+      "ct-merkle-leaf",
+      "ct-merkle-empty",
+      "ct-merkle-node",
+      "ct-merkle-root",
+      "ct-merkle-member-prove",
+      "ct-merkle-member-verify",
+      "ct-transaction-context",
+      "ct-wallet-proof-request-digest",
+      "ct-sample-opening",
+      "ct-sample-openings",
+      "ct-sample-nullifier-mask",
+      "ct-sample-nullifier-masks",
+      "ct-nullifier-canonical-challenge",
+      "ct-nullifier-verify",
+      "ct-member-prove",
+      "ct-member-verify",
+      "ct-prove-merkle",
+      "ct-merkle-proof-digest",
+      "ct-merkle-envelope-digest",
+      "ct-verify-merkle",
+      "ct-verify-merkle-envelope",
+      "ct-verify-scaffold"
+    ]
+  },
+  "gateWiring": {
+    "Makefile": [
+      "scripts/check_confidential_runtime_surface.py"
+    ],
+    ".github/workflows/ci.yml": [
+      "scripts/check_confidential_runtime_surface.py"
+    ],
+    "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md": [
+      "confidential runtime-surface manifest"
+    ]
+  }
+}

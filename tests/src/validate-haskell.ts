@@ -46,6 +46,12 @@ async function loadSdk() {
 }
 
 type SampleOpening = { msg: number[]; rand: number[] };
+type MembershipProof = {
+  index: number;
+  root: number[];
+  siblings: number[][];
+  directions: boolean[];
+};
 
 function allBounded(values: number[], bound: number): boolean {
   return values.every(value => Number.isSafeInteger(value) && Math.abs(value) <= bound);
@@ -534,6 +540,26 @@ assert.equal(haskellSampleOpening.rand.length, cbParamsCase.n2, 'ct-sample-openi
 assert.ok(allBounded(haskellSampleOpening.msg, cbParamsCase.gamma), 'ct-sample-opening msg bound');
 assert.ok(allBounded(haskellSampleOpening.rand, cbParamsCase.gamma), 'ct-sample-opening rand bound');
 
+const haskellSampleOpenings = parseResult<SampleOpening[]>(
+  runHaskell([
+    'ct-sample-openings',
+    '4',
+    '1',
+    cbParamsCase.n2.toString(),
+    cbParamsCase.gamma.toString(),
+  ])
+);
+assert.equal(haskellSampleOpenings.length, 4, 'ct-sample-openings count');
+assert.ok(
+  haskellSampleOpenings.every(mask =>
+    mask.msg.length === 1 &&
+    mask.rand.length === cbParamsCase.n2 &&
+    allBounded(mask.msg, cbParamsCase.gamma) &&
+    allBounded(mask.rand, cbParamsCase.gamma)
+  ),
+  'ct-sample-openings shape and bound'
+);
+
 const haskellSampleNullifierMask = parseResult<SampleOpening>(
   runHaskell([
     'ct-sample-nullifier-mask',
@@ -929,10 +955,32 @@ if (ctCliAcceptsSdkNullifier !== null) {
 }
 const ctRoot = sdk.ConfidentialTransaction.ledgerRoot(ctParamsExpected, ctLedger);
 const ctMemberProof = sdk.ConfidentialTransaction.membershipProve(ctParamsExpected, ctLedger, ctCIn2);
+const ctCliMemberProof = parseJson<MembershipProof>(
+  runHaskell([
+    'ct-member-prove',
+    ctParamsCase.m.toString(),
+    ctParamsCase.n2.toString(),
+    ctParamsCase.q.toString(),
+    ctParamsCase.beta.toString(),
+    JSON.stringify(ctLedger),
+    JSON.stringify(ctCIn2),
+  ])
+);
 assert.ok(ctMemberProof);
+assert.deepEqual(ctCliMemberProof, ctMemberProof, 'ct-member-prove shared surface');
 assert.deepEqual(ctMemberProof!.root, ctRoot, 'ct-member-root shared surface');
 assert.equal(
-  sdk.ConfidentialTransaction.membershipVerify(ctParamsExpected, ctCIn2, ctMemberProof!),
+  parseResult<boolean>(
+    runHaskell([
+      'ct-member-verify',
+      ctParamsCase.m.toString(),
+      ctParamsCase.n2.toString(),
+      ctParamsCase.q.toString(),
+      ctParamsCase.beta.toString(),
+      JSON.stringify(ctLedger),
+      JSON.stringify(ctCIn2),
+    ])
+  ),
   true,
   'ct-member-verify shared surface'
 );
