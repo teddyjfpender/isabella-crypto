@@ -92,6 +92,12 @@ def main() -> None:
         base_report = json.loads(base_path.read_text(encoding="utf-8"))
         candidate = base_report["candidates"][0]
         params = matching_parameters(candidate)
+        estimator_ready_candidate = base_report["candidates"][1]
+        estimator_ready_params = matching_parameters(estimator_ready_candidate)
+        if estimator_ready_candidate["external_lattice_estimator_request"]["status"] != "ready_for_external_estimator":
+            raise SystemExit("widened SIS candidate must be ready_for_external_estimator")
+        if estimator_ready_candidate["formal_proof_margins"]["warnings"]:
+            raise SystemExit("widened SIS candidate must pass formal proof-margin modulus checks")
 
         blocked_estimator = copy.deepcopy(base_report)
         blocked_estimator["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
@@ -161,6 +167,44 @@ def main() -> None:
         expect_checker_failure(
             mismatched_status_path,
             "external_lattice_estimator_request.status must be blocked_by_formal_modulus",
+        )
+
+        ready_failed_estimator = copy.deepcopy(base_report)
+        ready_failed_estimator["candidates"][1]["external_lattice_estimator_report"] = estimator_report(
+            estimator_ready_candidate,
+            None,
+            estimator_ready_params,
+            status="failed",
+        )
+        ready_failed_path = tmpdir / "ready-failed-estimator.json"
+        write_report(ready_failed_path, ready_failed_estimator)
+        ready_failed_proc = run(["python3", str(CHECKER), "--report", str(ready_failed_path)])
+        if ready_failed_proc.returncode != 0:
+            raise SystemExit(ready_failed_proc.stdout + ready_failed_proc.stderr)
+
+        ready_low_security_estimator = copy.deepcopy(base_report)
+        ready_low_security_estimator["candidates"][1]["external_lattice_estimator_report"] = estimator_report(
+            estimator_ready_candidate,
+            estimator_ready_candidate["target_security_bits"] - 1,
+            estimator_ready_params,
+            status="estimated",
+        )
+        ready_low_security_path = tmpdir / "ready-low-security-estimator.json"
+        write_report(ready_low_security_path, ready_low_security_estimator)
+        expect_checker_failure(
+            ready_low_security_path,
+            "security_level_bits is below target_security_bits",
+        )
+
+        mismatched_ready_estimator_status = copy.deepcopy(base_report)
+        mismatched_ready_estimator_status["candidates"][1][
+            "external_lattice_estimator_request"
+        ]["status"] = "blocked_by_formal_modulus"
+        mismatched_ready_status_path = tmpdir / "mismatched-ready-estimator-status.json"
+        write_report(mismatched_ready_status_path, mismatched_ready_estimator_status)
+        expect_checker_failure(
+            mismatched_ready_status_path,
+            "external_lattice_estimator_request.status must be ready_for_external_estimator",
         )
 
     print(json.dumps({"gate": "confidential-parameter-readiness-regressions", "status": "passed"}))

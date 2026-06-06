@@ -258,6 +258,206 @@
       }
     },
     {
+      "name": "ct_sis_note_mvp_q83_v0",
+      "architecture": "SIS note commitment MVP",
+      "n1": 1,
+      "n2": 1024,
+      "m": 1024,
+      "q": 4835703278458516765933661,
+      "beta": 65536,
+      "gamma": 16777216,
+      "range_bits": 64,
+      "fs_rounds": 128,
+      "target_security_bits": 128,
+      "notes": "Widened-modulus SIS-note candidate using the same dimensions and witness bounds as ct_sis_note_mvp_v0. The modulus is the first screened prime above 2 * max_sis_bound + 2 for the current formal proof margins, so the generated SIS request can be handed to an external estimator. This is not production-ready without external lattice-estimator and LaZer parameter-generation reports.",
+      "total_opening_dimension": 1025,
+      "syndrome_capacity_bits": 83968.0,
+      "short_opening_volume_bits": 17425.01,
+      "capacity_minus_opening_bits": 66542.99,
+      "balance_response_volume_bits": 25622.9,
+      "fiat_shamir_soundness_bits": 128,
+      "formal_proof_margins": {
+        "applicable": true,
+        "formal_sources": [
+          "Canon/ZK/Confidential_Balance.thy: balance_sigma_extract_distinct_binary_bound",
+          "Canon/ZK/Confidential_Range.thy: range_amount_sigma_extract_distinct_binary_bound",
+          "Canon/ZK/Confidential_Range.thy: range_pair_sigma_extract_distinct_binary_bound",
+          "Canon/ZK/Confidential_Transaction.thy: nullifier_sigma_extract_distinct_binary_bound",
+          "Canon/Crypto/Commit_SIS.thy: commit_collision_yields_sis_bound"
+        ],
+        "extracted_response_bounds": {
+          "balance": 33816576,
+          "range_amount": 1208925819614629208260608,
+          "range_pair": 33685504,
+          "nullifier": 33619968
+        },
+        "honest_witness_bounds": {
+          "balance": 262144,
+          "range_amount": 1208925819614629174706176,
+          "range_pair": 131072,
+          "nullifier": 65536
+        },
+        "sis_comparison_bounds": {
+          "balance_zero_opening_vs_honest": 34078720,
+          "range_amount_residual_vs_honest": 2417851639229258382966784,
+          "range_pair_residual_vs_honest": 33816576,
+          "nullifier_opening_vs_honest": 33685504
+        },
+        "volume_bits": {
+          "balance_extracted_response": 26635.5,
+          "range_amount_extracted_response": 82944.0,
+          "range_pair_extracted_response": 26629.76,
+          "nullifier_extracted_opening": 26652.89
+        },
+        "modulus_checks": {
+          "balance_extracted_response": {
+            "bound": 33816576,
+            "log2_bound": 25.01,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.0,
+            "minimum_q": 33816577,
+            "minimum_q_bits": 26,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "range_amount_extracted_response": {
+            "bound": 1208925819614629208260608,
+            "log2_bound": 80.0,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.25,
+            "minimum_q": 1208925819614629208260609,
+            "minimum_q_bits": 81,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "range_pair_extracted_response": {
+            "bound": 33685504,
+            "log2_bound": 25.01,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.0,
+            "minimum_q": 33685505,
+            "minimum_q_bits": 26,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "nullifier_extracted_opening": {
+            "bound": 33619968,
+            "log2_bound": 25.0,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.0,
+            "minimum_q": 33619969,
+            "minimum_q_bits": 26,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "sis_balance_zero_opening_vs_honest": {
+            "bound": 34078720,
+            "log2_bound": 25.02,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.0,
+            "minimum_q": 34078721,
+            "minimum_q_bits": 26,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "sis_range_amount_residual_vs_honest": {
+            "bound": 2417851639229258382966784,
+            "log2_bound": 81.0,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.5,
+            "minimum_q": 2417851639229258382966785,
+            "minimum_q_bits": 82,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "sis_range_pair_residual_vs_honest": {
+            "bound": 33816576,
+            "log2_bound": 25.01,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.0,
+            "minimum_q": 33816577,
+            "minimum_q_bits": 26,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          },
+          "sis_nullifier_opening_vs_honest": {
+            "bound": 33685504,
+            "log2_bound": 25.01,
+            "less_than_modulus": true,
+            "bound_to_modulus_ratio": 0.0,
+            "minimum_q": 33685505,
+            "minimum_q_bits": 26,
+            "current_q_bits": 83,
+            "q_shortfall": 0,
+            "q_bits_shortfall": 0
+          }
+        },
+        "minimum_modulus_requirement": {
+          "current_q": 4835703278458516765933661,
+          "current_q_bits": 83,
+          "minimum_q": 2417851639229258382966785,
+          "minimum_q_bits": 82,
+          "q_shortfall": 0,
+          "q_bits_shortfall": 0,
+          "blocking_checks": []
+        },
+        "warnings": []
+      },
+      "external_lattice_estimator_request": {
+        "applicable": true,
+        "tool_family": "malb/lattice-estimator",
+        "problem": "SIS",
+        "estimator_api": {
+          "module": "estimator",
+          "constructor": "SIS.Parameters",
+          "estimate_calls": [
+            "SIS.estimate",
+            "SIS.estimate.rough"
+          ]
+        },
+        "parameter_mapping": {
+          "n": 1024,
+          "m": 1025,
+          "q": 4835703278458516765933661,
+          "norm": "infinity",
+          "length_bound": 2417851639229258382966784
+        },
+        "source_bound": {
+          "name": "sis_range_amount_residual_vs_honest",
+          "value": 2417851639229258382966784,
+          "formal_source": "Canon/Crypto/Commit_SIS.thy: commit_collision_yields_sis_bound"
+        },
+        "estimator_preconditions": {
+          "length_bound_lt_half_modulus": true,
+          "comparison": "2 * length_bound < q - 1",
+          "q_minus_one": 4835703278458516765933660,
+          "twice_length_bound": 4835703278458516765933568,
+          "half_modulus": 2.4178516392292583e+24,
+          "current_q_bits": 83,
+          "length_bound_bits": 82
+        },
+        "status": "ready_for_external_estimator",
+        "notes": "Pass this SIS instance to lattice-estimator with norm=+Infinity only after the formal response/SIS bound is below (q - 1) / 2."
+      },
+      "screening_status": "screen_only",
+      "production_readiness": {
+        "ready": false,
+        "blockers": [
+          "screening_status_is_not_production_candidate",
+          "external_lattice_estimator_unavailable",
+          "external_lattice_estimator_report_missing",
+          "lazer_parameter_generation_report_missing"
+        ]
+      }
+    },
+    {
       "name": "rlwe_ahe_transfer_research_v0",
       "architecture": "Separate RLWE/AHE EncryptValid/SamePlaintext/TransferValid layer",
       "n1": 1,

@@ -431,6 +431,27 @@ def main() -> None:
             ),
         ),
         Candidate(
+            name="ct_sis_note_mvp_q83_v0",
+            architecture="SIS note commitment MVP",
+            n1=1,
+            n2=1024,
+            m=1024,
+            q=4_835_703_278_458_516_765_933_661,
+            beta=2**16,
+            gamma=2**24,
+            range_bits=64,
+            fs_rounds=128,
+            target_security_bits=128,
+            notes=(
+                "Widened-modulus SIS-note candidate using the same dimensions and "
+                "witness bounds as ct_sis_note_mvp_v0. The modulus is the first "
+                "screened prime above 2 * max_sis_bound + 2 for the current formal "
+                "proof margins, so the generated SIS request can be handed to an "
+                "external estimator. This is not production-ready without external "
+                "lattice-estimator and LaZer parameter-generation reports."
+            ),
+        ),
+        Candidate(
             name="rlwe_ahe_transfer_research_v0",
             architecture="Separate RLWE/AHE EncryptValid/SamePlaintext/TransferValid layer",
             n1=1,

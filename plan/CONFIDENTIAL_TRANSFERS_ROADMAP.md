@@ -265,6 +265,7 @@ Selected baseline candidates:
 | Candidate | Architecture | q | n1 | n2 | m | beta | gamma | range bits | FS bits | target bits |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `ct_sis_note_mvp_v0` | SIS note commitment MVP | 8380417 | 1 | 1024 | 1024 | 65536 | 16777216 | 64 | 128 | 128 |
+| `ct_sis_note_mvp_q83_v0` | SIS note commitment MVP, widened modulus | 4835703278458516765933661 | 1 | 1024 | 1024 | 65536 | 16777216 | 64 | 128 | 128 |
 | `rlwe_ahe_transfer_research_v0` | RLWE/AHE research layer | 8380417 | 1 | 2048 | 2048 | 65536 | 16777216 | 64 | 128 | 128 |
 
 The local screen is not a production security estimate. The generated artifact
@@ -275,24 +276,35 @@ formal modulus requirements: for `ct_sis_note_mvp_v0`, the current modulus is
 `q = 8380417` (23 bits), while the proof-margin aggregate requires an 82-bit
 minimum modulus, dominated by the `sis_range_amount_residual_vs_honest` bound.
 That gap is surfaced as the machine-readable blocker
-`formal_minimum_q_bits_required:82`.
+`formal_minimum_q_bits_required:82`. The widened
+`ct_sis_note_mvp_q83_v0` candidate keeps the same SIS-note dimensions and
+witness bounds but uses `q = 4835703278458516765933661`, the first screened
+prime above `2 * max_sis_bound + 2` for the current proof margins. It has no
+formal modulus warnings, but it is still blocked until external
+lattice-estimator and LaZer parameter-generation reports are attached.
 
-The same artifact now records the exact SIS request to pass to an external
-lattice-estimator run once the formal precondition is satisfied:
+The same artifact now records exact SIS requests. The legacy MVP request is:
 `SIS.Parameters(n=1024, m=1025, q=8380417, length_bound=2417851639229258382966784,
 norm=infinity)`. The selected length bound comes from
 `sis_range_amount_residual_vs_honest`. The request is intentionally marked
 `blocked_by_formal_modulus` because the integer precondition
 `2 * length_bound < q - 1` is false:
 `twice_length_bound = 4835703278458516765933568`, while
-`q_minus_one = 8380416`. The RLWE/AHE research candidate has no estimator
-request yet because its `EncryptValid`, `SamePlaintext`, `TransferValid`, and
-`NoiseBoundValid` relations remain unformalized.
+`q_minus_one = 8380416`.
+
+The widened candidate request is:
+`SIS.Parameters(n=1024, m=1025, q=4835703278458516765933661,
+length_bound=2417851639229258382966784, norm=infinity)`. It is marked
+`ready_for_external_estimator` because
+`2 * length_bound = 4835703278458516765933568` is below
+`q_minus_one = 4835703278458516765933660`. The RLWE/AHE research candidate has
+no estimator request yet because its `EncryptValid`, `SamePlaintext`,
+`TransferValid`, and `NoiseBoundValid` relations remain unformalized.
 `scripts/run_confidential_lattice_estimator.py` consumes these requests and
-emits report collections. With the current parameter screen it emits
-`blocked_by_formal_modulus` for `ct_sis_note_mvp_v0` and `not_applicable` for
-the RLWE/AHE research candidate; it will only invoke malb/lattice-estimator
-after the formal request status becomes `ready_for_external_estimator`.
+emits report collections. With the current parameter screen it records
+`blocked_by_formal_modulus` for `ct_sis_note_mvp_v0`, attempts
+malb/lattice-estimator for `ct_sis_note_mvp_q83_v0`, and records
+`not_applicable` for the RLWE/AHE research candidate.
 
 ## Validation Plan
 
