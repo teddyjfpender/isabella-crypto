@@ -793,6 +793,156 @@ definition range_fs_verify ::
           range_sigma_verify_pairs p gamma ck c_pair_res
             (a_pairss ! i) (es ! i) (z_pairss ! i)))"
 
+definition range_scheduled_verify ::
+  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+   commitment list \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   commitment list list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow>
+   int_vec list list \<Rightarrow> bool" where
+  "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+     a_amounts a_pairss es z_amounts z_pairss \<longleftrightarrow>
+    (let c_amount_res = range_amount_commitment p ck c_amount c_bits;
+         c_pair_res = range_pair_commitments p ck c_bits c_comps
+     in valid_commitment p c_amount \<and>
+        length c_bits = k \<and>
+        length c_comps = k \<and>
+        length c_pair_res = k \<and>
+        length a_amounts = range_fs_rounds \<and>
+        length a_pairss = range_fs_rounds \<and>
+        length es = range_fs_rounds \<and>
+        length z_amounts = range_fs_rounds \<and>
+        length z_pairss = range_fs_rounds \<and>
+        (\<forall>i < range_fs_rounds.
+          length (a_pairss ! i) = k \<and>
+          length (z_pairss ! i) = k \<and>
+          range_amount_sigma_verify p gamma k ck c_amount_res
+            (a_amounts ! i) (es ! i) (z_amounts ! i) \<and>
+          (\<forall>j < k.
+            range_pair_sigma_verify p gamma ck (c_pair_res ! j)
+              ((a_pairss ! i) ! j) (es ! i) ((z_pairss ! i) ! j))))"
+
+lemma range_scheduled_fork_extract_amount_algebraic_opening:
+  assumes left:
+        "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+           a_amounts a_pairss es1 z_amounts1 z_pairss1"
+      and right:
+        "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+           a_amounts a_pairss es2 z_amounts2 z_pairss2"
+      and fork: "forked_binary_challenge_schedules range_fs_rounds es1 es2 i"
+      and c_valid:
+        "valid_commitment p (range_amount_commitment p ck c_amount c_bits)"
+      and c_canonical:
+        "vec_mod (range_amount_commitment p ck c_amount c_bits) (cp_q p) =
+         range_amount_commitment p ck c_amount c_bits"
+  obtains r where
+    "range_amount_sigma_extract (es1 ! i) (z_amounts1 ! i)
+       (es2 ! i) (z_amounts2 ! i) = Some r"
+    "rand_commit p ck r = range_amount_commitment p ck c_amount c_bits"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + range_amount_witness_bound p k)"
+proof -
+  let ?c = "range_amount_commitment p ck c_amount c_bits"
+  have i_lt: "i < range_fs_rounds"
+    using fork by (rule forked_binary_challenge_schedules_index(1))
+  have distinct: "es1 ! i \<noteq> es2 ! i"
+    using fork by (rule forked_binary_challenge_schedules_index(2))
+  have t1:
+    "range_amount_sigma_verify p gamma k ck ?c
+      (a_amounts ! i) (es1 ! i) (z_amounts1 ! i)"
+    using left i_lt unfolding range_scheduled_verify_def Let_def by simp
+  have t2:
+    "range_amount_sigma_verify p gamma k ck ?c
+      (a_amounts ! i) (es2 ! i) (z_amounts2 ! i)"
+    using right i_lt unfolding range_scheduled_verify_def Let_def by simp
+  have e1_ok: "valid_range_challenge p (es1 ! i)"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have e2_ok: "valid_range_challenge p (es2 ! i)"
+    using t2 unfolding range_amount_sigma_verify_def by simp
+  have z1_ok:
+    "valid_range_amount_response p gamma k (es1 ! i) (z_amounts1 ! i)"
+    using t1 unfolding range_amount_sigma_verify_def by simp
+  have z2_ok:
+    "valid_range_amount_response p gamma k (es2 ! i) (z_amounts2 ! i)"
+    using t2 unfolding range_amount_sigma_verify_def by simp
+  obtain r where ext:
+    "range_amount_sigma_extract (es1 ! i) (z_amounts1 ! i)
+       (es2 ! i) (z_amounts2 ! i) = Some r"
+    using range_amount_sigma_extract_some_if_distinct_binary[
+      OF e1_ok e2_ok distinct]
+    by blast
+  have open_eq: "rand_commit p ck r = ?c"
+    using range_amount_sigma_extract_algebraic_opening[
+      OF t1 t2 c_valid c_canonical ext] .
+  have bounded:
+    "valid_vec r (cp_n2 p) \<and>
+     all_bounded r (2 * gamma + range_amount_witness_bound p k)"
+    using range_amount_sigma_extract_distinct_binary_bound[
+      OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
+  show ?thesis
+    using that ext open_eq bounded by blast
+qed
+
+lemma range_scheduled_fork_extract_pair_algebraic_opening:
+  assumes left:
+        "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+           a_amounts a_pairss es1 z_amounts1 z_pairss1"
+      and right:
+        "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+           a_amounts a_pairss es2 z_amounts2 z_pairss2"
+      and fork: "forked_binary_challenge_schedules range_fs_rounds es1 es2 i"
+      and j_lt: "j < k"
+      and c_valid:
+        "valid_commitment p ((range_pair_commitments p ck c_bits c_comps) ! j)"
+      and c_canonical:
+        "vec_mod ((range_pair_commitments p ck c_bits c_comps) ! j) (cp_q p) =
+         (range_pair_commitments p ck c_bits c_comps) ! j"
+  obtains r where
+    "range_pair_sigma_extract (es1 ! i) ((z_pairss1 ! i) ! j)
+       (es2 ! i) ((z_pairss2 ! i) ! j) = Some r"
+    "rand_commit p ck r = (range_pair_commitments p ck c_bits c_comps) ! j"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + range_pair_witness_bound p)"
+proof -
+  let ?cs = "range_pair_commitments p ck c_bits c_comps"
+  have i_lt: "i < range_fs_rounds"
+    using fork by (rule forked_binary_challenge_schedules_index(1))
+  have distinct: "es1 ! i \<noteq> es2 ! i"
+    using fork by (rule forked_binary_challenge_schedules_index(2))
+  have t1:
+    "range_pair_sigma_verify p gamma ck (?cs ! j)
+      ((a_pairss ! i) ! j) (es1 ! i) ((z_pairss1 ! i) ! j)"
+    using left i_lt j_lt unfolding range_scheduled_verify_def Let_def by simp
+  have t2:
+    "range_pair_sigma_verify p gamma ck (?cs ! j)
+      ((a_pairss ! i) ! j) (es2 ! i) ((z_pairss2 ! i) ! j)"
+    using right i_lt j_lt unfolding range_scheduled_verify_def Let_def by simp
+  have e1_ok: "valid_range_challenge p (es1 ! i)"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have e2_ok: "valid_range_challenge p (es2 ! i)"
+    using t2 unfolding range_pair_sigma_verify_def by simp
+  have z1_ok:
+    "valid_range_pair_response p gamma (es1 ! i) ((z_pairss1 ! i) ! j)"
+    using t1 unfolding range_pair_sigma_verify_def by simp
+  have z2_ok:
+    "valid_range_pair_response p gamma (es2 ! i) ((z_pairss2 ! i) ! j)"
+    using t2 unfolding range_pair_sigma_verify_def by simp
+  obtain r where ext:
+    "range_pair_sigma_extract (es1 ! i) ((z_pairss1 ! i) ! j)
+       (es2 ! i) ((z_pairss2 ! i) ! j) = Some r"
+    using range_pair_sigma_extract_some_if_distinct_binary[
+      OF e1_ok e2_ok distinct]
+    by blast
+  have open_eq: "rand_commit p ck r = ?cs ! j"
+    using range_pair_sigma_extract_algebraic_opening[
+      OF t1 t2 c_valid c_canonical ext] .
+  have bounded:
+    "valid_vec r (cp_n2 p) \<and>
+     all_bounded r (2 * gamma + range_pair_witness_bound p)"
+    using range_pair_sigma_extract_distinct_binary_bound[
+      OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
+  show ?thesis
+    using that ext open_eq bounded by blast
+qed
+
 definition range_fs_prove ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
    commit_opening \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow>

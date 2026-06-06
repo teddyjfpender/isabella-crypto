@@ -1,6 +1,6 @@
 # Confidential Transfers Roadmap
 
-Last updated: 2026-06-05
+Last updated: 2026-06-06
 
 ## Current Branch State
 
@@ -17,7 +17,8 @@ The current confidential-transfer stack is an SIS note-commitment MVP:
 - `Canon/ZK/Confidential_Transaction.thy`: nullifiers, authenticated membership,
   balance, range proofs, and semantic ledger-step preservation.
 - `Canon/ZK/Repeated_FS.thy`: shared 128-round, domain-separated binary
-  Fiat-Shamir challenge policy.
+  Fiat-Shamir challenge policy plus an explicit forked binary challenge
+  schedule model for rewinding-style soundness statements.
 - `Canon/ZK/Authenticated_Merkle.thy`: production-target Merkle/hash model with
   canonical encodings and collision-resistance membership soundness lemmas.
 - `Canon/ZK/Authenticated_Ledger.thy`: executable membership scaffold.
@@ -70,6 +71,14 @@ benchmarks are independently checked.
   SIS via `binding_implies_sis`. Balance, range, and nullifier response bounds
   now also have explicit binary-challenge lemmas for the exact margins used by
   later SIS reductions.
+- `Repeated_FS.thy` now defines valid and forked binary challenge schedules.
+  `Confidential_Balance.thy`, `Confidential_Range.thy`, and
+  `Confidential_Transaction.thy` prove scheduled-fork extraction lemmas for
+  balance, range amount, range bit-pair, and nullifier rounds. These lemmas
+  show that two accepting scheduled transcripts with the same announcements
+  and a forked binary challenge round yield bounded algebraic openings. They
+  deliberately do not prove the ROM/forking lemma that obtains such forks from
+  the deterministic SHA3 Fiat-Shamir verifier.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
@@ -145,7 +154,9 @@ The formalization still needs these before production:
 1. Replace the HOL proof abstraction for `binary_fs_challenge` with a
    security model that connects the SHA3-256 transcript instantiation to the
    Fiat-Shamir assumptions used by the proof system.
-2. Replace extractor-correctness assumptions with concrete extractors and
+2. Connect the deterministic SHA3 Fiat-Shamir verifier to the scheduled-fork
+   extraction model with an explicit ROM/forking assumption or theorem, then
+   replace extractor-correctness assumptions with concrete extractors and
    soundness proofs for balance, range, and nullifier proof objects.
 3. Instantiate simulator assumptions with concrete simulators, rejection
    sampling/distribution bounds, and Fiat-Shamir-with-aborts analysis.
@@ -244,6 +255,7 @@ structured deterministic commitment key and is not a security estimate.
 Completed:
 
 - `./scripts/check_formalization.sh`
+- `isabelle build -d Canon Canon_ZK`
 - `make build-cool`
 - `cd tests && bun run audit-confidential`
 - `make test-sdk-equivalence`

@@ -569,6 +569,79 @@ definition nullifier_fs_verify ::
             (es ! i)
             \<lparr> open_msg = z_msgs ! i, open_rand = z_rands ! i \<rparr>))"
 
+definition nullifier_scheduled_verify ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   int list \<Rightarrow> commit_opening list \<Rightarrow> bool" where
+  "nullifier_scheduled_verify p gamma ck nk c nf a_commits a_nullifiers es zs \<longleftrightarrow>
+    length a_commits = nullifier_fs_rounds \<and>
+    length a_nullifiers = nullifier_fs_rounds \<and>
+    length es = nullifier_fs_rounds \<and>
+    length zs = nullifier_fs_rounds \<and>
+    (\<forall>i < nullifier_fs_rounds.
+      nullifier_sigma_verify p gamma ck nk c nf
+        (a_commits ! i) (a_nullifiers ! i) (es ! i) (zs ! i))"
+
+lemma nullifier_scheduled_fork_extract_algebraic_opening:
+  assumes left:
+        "nullifier_scheduled_verify p gamma ck nk c nf
+           a_commits a_nullifiers es1 zs1"
+      and right:
+        "nullifier_scheduled_verify p gamma ck nk c nf
+           a_commits a_nullifiers es2 zs2"
+      and fork: "forked_binary_challenge_schedules nullifier_fs_rounds es1 es2 i"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+      and nf_canonical: "vec_mod nf (cp_q p) = nf"
+  obtains op where
+    "nullifier_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) = Some op"
+    "commit ck op (cp_q p) = c"
+    "nullifier p nk op = nf"
+    "valid_vec (open_msg op) (cp_n1 p)"
+    "valid_vec (open_rand op) (cp_n2 p)"
+    "all_bounded (open_msg op) (2 * gamma + cp_beta p)"
+    "all_bounded (open_rand op) (2 * gamma + cp_beta p)"
+proof -
+  have i_lt: "i < nullifier_fs_rounds"
+    using fork by (rule forked_binary_challenge_schedules_index(1))
+  have distinct: "es1 ! i \<noteq> es2 ! i"
+    using fork by (rule forked_binary_challenge_schedules_index(2))
+  have t1:
+    "nullifier_sigma_verify p gamma ck nk c nf
+      (a_commits ! i) (a_nullifiers ! i) (es1 ! i) (zs1 ! i)"
+    using left i_lt unfolding nullifier_scheduled_verify_def by simp
+  have t2:
+    "nullifier_sigma_verify p gamma ck nk c nf
+      (a_commits ! i) (a_nullifiers ! i) (es2 ! i) (zs2 ! i)"
+    using right i_lt unfolding nullifier_scheduled_verify_def by simp
+  have e1_ok: "valid_nullifier_challenge p (es1 ! i)"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have e2_ok: "valid_nullifier_challenge p (es2 ! i)"
+    using t2 unfolding nullifier_sigma_verify_def by simp
+  have z1_ok: "valid_nullifier_response p gamma (es1 ! i) (zs1 ! i)"
+    using t1 unfolding nullifier_sigma_verify_def by simp
+  have z2_ok: "valid_nullifier_response p gamma (es2 ! i) (zs2 ! i)"
+    using t2 unfolding nullifier_sigma_verify_def by simp
+  obtain op where ext:
+    "nullifier_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) =
+       Some op"
+    using nullifier_sigma_extract_some_if_distinct_binary[
+      OF e1_ok e2_ok distinct]
+    by blast
+  have algebraic:
+    "commit ck op (cp_q p) = c \<and> nullifier p nk op = nf"
+    using nullifier_sigma_extract_algebraic_opening[
+      OF t1 t2 c_canonical nf_canonical ext] .
+  have bounded:
+    "valid_vec (open_msg op) (cp_n1 p) \<and>
+     valid_vec (open_rand op) (cp_n2 p) \<and>
+     all_bounded (open_msg op) (2 * gamma + cp_beta p) \<and>
+     all_bounded (open_rand op) (2 * gamma + cp_beta p)"
+    using nullifier_sigma_extract_distinct_binary_bound[
+      OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
+  show ?thesis
+    using that ext algebraic bounded by blast
+qed
+
 record membership_proof =
   member_index :: nat
   member_root :: commitment

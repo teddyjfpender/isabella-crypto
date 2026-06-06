@@ -86,6 +86,60 @@ lemma binary_fs_challenges_bit:
   unfolding binary_fs_challenges_def
   by simp
 
+definition valid_binary_challenge_schedule :: "nat \<Rightarrow> int list \<Rightarrow> bool" where
+  "valid_binary_challenge_schedule rounds es \<longleftrightarrow>
+    length es = rounds \<and> (\<forall>i < rounds. es ! i = 0 \<or> es ! i = 1)"
+
+definition forked_binary_challenge_schedules ::
+  "nat \<Rightarrow> int list \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> bool" where
+  "forked_binary_challenge_schedules rounds es1 es2 i \<longleftrightarrow>
+    valid_binary_challenge_schedule rounds es1 \<and>
+    valid_binary_challenge_schedule rounds es2 \<and>
+    i < rounds \<and>
+    es1 ! i \<noteq> es2 ! i"
+
+lemma binary_fs_challenges_valid_schedule:
+  "valid_binary_challenge_schedule rounds
+     (binary_fs_challenges domain fields rounds)"
+  unfolding valid_binary_challenge_schedule_def
+  by (simp add: binary_fs_challenges_bit)
+
+lemma valid_binary_challenge_schedule_nth:
+  assumes "valid_binary_challenge_schedule rounds es"
+      and "i < rounds"
+  shows "es ! i = 0 \<or> es ! i = 1"
+  using assms
+  unfolding valid_binary_challenge_schedule_def
+  by simp
+
+lemma forked_binary_challenge_schedules_left_valid:
+  assumes "forked_binary_challenge_schedules rounds es1 es2 i"
+  shows "valid_binary_challenge_schedule rounds es1"
+  using assms unfolding forked_binary_challenge_schedules_def by simp
+
+lemma forked_binary_challenge_schedules_right_valid:
+  assumes "forked_binary_challenge_schedules rounds es1 es2 i"
+  shows "valid_binary_challenge_schedule rounds es2"
+  using assms unfolding forked_binary_challenge_schedules_def by simp
+
+lemma forked_binary_challenge_schedules_index:
+  assumes "forked_binary_challenge_schedules rounds es1 es2 i"
+  shows "i < rounds" and "es1 ! i \<noteq> es2 ! i"
+  using assms unfolding forked_binary_challenge_schedules_def by auto
+
+lemma forked_binary_challenge_schedules_bits:
+  assumes fork: "forked_binary_challenge_schedules rounds es1 es2 i"
+  shows "es1 ! i = 0 \<or> es1 ! i = 1"
+    and "es2 ! i = 0 \<or> es2 ! i = 1"
+  using valid_binary_challenge_schedule_nth[
+          OF forked_binary_challenge_schedules_left_valid[OF fork],
+          of i]
+        valid_binary_challenge_schedule_nth[
+          OF forked_binary_challenge_schedules_right_valid[OF fork],
+          of i]
+        forked_binary_challenge_schedules_index(1)[OF fork]
+  by auto
+
 lemma bool_fs_challenges_length [simp]:
   "length (bool_fs_challenges rounds seed) = rounds"
   unfolding bool_fs_challenges_def

@@ -264,6 +264,16 @@ definition balance_fs_verify ::
      length zs = balance_fs_rounds \<and>
      (\<forall>i < balance_fs_rounds. balance_sigma_verify_core p gamma ck c (as ! i) (es ! i) (zs ! i)))"
 
+definition balance_scheduled_verify ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+   commitment list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow> bool" where
+  "balance_scheduled_verify p gamma ck c as es zs \<longleftrightarrow>
+    length as = balance_fs_rounds \<and>
+    length es = balance_fs_rounds \<and>
+    length zs = balance_fs_rounds \<and>
+    (\<forall>i < balance_fs_rounds.
+      balance_sigma_verify p gamma ck c (as ! i) (es ! i) (zs ! i))"
+
 lemma balance_sigma_verify_imp_core:
   assumes "balance_sigma_verify p gamma ck c a e z"
   shows "balance_sigma_verify_core p gamma ck c a e z"
@@ -1059,6 +1069,51 @@ proof -
         OF key_ok q_pos len_z2 len_z1 hi_eq lo_eq len_a_c c_canonical]
       by (simp add: r_eq)
   qed
+qed
+
+lemma balance_scheduled_fork_extract_algebraic_opening:
+  assumes left: "balance_scheduled_verify p gamma ck c as es1 zs1"
+      and right: "balance_scheduled_verify p gamma ck c as es2 zs2"
+      and fork: "forked_binary_challenge_schedules balance_fs_rounds es1 es2 i"
+      and c_valid: "valid_commitment p c"
+      and c_canonical: "vec_mod c (cp_q p) = c"
+  obtains r where
+    "balance_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) = Some r"
+    "rand_commit p ck r = c"
+    "valid_vec r (cp_n2 p)"
+    "all_bounded r (2 * gamma + 4 * cp_beta p)"
+proof -
+  have i_lt: "i < balance_fs_rounds"
+    using fork by (rule forked_binary_challenge_schedules_index(1))
+  have distinct: "es1 ! i \<noteq> es2 ! i"
+    using fork by (rule forked_binary_challenge_schedules_index(2))
+  have t1:
+    "balance_sigma_verify p gamma ck c (as ! i) (es1 ! i) (zs1 ! i)"
+    using left i_lt unfolding balance_scheduled_verify_def by simp
+  have t2:
+    "balance_sigma_verify p gamma ck c (as ! i) (es2 ! i) (zs2 ! i)"
+    using right i_lt unfolding balance_scheduled_verify_def by simp
+  have e1_ok: "valid_balance_challenge p (es1 ! i)"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have e2_ok: "valid_balance_challenge p (es2 ! i)"
+    using t2 unfolding balance_sigma_verify_def by simp
+  have z1_ok: "valid_balance_response p gamma (es1 ! i) (zs1 ! i)"
+    using t1 unfolding balance_sigma_verify_def by simp
+  have z2_ok: "valid_balance_response p gamma (es2 ! i) (zs2 ! i)"
+    using t2 unfolding balance_sigma_verify_def by simp
+  obtain r where ext:
+    "balance_sigma_extract (es1 ! i) (zs1 ! i) (es2 ! i) (zs2 ! i) = Some r"
+    using balance_sigma_extract_some_if_distinct_binary[OF e1_ok e2_ok distinct]
+    by blast
+  have open_eq: "rand_commit p ck r = c"
+    using balance_sigma_extract_algebraic_opening[
+      OF t1 t2 c_valid c_canonical ext] .
+  have bounded:
+    "valid_vec r (cp_n2 p) \<and> all_bounded r (2 * gamma + 4 * cp_beta p)"
+    using balance_sigma_extract_distinct_binary_bound[
+      OF e1_ok e2_ok distinct z1_ok z2_ok ext] .
+  show ?thesis
+    using that ext open_eq bounded by blast
 qed
 
 lemma amount_of_opening_eq_hd:
