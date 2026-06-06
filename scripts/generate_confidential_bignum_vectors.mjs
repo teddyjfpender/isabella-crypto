@@ -111,7 +111,7 @@ const fixture = {
   vectorEncoding,
   notes: [
     'This fixture defines the production bignum codec target for widened confidential-transfer parameters.',
-    'Existing transaction/proof transcript surfaces still use signed-64-bit integers until the bignum codec is integrated there.'
+    'Fiat-Shamir transcript fields consume this codec; proof arithmetic, proof APIs, and transaction/runtime integer surfaces still need multiprecision integration before launch.'
   ],
   scalarCases,
   vectorCases,

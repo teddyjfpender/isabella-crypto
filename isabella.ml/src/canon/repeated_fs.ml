@@ -5,7 +5,10 @@
     expansion:
 
     ["ISABELLA-CT-FS-v1" || domain_i64_le || round_i64_le ||
-     field_count_i64_le || fields_i64_le...]
+     field_count_i64_le || fields_bignum...]
+
+    Each transcript field is encoded with the confidential bignum codec:
+    sign_u8 || len_i64_le || minimal little-endian magnitude bytes.
 
     The proof slices currently require binary challenges, so the low bit of the
     SHA3-256 digest is used for each round. *)
@@ -89,6 +92,24 @@ let byte_of_int64_le value offset =
 let int64_le_bytes value =
   List.init 8 (byte_of_int64_le value)
 
+let transcript_int_bytes value =
+  let negative = value < 0 in
+  let rec magnitude_bytes acc magnitude =
+    if magnitude = 0L then List.rev acc
+    else
+      magnitude_bytes
+        (byte_of_int64_le magnitude 0 :: acc)
+        (Int64.shift_right_logical magnitude 8)
+  in
+  let magnitude =
+    if negative then Int64.neg (Int64.of_int value)
+    else Int64.of_int value
+  in
+  let bytes = magnitude_bytes [] magnitude in
+  (if negative then 1 else 0)
+  :: int64_le_bytes (Int64.of_int (List.length bytes))
+  @ bytes
+
 let string_bytes s =
   List.init (String.length s) (fun i -> Char.code s.[i])
 
@@ -97,7 +118,7 @@ let transcript_bytes domain round fields =
   @ int64_le_bytes (Int64.of_int domain)
   @ int64_le_bytes (Int64.of_int round)
   @ int64_le_bytes (Int64.of_int (List.length fields))
-  @ List.concat (List.map (fun x -> int64_le_bytes (Int64.of_int x)) fields)
+  @ List.concat (List.map transcript_int_bytes fields)
 
 let absorb_block state block rate =
   List.iteri

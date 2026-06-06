@@ -259,7 +259,7 @@
       },
       "runtime_integer_compatibility": {
         "compatible": false,
-        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit canonical integer encodings and TypeScript number arithmetic",
+        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with TypeScript number proof arithmetic plus signed-64-bit public transaction/runtime integer encodings",
         "limits": {
           "typescript_number_safe_integer": 9007199254740991,
           "signed_64_bit_encoding": 9223372036854775807
@@ -289,7 +289,7 @@
         },
         "required_for_compatibility": [
           "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
-          "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields",
+          "canonical bignum serialization for every proof API and transaction/runtime integer field that can carry widened parameter values",
           "regenerated transcript, transaction, Merkle, proof-digest, and backend parity vectors",
           "benchmarks for the selected widened-modulus/runtime representation"
         ]
@@ -502,7 +502,7 @@
       },
       "runtime_integer_compatibility": {
         "compatible": false,
-        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit canonical integer encodings and TypeScript number arithmetic",
+        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with TypeScript number proof arithmetic plus signed-64-bit public transaction/runtime integer encodings",
         "limits": {
           "typescript_number_safe_integer": 9007199254740991,
           "signed_64_bit_encoding": 9223372036854775807
@@ -534,7 +534,7 @@
         },
         "required_for_compatibility": [
           "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
-          "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields",
+          "canonical bignum serialization for every proof API and transaction/runtime integer field that can carry widened parameter values",
           "regenerated transcript, transaction, Merkle, proof-digest, and backend parity vectors",
           "benchmarks for the selected widened-modulus/runtime representation"
         ]
@@ -594,7 +594,7 @@
       },
       "runtime_integer_compatibility": {
         "compatible": true,
-        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit canonical integer encodings and TypeScript number arithmetic",
+        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with TypeScript number proof arithmetic plus signed-64-bit public transaction/runtime integer encodings",
         "limits": {
           "typescript_number_safe_integer": 9007199254740991,
           "signed_64_bit_encoding": 9223372036854775807

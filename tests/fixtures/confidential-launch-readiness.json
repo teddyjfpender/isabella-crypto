@@ -102,15 +102,15 @@
       "id": "runtime_bignum_representation",
       "category": "implementation_boundary",
       "status": "open",
-      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number and signed-64-bit runtime representation. A standalone canonical bignum codec now has TypeScript/OCaml/Haskell parity vectors, but the transaction/proof transcript surfaces still need to consume it.",
-      "acceptanceGate": "Move the production proof/transcript/runtime integer surface to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
+      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec, but proof APIs, proof arithmetic, and transaction/runtime integer fields still need multiprecision integration before launch.",
+      "acceptanceGate": "Move every production proof API, proof arithmetic path, and transaction/runtime integer field that can carry widened parameter values to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
       "evidence": [
         {
           "file": "tests/fixtures/confidential-bignum-vectors.json",
           "snippets": [
             "ISABELLA-CT-BIGNUM-v1",
             "q83-modulus",
-            "Existing transaction/proof transcript surfaces still use signed-64-bit integers"
+            "Fiat-Shamir transcript fields consume this codec"
           ]
         },
         {
@@ -125,7 +125,7 @@
           "file": "scripts/confidential_parameter_screen.py",
           "snippets": [
             "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
-            "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields"
+            "canonical bignum serialization for every proof API and transaction/runtime integer field that can carry widened parameter values"
           ]
         }
       ]

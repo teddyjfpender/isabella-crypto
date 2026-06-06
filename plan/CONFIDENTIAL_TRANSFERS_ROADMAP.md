@@ -64,8 +64,9 @@ benchmarks are independently checked.
   with only the binary-output contract used by the proofs. Isabelle code export
   is bound to the OCaml and Haskell SHA3-256 counter-mode runtime
   implementations, and the TypeScript/js_of_ocaml path uses the same canonical
-  signed-64-bit little-endian transcript encoding. Transcript vectors live in
-  `tests/fixtures/confidential-transcript-vectors.json`.
+  transcript layout: fixed signed-64-bit control words for domain, round, and
+  field-count, plus bignum-encoded transcript fields. Transcript vectors live
+  in `tests/fixtures/confidential-transcript-vectors.json`.
 - Balance, range, and nullifier proofs now have separate transcript domains and
   public transcript-field encoders.
 - `tests/fixtures/confidential-domain-registry.json` records the active
@@ -77,9 +78,10 @@ benchmarks are independently checked.
   parameters: `sign_u8 || len_i64_le || magnitude_le_minimal`. TypeScript,
   OCaml, and Haskell expose matching `ct-bignum-encode` /
   `ct-bignum-vector-encode` parity surfaces, including the q83 modulus and the
-  current largest SIS response bound. This is a codec target only; the
-  transaction/proof transcript surfaces still need to consume it before the
-  runtime bignum blocker can close.
+  current largest SIS response bound. Fiat-Shamir transcript fields now consume
+  this codec; proof arithmetic, proof APIs, and transaction/runtime integer
+  fields that can carry widened values still need multiprecision integration
+  before the runtime bignum blocker can close.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
   assumptions for HVZK, narrower programmed-schedule HVZK assumptions, and a
@@ -313,14 +315,16 @@ formal modulus warnings, but it is still blocked until external
 lattice-estimator and LaZer parameter-generation reports are attached.
 
 The parameter screen also records runtime integer compatibility against the
-current TypeScript-number arithmetic and signed-64-bit canonical integer
-encoding. Both SIS-note candidates are blocked by this check: the 64-bit range
-proof response/SIS bounds exceed both `Number.MAX_SAFE_INTEGER` and signed
-64-bit encodings, and the q83 candidate additionally exceeds those limits at
-the modulus itself. Production for these parameters therefore needs BigInt or
-multiprecision proof arithmetic across TypeScript, OCaml, and Haskell, plus a
-canonical bignum serialization and regenerated parity vectors. External
-estimator evidence alone is not enough to mark the candidate launchable.
+current TypeScript-number proof arithmetic and signed-64-bit public
+transaction/runtime integer encodings. Both SIS-note candidates are blocked by
+this check: the 64-bit range proof response/SIS bounds exceed both
+`Number.MAX_SAFE_INTEGER` and signed 64-bit encodings, and the q83 candidate
+additionally exceeds those limits at the modulus itself. Production for these
+parameters therefore needs BigInt or multiprecision proof arithmetic across
+TypeScript, OCaml, and Haskell, canonical bignum serialization for every proof
+API and transaction/runtime integer field that can carry widened values, and
+regenerated parity vectors. External estimator evidence alone is not enough to
+mark the candidate launchable.
 
 The same artifact now records exact SIS requests. The legacy MVP request is:
 `SIS.Parameters(n=1024, m=1025, q=8380417, length_bound=2417851639229258382966784,
@@ -446,20 +450,22 @@ Important validation caveats:
   acceptance/rejection against native context digests and Merkle proofs through
   `ct-verify-merkle-envelope` by default for both OCaml and Haskell.
 - `scripts/bench_confidential_balance_128.mjs` now completes and writes
-  `bench/data/confidential-balance-128.json`. On the June 5, 2026 local run
-  with toy dimensions and SHA3-256 transcript hashing, 128-round balance
-  proving had a 4.001 ms median and verification had a 3.950209 ms median.
+  `bench/data/confidential-balance-128.json`. On the June 6, 2026 local run
+  with toy dimensions and SHA3-256 transcript hashing over bignum transcript
+  fields, 128-round balance proving had a 4.050542 ms median and verification
+  had a 3.841417 ms median.
   The earlier multi-minute behavior was an executable-model bug: the
   prover/verifier hot paths repeatedly evaluated the brute-force SIS
   key-separation predicate. That predicate remains part of the stronger
   security relations, but the executable proof paths now check only
   parameter/key dimensions.
 - `scripts/bench_confidential_balance_realistic.mjs` now writes
-  `bench/data/confidential-balance-realistic.json`. On the June 5, 2026 local
-  run using the `ct_sis_note_mvp_v0` dimensions, a 128-round balance proof had
-  a 0.771455667 s proving time, a 0.724763333 s verification time, and a
-  972347-byte JSON proof object. This is a structured-key runtime benchmark,
-  not a production lattice security estimate.
+  `bench/data/confidential-balance-realistic.json`. On the June 6, 2026 local
+  run using the `ct_sis_note_mvp_v0` dimensions and bignum transcript-field
+  hashing, a 128-round balance proof had a 3.137738041 s proving time, a
+  3.4319395 s verification time, and a 972687-byte JSON proof object. This is
+  a structured-key runtime benchmark, not a production lattice security
+  estimate.
 - `scripts/check_confidential_bench_budgets.mjs` enforces current CI ceilings
   for the 128-round toy benchmark, the realistic-dimension benchmark, and the
   realistic JSON proof size. The ceilings are deliberately wider than local

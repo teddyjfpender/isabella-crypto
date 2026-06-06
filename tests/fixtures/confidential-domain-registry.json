@@ -1,11 +1,14 @@
 {
   "version": 1,
-  "integerEncoding": "signed-64-bit-little-endian",
+  "integerEncoding": "namespace-specific",
   "namespaces": {
     "fiatShamir": {
       "dst": "ISABELLA-CT-FS-v1",
       "rounds": 128,
       "challengeExpansion": "SHA3-256-counter-mode-low-bit",
+      "controlEncoding": "domain_i64_le || round_i64_le || field_count_i64_le",
+      "fieldEncoding": "sign_u8 || len_i64_le || magnitude_le_minimal",
+      "transcriptLayout": "dst || domain_i64_le || round_i64_le || field_count_i64_le || fields_bignum...",
       "domains": {
         "balance": 1001,
         "range": 2001,
@@ -15,6 +18,7 @@
     "merkle": {
       "dst": "ISABELLA-CT-MERKLE-v1",
       "hash": "SHA3-256",
+      "integerEncoding": "signed-64-bit-little-endian",
       "tags": {
         "leaf": 0,
         "node": 1,
@@ -25,6 +29,7 @@
       "dst": "ISABELLA-CT-TX-v1",
       "protocolId": "ISABELLA-CT-SIS-NOTE",
       "hash": "SHA3-256",
+      "integerEncoding": "signed-64-bit-little-endian",
       "tags": {
         "context": 0,
         "merkleProof": 1,

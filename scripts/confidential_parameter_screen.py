@@ -260,15 +260,16 @@ def runtime_integer_compatibility(candidate: Candidate, margins: dict[str, Any])
     return {
         "compatible": compatible,
         "runtime_model": (
-            "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit "
-            "canonical integer encodings and TypeScript number arithmetic"
+            "current OCaml/Haskell/TypeScript reference runtime with TypeScript "
+            "number proof arithmetic plus signed-64-bit public transaction/runtime "
+            "integer encodings"
         ),
         "limits": limits,
         "checked_values": checked_values,
         "blocking_values": blocking_values,
         "required_for_compatibility": [] if compatible else [
             "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
-            "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields",
+            "canonical bignum serialization for every proof API and transaction/runtime integer field that can carry widened parameter values",
             "regenerated transcript, transaction, Merkle, proof-digest, and backend parity vectors",
             "benchmarks for the selected widened-modulus/runtime representation",
         ],

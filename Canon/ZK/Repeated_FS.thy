@@ -16,7 +16,11 @@ text \<open>
   expansion over:
 
     \<open>"ISABELLA-CT-FS-v1" || domain_i64_le || round_i64_le ||
-      field_count_i64_le || fields_i64_le...\<close>
+      field_count_i64_le || fields_bignum...\<close>
+
+  Here domain, round, and field-count are fixed little-endian signed 64-bit
+  control words. Each public transcript field uses the confidential bignum
+  codec \<open>sign_u8 || len_i64_le || magnitude_le_minimal\<close>.
 
   Backend parity for that byte encoding is pinned by
   \<open>tests/fixtures/confidential-transcript-vectors.json\<close>.

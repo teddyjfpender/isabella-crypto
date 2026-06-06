@@ -10,11 +10,30 @@ const projectRoot = path.resolve(__dirname, '..');
 const out = process.env.OUT ?? path.join(projectRoot, 'tests/fixtures/confidential-transcript-vectors.json');
 
 const dst = Buffer.from('ISABELLA-CT-FS-v1', 'ascii');
+const controlEncoding = 'domain_i64_le || round_i64_le || field_count_i64_le';
+const fieldEncoding = 'sign_u8 || len_i64_le || magnitude_le_minimal';
+const integerEncoding = `control=${controlEncoding}; field=${fieldEncoding}`;
 
 function i64le(value) {
   const out = Buffer.alloc(8);
   out.writeBigInt64LE(BigInt(value), 0);
   return out;
+}
+
+function encodeTranscriptField(value) {
+  const normalized = BigInt(value);
+  const negative = normalized < 0n;
+  let magnitude = negative ? -normalized : normalized;
+  const bytes = [];
+  while (magnitude > 0n) {
+    bytes.push(Number(magnitude & 0xffn));
+    magnitude >>= 8n;
+  }
+  return Buffer.concat([
+    Buffer.from([negative ? 1 : 0]),
+    i64le(bytes.length),
+    Buffer.from(bytes),
+  ]);
 }
 
 function encodeTranscript(domain, round, fields) {
@@ -23,7 +42,7 @@ function encodeTranscript(domain, round, fields) {
     i64le(domain),
     i64le(round),
     i64le(fields.length),
-    ...fields.map(i64le),
+    ...fields.map(encodeTranscriptField),
   ]);
 }
 
@@ -109,13 +128,21 @@ nullifierCanonical.fields = [
   sum(nullifierCanonical.aNullifier),
 ];
 
+const signedFields = {
+  name: 'signed-fields-direct',
+  domain: 1001,
+  fields: [0, -1, 255, 256, -256],
+};
+
 const vectors = {
   version: 1,
   algorithm: 'SHA3-256-counter-mode-low-bit',
   dst: dst.toString('ascii'),
-  integerEncoding: 'signed-64-bit-little-endian',
-  transcriptLayout: 'dst || domain_i64_le || round_i64_le || field_count_i64_le || fields_i64_le...',
-  cases: [balance, range, nullifier, nullifierCanonical].map((entry) => ({
+  integerEncoding,
+  controlEncoding,
+  fieldEncoding,
+  transcriptLayout: 'dst || domain_i64_le || round_i64_le || field_count_i64_le || fields_bignum...',
+  cases: [balance, range, nullifier, nullifierCanonical, signedFields].map((entry) => ({
     ...entry,
     rounds: [0, 1, 2, 3].map((round) => challenge(entry.domain, entry.fields, round)),
   })),

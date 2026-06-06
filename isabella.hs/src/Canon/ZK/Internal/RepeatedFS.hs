@@ -97,13 +97,23 @@ int64LeBytes :: Int -> [Word8]
 int64LeBytes value =
   word64LeBytes (fromIntegral value :: Word64)
 
+transcriptIntBytes :: Int -> [Word8]
+transcriptIntBytes value =
+  let normalized = toInteger value
+      negative = normalized < 0
+      magnitude = abs normalized
+      magnitudeBytes 0 = []
+      magnitudeBytes n = fromIntegral (n .&. 0xff) : magnitudeBytes (n `shiftR` 8)
+      bytes = magnitudeBytes magnitude
+   in (if negative then 1 else 0) : int64LeBytes (length bytes) ++ bytes
+
 transcriptBytes :: Int -> Int -> [Int] -> [Word8]
 transcriptBytes domain roundIndex fields =
   map (fromIntegral . ord) transcriptDst ++
   int64LeBytes domain ++
   int64LeBytes roundIndex ++
   int64LeBytes (length fields) ++
-  concatMap int64LeBytes fields
+  concatMap transcriptIntBytes fields
 
 absorbBlock :: [Word64] -> [Word8] -> [Word64]
 absorbBlock state block =

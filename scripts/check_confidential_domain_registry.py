@@ -90,8 +90,8 @@ def check_registry_shape(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if require_int(registry.get("version"), "version") != 1:
         fail("version must be 1")
     encoding = require_string(registry.get("integerEncoding"), "integerEncoding")
-    if encoding != "signed-64-bit-little-endian":
-        fail("integerEncoding must be signed-64-bit-little-endian")
+    if encoding != "namespace-specific":
+        fail("integerEncoding must be namespace-specific")
 
     namespaces = require_object(registry.get("namespaces"), "namespaces")
     required = {"fiatShamir", "merkle", "transaction"}
@@ -110,6 +110,14 @@ def check_registry_shape(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
     fs = require_object(namespaces["fiatShamir"], "namespaces.fiatShamir")
     if require_int(fs.get("rounds"), "namespaces.fiatShamir.rounds") != 128:
         fail("Fiat-Shamir rounds must be 128")
+    if require_string(fs.get("challengeExpansion"), "namespaces.fiatShamir.challengeExpansion") != "SHA3-256-counter-mode-low-bit":
+        fail("Fiat-Shamir challenge expansion must be SHA3-256-counter-mode-low-bit")
+    if require_string(fs.get("controlEncoding"), "namespaces.fiatShamir.controlEncoding") != "domain_i64_le || round_i64_le || field_count_i64_le":
+        fail("Fiat-Shamir control encoding must be domain_i64_le || round_i64_le || field_count_i64_le")
+    if require_string(fs.get("fieldEncoding"), "namespaces.fiatShamir.fieldEncoding") != "sign_u8 || len_i64_le || magnitude_le_minimal":
+        fail("Fiat-Shamir field encoding must be the confidential bignum codec")
+    if require_string(fs.get("transcriptLayout"), "namespaces.fiatShamir.transcriptLayout") != "dst || domain_i64_le || round_i64_le || field_count_i64_le || fields_bignum...":
+        fail("Fiat-Shamir transcript layout must use bignum transcript fields")
     domains = {
         name: require_int(value, f"namespaces.fiatShamir.domains.{name}")
         for name, value in require_object(fs.get("domains"), "namespaces.fiatShamir.domains").items()
@@ -118,6 +126,8 @@ def check_registry_shape(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
     for namespace_name in ["merkle", "transaction"]:
         namespace = require_object(namespaces[namespace_name], f"namespaces.{namespace_name}")
+        if require_string(namespace.get("integerEncoding"), f"namespaces.{namespace_name}.integerEncoding") != "signed-64-bit-little-endian":
+            fail(f"{namespace_name} integer encoding must be signed-64-bit-little-endian")
         tags = {
             name: require_int(value, f"namespaces.{namespace_name}.tags.{name}")
             for name, value in require_object(namespace.get("tags"), f"namespaces.{namespace_name}.tags").items()
@@ -133,8 +143,17 @@ def check_fixtures(namespaces: dict[str, dict[str, Any]]) -> None:
     transcript = load_json(TRANSCRIPT_VECTORS)
     if transcript.get("dst") != fs["dst"]:
         fail("confidential-transcript-vectors dst disagrees with registry")
-    if transcript.get("integerEncoding") != "signed-64-bit-little-endian":
+    if transcript.get("algorithm") != fs["challengeExpansion"]:
+        fail("confidential-transcript-vectors challenge expansion disagrees with registry")
+    expected_integer_encoding = f"control={fs['controlEncoding']}; field={fs['fieldEncoding']}"
+    if transcript.get("integerEncoding") != expected_integer_encoding:
         fail("confidential-transcript-vectors integer encoding disagrees with registry")
+    if transcript.get("controlEncoding") != fs["controlEncoding"]:
+        fail("confidential-transcript-vectors control encoding disagrees with registry")
+    if transcript.get("fieldEncoding") != fs["fieldEncoding"]:
+        fail("confidential-transcript-vectors field encoding disagrees with registry")
+    if transcript.get("transcriptLayout") != fs["transcriptLayout"]:
+        fail("confidential-transcript-vectors layout disagrees with registry")
     registry_domains = set(require_object(fs["domains"], "fiatShamir.domains").values())
     vector_domains = {
         require_int(require_object(case, "transcript case").get("domain"), "transcript case.domain")
@@ -147,6 +166,8 @@ def check_fixtures(namespaces: dict[str, dict[str, Any]]) -> None:
     merkle_vectors = load_json(MERKLE_VECTORS)
     if merkle_vectors.get("dst") != merkle["dst"]:
         fail("confidential-merkle-vectors dst disagrees with registry")
+    if merkle_vectors.get("integerEncoding") != merkle["integerEncoding"]:
+        fail("confidential-merkle-vectors integer encoding disagrees with registry")
     if merkle_vectors.get("tags") != merkle["tags"]:
         fail("confidential-merkle-vectors tags disagree with registry")
 
@@ -154,6 +175,8 @@ def check_fixtures(namespaces: dict[str, dict[str, Any]]) -> None:
     transaction_vectors = load_json(TRANSACTION_VECTORS)
     if transaction_vectors.get("dst") != transaction["dst"]:
         fail("confidential-transaction-vectors dst disagrees with registry")
+    if transaction_vectors.get("integerEncoding") != transaction["integerEncoding"]:
+        fail("confidential-transaction-vectors integer encoding disagrees with registry")
     if transaction_vectors.get("protocolId") != transaction["protocolId"]:
         fail("confidential-transaction-vectors protocolId disagrees with registry")
     if transaction_vectors.get("tags") != transaction["tags"]:

@@ -39,6 +39,8 @@ type TranscriptVectors = {
   algorithm: string;
   dst: string;
   integerEncoding: string;
+  controlEncoding: string;
+  fieldEncoding: string;
   transcriptLayout: string;
   cases: TranscriptCase[];
 };
@@ -49,13 +51,29 @@ function i64le(value: number): Buffer {
   return out;
 }
 
+function encodeTranscriptField(value: number): Buffer {
+  const normalized = BigInt(value);
+  const negative = normalized < 0n;
+  let magnitude = negative ? -normalized : normalized;
+  const bytes: number[] = [];
+  while (magnitude > 0n) {
+    bytes.push(Number(magnitude & 0xffn));
+    magnitude >>= 8n;
+  }
+  return Buffer.concat([
+    Buffer.from([negative ? 1 : 0]),
+    i64le(bytes.length),
+    Buffer.from(bytes),
+  ]);
+}
+
 function encodeTranscript(dst: string, domain: number, round: number, fields: number[]): Buffer {
   return Buffer.concat([
     Buffer.from(dst, 'ascii'),
     i64le(domain),
     i64le(round),
     i64le(fields.length),
-    ...fields.map(i64le),
+    ...fields.map(encodeTranscriptField),
   ]);
 }
 
@@ -79,7 +97,14 @@ describe('Confidential Fiat-Shamir transcript vectors', () => {
   it('pins the canonical SHA3 transcript encoding', () => {
     expect(vectors.algorithm).toBe('SHA3-256-counter-mode-low-bit');
     expect(vectors.dst).toBe('ISABELLA-CT-FS-v1');
-    expect(vectors.integerEncoding).toBe('signed-64-bit-little-endian');
+    expect(vectors.integerEncoding).toBe(
+      'control=domain_i64_le || round_i64_le || field_count_i64_le; field=sign_u8 || len_i64_le || magnitude_le_minimal'
+    );
+    expect(vectors.controlEncoding).toBe('domain_i64_le || round_i64_le || field_count_i64_le');
+    expect(vectors.fieldEncoding).toBe('sign_u8 || len_i64_le || magnitude_le_minimal');
+    expect(vectors.transcriptLayout).toBe(
+      'dst || domain_i64_le || round_i64_le || field_count_i64_le || fields_bignum...'
+    );
 
     for (const entry of vectors.cases) {
       for (const round of entry.rounds) {
