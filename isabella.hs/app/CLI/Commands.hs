@@ -92,6 +92,7 @@ runCommand format cmd args = case cmd of
     "ct-bignum-merkle-root" -> cmdCtBignumMerkleRoot format args
     "ct-bignum-merkle-member-prove" -> cmdCtBignumMerkleMemberProve format args
     "ct-bignum-merkle-member-verify" -> cmdCtBignumMerkleMemberVerify format args
+    "ct-bignum-prove-merkle" -> cmdCtBignumProveMerkle format args
     "ct-bignum-transaction-context" -> cmdCtBignumTransactionContext format args
     "ct-bignum-merkle-proof-digest" -> cmdCtBignumMerkleProofDigest format args
     "ct-bignum-merkle-envelope-digest" -> cmdCtBignumMerkleEnvelopeDigest format args
@@ -743,6 +744,56 @@ bignumVerifyMerkleWithFee params gamma k ck nk ledger rootDigest rootDepth spent
         bigCrFsVerify params gamma k ck cOut1 (bigTxOut1Range proof) &&
         bigCrFsVerify params gamma k ck cOut2 (bigTxOut2Range proof)
 
+bignumProveMerkleWithFee ::
+  BigCbParams -> Integer -> Int -> [[Integer]] -> [[Integer]] -> [[Integer]] -> [[Integer]] -> Integer ->
+  [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] ->
+  BigOpening -> BigOpening -> BigOpening -> BigOpening ->
+  [BigOpening] -> [BigOpening] -> [BigOpening] -> [BigOpening] ->
+  [BigOpening] -> [BigOpening] -> [[Integer]] -> [[Integer]] -> [[[Integer]]] -> [[Integer]] -> [[[Integer]]] ->
+  Maybe BigMerkleTransactionProof
+bignumProveMerkleWithFee params gamma k ck nk ledger spent publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2
+  opIn1 opIn2 opOut1 opOut2
+  out1Bits out1Comps out2Bits out2Comps
+  yIn1 yIn2 yBalance yOut1Amounts yOut1Pairss yOut2Amounts yOut2Pairss =
+    let inputAmount = bigAmountOfOpening opIn1 + bigAmountOfOpening opIn2
+        outputAmount = bigAmountOfOpening opOut1 + bigAmountOfOpening opOut2
+        balanceWitness =
+          bigOpenRand (bigOpeningSub (bigOpeningAdd opIn1 opIn2) (bigOpeningAdd opOut1 opOut2))
+     in if not (requireNonnegativePublicFee publicFee) ||
+           nf1 `elem` spent ||
+           nf2 `elem` spent ||
+           nf1 == nf2 ||
+           inputAmount /= outputAmount + publicFee
+        then Nothing
+        else do
+          in1Member <- bignumMerkleMembershipProve ledger cIn1
+          in2Member <- bignumMerkleMembershipProve ledger cIn2
+          if ConfidentialMerkle.merkle_index in1Member == ConfidentialMerkle.merkle_index in2Member
+            then Nothing
+            else do
+              in1Nullifier <- bigNfFsProve params gamma ck nk cIn1 nf1 opIn1 yIn1
+              in2Nullifier <- bigNfFsProve params gamma ck nk cIn2 nf2 opIn2 yIn2
+              balance <- bigFsProve
+                params
+                gamma
+                ck
+                (bignumFeeBalanceCommitment params ck cIn1 cIn2 cOut1 cOut2 publicFee)
+                balanceWitness
+                yBalance
+              out1Range <- bigCrFsProve params gamma k ck cOut1 opOut1 out1Bits out1Comps yOut1Amounts yOut1Pairss
+              out2Range <- bigCrFsProve params gamma k ck cOut2 opOut2 out2Bits out2Comps yOut2Amounts yOut2Pairss
+              Just
+                BigMerkleTransactionProof
+                  { bigTxIn1Member = in1Member
+                  , bigTxIn2Member = in2Member
+                  , bigTxIn1Nullifier = in1Nullifier
+                  , bigTxIn2Nullifier = in2Nullifier
+                  , bigTxBalance = balance
+                  , bigTxOut1Range = out1Range
+                  , bigTxOut2Range = out2Range
+                  }
+
 bignumHex :: [Int] -> String
 bignumHex = concatMap bignumHexByte
 
@@ -1041,6 +1092,18 @@ jsonBigNfProof proof =
         , ("aNullifiers", jsonIntegerMat (bigNfANullifiers proof))
         , ("zMsgs", jsonIntegerMat (bigNfZMsgs proof))
         , ("zRands", jsonIntegerMat (bigNfZRands proof))
+        ]
+
+jsonBigMerkleTransactionProof :: BigMerkleTransactionProof -> String
+jsonBigMerkleTransactionProof proof =
+    jsonObject
+        [ ("in1Member", jsonMerkleMembershipProof (bigTxIn1Member proof))
+        , ("in2Member", jsonMerkleMembershipProof (bigTxIn2Member proof))
+        , ("in1Nullifier", jsonBigNfProof (bigTxIn1Nullifier proof))
+        , ("in2Nullifier", jsonBigNfProof (bigTxIn2Nullifier proof))
+        , ("balance", jsonBigCbProof (bigTxBalance proof))
+        , ("out1Range", jsonBigCrProof (bigTxOut1Range proof))
+        , ("out2Range", jsonBigCrProof (bigTxOut2Range proof))
         ]
 
 bigCbFsDomain :: Int
@@ -2952,6 +3015,133 @@ cmdCtBignumMerkleMemberVerify format [ledgerStr, commitmentStr] =
         _ -> outputError format "Expected canonical bignum ledger matrix and commitment vector"
 cmdCtBignumMerkleMemberVerify format _ =
     outputUsage format "Usage: ct-bignum-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
+
+cmdCtBignumProveMerkle :: OutputFormat -> [String] -> IO ()
+cmdCtBignumProveMerkle format
+    [ mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, publicFeeStr
+    , cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str
+    , in1AmountStr, in1RandStr, in2AmountStr, in2RandStr
+    , out1AmountStr, out1RandStr, out2AmountStr, out2RandStr
+    , out1BitsStr, out1BitRandsStr, out1CompsStr, out1CompRandsStr
+    , out2BitsStr, out2BitRandsStr, out2CompsStr, out2CompRandsStr
+    , yIn1MsgsStr, yIn1RandsStr, yIn2MsgsStr, yIn2RandsStr
+    , yBalanceStr, yOut1AmountsStr, yOut1PairssStr, yOut2AmountsStr, yOut2PairssStr
+    ] =
+        case
+            ( parseBigCbParams mStr n2Str qStr betaStr
+            , parseCanonicalInteger gammaStr
+            , parseCanonicalInt kStr
+            , parseCanonicalIntegerMat ckStr
+            , parseCanonicalIntegerMat nkStr
+            , parseCanonicalIntegerMat ledgerStr
+            , parseCanonicalIntegerMat spentStr
+            , parseCanonicalInteger publicFeeStr
+            , parseCanonicalIntegerVec cIn1Str
+            , parseCanonicalIntegerVec cIn2Str
+            , parseCanonicalIntegerVec cOut1Str
+            , parseCanonicalIntegerVec cOut2Str
+            , parseCanonicalIntegerVec nf1Str
+            , parseCanonicalIntegerVec nf2Str
+            , parseCanonicalInteger in1AmountStr
+            , parseCanonicalIntegerVec in1RandStr
+            , parseCanonicalInteger in2AmountStr
+            , parseCanonicalIntegerVec in2RandStr
+            , parseCanonicalInteger out1AmountStr
+            , parseCanonicalIntegerVec out1RandStr
+            , parseCanonicalInteger out2AmountStr
+            , parseCanonicalIntegerVec out2RandStr
+            , parseCanonicalIntegerVec out1BitsStr
+            , parseCanonicalIntegerMat out1BitRandsStr
+            , parseCanonicalIntegerVec out1CompsStr
+            , parseCanonicalIntegerMat out1CompRandsStr
+            , parseCanonicalIntegerVec out2BitsStr
+            , parseCanonicalIntegerMat out2BitRandsStr
+            , parseCanonicalIntegerVec out2CompsStr
+            , parseCanonicalIntegerMat out2CompRandsStr
+            , parseCanonicalIntegerVec yIn1MsgsStr
+            , parseCanonicalIntegerMat yIn1RandsStr
+            , parseCanonicalIntegerVec yIn2MsgsStr
+            , parseCanonicalIntegerMat yIn2RandsStr
+            , parseCanonicalIntegerMat yBalanceStr
+            , parseCanonicalIntegerMat yOut1AmountsStr
+            , parseCanonicalIntegerCube yOut1PairssStr
+            , parseCanonicalIntegerMat yOut2AmountsStr
+            , parseCanonicalIntegerCube yOut2PairssStr
+            )
+        of
+            ( Just params
+              , Just gamma
+              , Just k
+              , Just ck
+              , Just nk
+              , Just ledger
+              , Just spent
+              , Just publicFee
+              , Just cIn1
+              , Just cIn2
+              , Just cOut1
+              , Just cOut2
+              , Just nf1
+              , Just nf2
+              , Just in1Amount
+              , Just in1Rand
+              , Just in2Amount
+              , Just in2Rand
+              , Just out1Amount
+              , Just out1Rand
+              , Just out2Amount
+              , Just out2Rand
+              , Just out1Bits
+              , Just out1BitRands
+              , Just out1Comps
+              , Just out1CompRands
+              , Just out2Bits
+              , Just out2BitRands
+              , Just out2Comps
+              , Just out2CompRands
+              , Just yIn1Msgs
+              , Just yIn1Rands
+              , Just yIn2Msgs
+              , Just yIn2Rands
+              , Just yBalance
+              , Just yOut1Amounts
+              , Just yOut1Pairss
+              , Just yOut2Amounts
+              , Just yOut2Pairss
+              ) ->
+                case
+                    ( makeBigScalarOpenings out1Bits out1BitRands
+                    , makeBigScalarOpenings out1Comps out1CompRands
+                    , makeBigScalarOpenings out2Bits out2BitRands
+                    , makeBigScalarOpenings out2Comps out2CompRands
+                    , makeBigScalarOpenings yIn1Msgs yIn1Rands
+                    , makeBigScalarOpenings yIn2Msgs yIn2Rands
+                    )
+                of
+                    (Just out1BitOps, Just out1CompOps, Just out2BitOps, Just out2CompOps, Just yIn1Ops, Just yIn2Ops) ->
+                        case
+                            bignumProveMerkleWithFee
+                                params gamma k ck nk ledger spent publicFee
+                                cIn1 cIn2 cOut1 cOut2 nf1 nf2
+                                (bigOpening [in1Amount] in1Rand)
+                                (bigOpening [in2Amount] in2Rand)
+                                (bigOpening [out1Amount] out1Rand)
+                                (bigOpening [out2Amount] out2Rand)
+                                out1BitOps out1CompOps out2BitOps out2CompOps
+                                yIn1Ops yIn2Ops yBalance yOut1Amounts yOut1Pairss yOut2Amounts yOut2Pairss
+                        of
+                            Just proof ->
+                                case format of
+                                    Human -> putStrLn $ "ct_bignum_merkle_proof = " ++ jsonBigMerkleTransactionProof proof
+                                    Json -> putStrLn $ jsonBigMerkleTransactionProof proof
+                            Nothing ->
+                                case format of
+                                    Human -> putStrLn "ct_bignum_merkle_proof = null"
+                                    Json -> putStrLn "null"
+                    _ -> outputError format "Bit, complement, and nullifier-mask counts must match their randomness matrices"
+            _ -> outputError format "Expected bignum params, keys, ledger, commitments, openings, bit decompositions, and mask vectors"
+cmdCtBignumProveMerkle format _ =
+    outputUsage format "Usage: ct-bignum-prove-merkle M N2 Q BETA G K CK NK LEDGER SPENT FEE C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
 
 cmdCtBignumTransactionContext :: OutputFormat -> [String] -> IO ()
 cmdCtBignumTransactionContext format

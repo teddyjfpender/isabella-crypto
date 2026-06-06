@@ -352,13 +352,16 @@ OCaml/Haskell now expose matching `ct-bignum-*` native preview commands checked
 against `tests/fixtures/confidential-bignum-transaction-vectors.json` for
 q83-scale Merkle leaves, transaction contexts, proof digests, envelopes,
 accepted-root windows, wallet proof requests, and envelope verification of the
-TypeScript BigInt Merkle transfer proof. The runtime-surface manifest
+TypeScript BigInt Merkle transfer proof. OCaml/Haskell also expose
+`ct-bignum-prove-merkle`, a deterministic preview prover that emits the same
+BigInt Merkle transfer proof as the TypeScript reference for the shared
+conformance case. The runtime-surface manifest
 still records `runtimeIntegerBoundary.status =
 "blocked_by_transaction_i64_encoding"`, and
 `scripts/check_confidential_runtime_surface.py --require-production` fails while
-the selected launch namespaces remain signed-64. Production still needs native
-prover/full launch bignum parity, launch-callers moved to selected bignum
-namespaces, canonical bignum serialization for every remaining proof API and
+the selected launch namespaces remain signed-64. Production still needs
+launch-callers moved to selected bignum namespaces, CSPRNG wallet proof
+generation, canonical bignum serialization for every remaining proof API and
 transaction/runtime integer field that can carry widened values, and
 widened-runtime benchmark evidence across all runtimes.
 External estimator evidence alone is not enough to

@@ -44,10 +44,11 @@ nullifier proof reference path with OCaml/Haskell multiprecision preview parity.
 `ConfidentialTransactionBigInt` now composes those TypeScript BigInt proof
 slices with bignum Merkle membership, transaction digests, fee-aware balance
 checks, and envelope-policy verification, and OCaml/Haskell now expose native
-preview envelope verifiers for that BigInt Merkle transfer proof. Native prover
-parity, selected bignum launch namespace wiring, remaining transaction/runtime
-integer fields that can carry widened values, and regenerated vectors/benchmarks
-still need multiprecision integration before production.
+preview deterministic provers plus envelope verifiers for that BigInt Merkle
+transfer proof. Selected bignum launch namespace wiring, CSPRNG wallet proof
+generation, remaining transaction/runtime integer fields that can carry widened
+values, and regenerated vectors/benchmarks still need multiprecision integration
+before production.
 
 ## Current Stabilization Commands
 

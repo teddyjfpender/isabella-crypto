@@ -103,6 +103,7 @@ const bignumVectors = JSON.parse(fs.readFileSync(bignumVectorsPath, 'utf8')) as 
 type SampleOpening = { msg: number[]; rand: number[] };
 type BigintBalanceProofJson = { as: string[][]; zs: string[][] };
 type DecimalOpening = { msg: string[]; rand: string[] };
+type BignumOpeningJson = { msg: string[]; rand: string[] };
 type BigintRangeProofJson = {
   bits: string[][];
   comps: string[][];
@@ -434,6 +435,13 @@ function makeBignumTransferCase() {
   const out2Comps = bignumCompOpenings(out2Bits);
   const ledger = [cIn1, cIn2, cOut1, cOut2];
   const spent: bigint[][] = [];
+  const yIn1 = bignumOpeningMasks(rounds);
+  const yIn2 = bignumOpeningMasks(rounds);
+  const yBalance = bignumVectorMasks(rounds);
+  const yOut1 = bignumVectorMasks(rounds);
+  const yOut1Pairs = bignumPairMasks(rounds, k);
+  const yOut2 = bignumVectorMasks(rounds);
+  const yOut2Pairs = bignumPairMasks(rounds, k);
   const proof = tx.fsProveMerkleWithFee(
     params,
     gamma,
@@ -457,13 +465,13 @@ function makeBignumTransferCase() {
     out1Comps,
     out2Bits,
     out2Comps,
-    bignumOpeningMasks(rounds),
-    bignumOpeningMasks(rounds),
-    bignumVectorMasks(rounds),
-    bignumVectorMasks(rounds),
-    bignumPairMasks(rounds, k),
-    bignumVectorMasks(rounds),
-    bignumPairMasks(rounds, k)
+    yIn1,
+    yIn2,
+    yBalance,
+    yOut1,
+    yOut1Pairs,
+    yOut2,
+    yOut2Pairs
   );
   assert.ok(proof, 'TypeScript BigInt Merkle proof generation succeeds');
   const root = tx.merkleLedgerRoot(ledger);
@@ -494,6 +502,23 @@ function makeBignumTransferCase() {
     nk,
     ledger,
     spent,
+    witnesses: {
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2,
+      out1Bits,
+      out1Comps,
+      out2Bits,
+      out2Comps,
+      yIn1,
+      yIn2,
+      yBalance,
+      yOut1,
+      yOut1Pairs,
+      yOut2,
+      yOut2Pairs,
+    },
     context,
     contextDigest: tx.transactionContextDigest(context),
     proof,
@@ -503,10 +528,96 @@ function makeBignumTransferCase() {
     nk: string[][];
     ledger: string[][];
     spent: string[][];
+    witnesses: {
+      opIn1: BignumOpeningJson;
+      opIn2: BignumOpeningJson;
+      opOut1: BignumOpeningJson;
+      opOut2: BignumOpeningJson;
+      out1Bits: BignumOpeningJson[];
+      out1Comps: BignumOpeningJson[];
+      out2Bits: BignumOpeningJson[];
+      out2Comps: BignumOpeningJson[];
+      yIn1: BignumOpeningJson[];
+      yIn2: BignumOpeningJson[];
+      yBalance: string[][];
+      yOut1: string[][];
+      yOut1Pairs: string[][][];
+      yOut2: string[][];
+      yOut2Pairs: string[][][];
+    };
     context: BignumTransactionContextJson;
     contextDigest: string;
     proof: BignumMerkleTransactionProofJson;
   };
+}
+
+function bignumOpeningAmount(opening: BignumOpeningJson): string {
+  assert.equal(opening.msg.length, 1, 'bignum transfer opening is scalar');
+  return opening.msg[0];
+}
+
+function bignumOpeningRands(openings: BignumOpeningJson[]): string[][] {
+  return openings.map((opening) => opening.rand);
+}
+
+function bignumOpeningAmounts(openings: BignumOpeningJson[]): string[] {
+  return openings.map(bignumOpeningAmount);
+}
+
+function bignumProveMerkleArgs(
+  testCase: ReturnType<typeof makeBignumTransferCase>,
+  options: {
+    spent?: string[][];
+    publicFee?: string;
+  } = {}
+): string[] {
+  const context = testCase.context;
+  const witnesses = testCase.witnesses;
+  return [
+    'ct-bignum-prove-merkle',
+    testCase.params.m,
+    testCase.params.n2,
+    testCase.params.q,
+    testCase.params.beta,
+    testCase.params.gamma,
+    testCase.params.k,
+    integerMatText(testCase.ck),
+    integerMatText(testCase.nk),
+    integerMatText(testCase.ledger),
+    integerMatText(options.spent ?? testCase.spent),
+    options.publicFee ?? context.publicFee,
+    integerVecText(context.cIn1),
+    integerVecText(context.cIn2),
+    integerVecText(context.cOut1),
+    integerVecText(context.cOut2),
+    integerVecText(context.nf1),
+    integerVecText(context.nf2),
+    bignumOpeningAmount(witnesses.opIn1),
+    integerVecText(witnesses.opIn1.rand),
+    bignumOpeningAmount(witnesses.opIn2),
+    integerVecText(witnesses.opIn2.rand),
+    bignumOpeningAmount(witnesses.opOut1),
+    integerVecText(witnesses.opOut1.rand),
+    bignumOpeningAmount(witnesses.opOut2),
+    integerVecText(witnesses.opOut2.rand),
+    integerVecText(bignumOpeningAmounts(witnesses.out1Bits)),
+    integerMatText(bignumOpeningRands(witnesses.out1Bits)),
+    integerVecText(bignumOpeningAmounts(witnesses.out1Comps)),
+    integerMatText(bignumOpeningRands(witnesses.out1Comps)),
+    integerVecText(bignumOpeningAmounts(witnesses.out2Bits)),
+    integerMatText(bignumOpeningRands(witnesses.out2Bits)),
+    integerVecText(bignumOpeningAmounts(witnesses.out2Comps)),
+    integerMatText(bignumOpeningRands(witnesses.out2Comps)),
+    integerVecText(bignumOpeningAmounts(witnesses.yIn1)),
+    integerMatText(bignumOpeningRands(witnesses.yIn1)),
+    integerVecText(bignumOpeningAmounts(witnesses.yIn2)),
+    integerMatText(bignumOpeningRands(witnesses.yIn2)),
+    integerMatText(witnesses.yBalance),
+    integerMatText(witnesses.yOut1),
+    integerCubeText(witnesses.yOut1Pairs),
+    integerMatText(witnesses.yOut2),
+    integerCubeText(witnesses.yOut2Pairs),
+  ];
 }
 
 function bignumEnvelopeVerifyArgs(
@@ -635,6 +746,45 @@ for (const entry of bignumTransactionVectors.walletProofRequestCases) {
 }
 
 const bignumTransferCase = makeBignumTransferCase();
+const bignumTransferProofDigest = sdk.ConfidentialTransactionBigInt.transactionMerkleProofDigest(
+  bignumTransferCase.proof
+);
+const ocamlBignumTransferProof = parseCliResult<BignumMerkleTransactionProofJson>(
+  runCli(bignumProveMerkleArgs(bignumTransferCase))
+);
+assert.deepEqual(
+  ocamlBignumTransferProof,
+  bignumTransferCase.proof,
+  'ct-bignum-prove-merkle OCaml emits the TypeScript BigInt Merkle proof'
+);
+assert.equal(
+  ocamlStringResult(['ct-bignum-merkle-proof-digest', ...bignumProofArgs(ocamlBignumTransferProof)]),
+  bignumTransferProofDigest,
+  'ct-bignum-prove-merkle OCaml proof digest matches TypeScript'
+);
+assert.equal(
+  ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase, { proof: ocamlBignumTransferProof })),
+  true,
+  'ct-bignum-prove-merkle OCaml proof verifies in native envelope verifier'
+);
+assert.equal(
+  parseCliResult<BignumMerkleTransactionProofJson | null>(
+    runCli(bignumProveMerkleArgs(bignumTransferCase, {
+      spent: [bignumTransferCase.context.nf1],
+    }))
+  ),
+  null,
+  'ct-bignum-prove-merkle OCaml rejects spent BigInt nullifier'
+);
+assert.equal(
+  parseCliResult<BignumMerkleTransactionProofJson | null>(
+    runCli(bignumProveMerkleArgs(bignumTransferCase, {
+      publicFee: (BigInt(bignumTransferCase.context.publicFee) + 1n).toString(),
+    }))
+  ),
+  null,
+  'ct-bignum-prove-merkle OCaml rejects wrong bignum fee witness'
+);
 assert.equal(
   ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase)),
   true,

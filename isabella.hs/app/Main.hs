@@ -97,6 +97,7 @@ showHelp = do
     putStrLn "  ct-bignum-merkle-root LEDGER Compute bignum cryptographic Merkle root"
     putStrLn "  ct-bignum-merkle-member-prove LEDGER C Build bignum Merkle membership proof"
     putStrLn "  ct-bignum-merkle-member-verify LEDGER C Verify bignum Merkle membership proof"
+    putStrLn "  ct-bignum-prove-merkle ... Build deterministic bignum Merkle transaction proof"
     putStrLn "  ct-bignum-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2"
     putStrLn "  ct-bignum-merkle-proof-digest ... Hash canonical bignum Merkle transaction proof bytes"
     putStrLn "  ct-bignum-merkle-envelope-digest ... Hash canonical bignum context digest and proof digest bytes"

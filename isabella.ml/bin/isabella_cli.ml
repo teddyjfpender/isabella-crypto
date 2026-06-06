@@ -1646,6 +1646,94 @@ let ct_bignum_verify_merkle_with_fee
       proof.bignum_out2_range.bignum_range_pair_zss
   with Invalid_argument _ -> false
 
+let ct_bignum_prove_merkle_with_fee
+    params gamma k ck nk ledger spent public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2
+    op_in1 op_in2 op_out1 op_out2
+    out1_bits out1_comps out2_bits out2_comps
+    y_in1 y_in2 y_balance y_out1_amounts y_out1_pairss y_out2_amounts y_out2_pairss =
+  try
+    ct_bignum_require_nonnegative "publicFee" public_fee;
+    let input_amount =
+      bigint_add (big_amount_of_opening op_in1) (big_amount_of_opening op_in2)
+    in
+    let output_amount =
+      bigint_add (big_amount_of_opening op_out1) (big_amount_of_opening op_out2)
+    in
+    let balance_witness =
+      (big_opening_sub
+         (big_opening_add op_in1 op_in2)
+         (big_opening_add op_out1 op_out2)).big_open_rand
+    in
+    if ct_bignum_contains_vec spent nf1 ||
+       ct_bignum_contains_vec spent nf2 ||
+       nf1 = nf2 ||
+       compare_bigint input_amount (bigint_add output_amount public_fee) <> 0
+    then None
+    else
+      match ct_bignum_merkle_membership_prove ledger c_in1,
+            ct_bignum_merkle_membership_prove ledger c_in2 with
+      | Some in1_member, Some in2_member
+        when in1_member.Confidential_merkle.merkle_index <>
+             in2_member.Confidential_merkle.merkle_index ->
+        (match
+           big_nf_fs_prove params gamma ck nk c_in1 nf1 op_in1 y_in1,
+           big_nf_fs_prove params gamma ck nk c_in2 nf2 op_in2 y_in2,
+           big_fs_prove
+             params
+             gamma
+             ck
+             (ct_bignum_fee_balance_commitment params ck c_in1 c_in2 c_out1 c_out2 public_fee)
+             balance_witness
+             y_balance,
+           big_cr_fs_prove params gamma k ck c_out1 op_out1 out1_bits out1_comps y_out1_amounts y_out1_pairss,
+           big_cr_fs_prove params gamma k ck c_out2 op_out2 out2_bits out2_comps y_out2_amounts y_out2_pairss
+         with
+         | Some (in1_a_commits, in1_a_nullifiers, in1_z_msgs, in1_z_rands),
+           Some (in2_a_commits, in2_a_nullifiers, in2_z_msgs, in2_z_rands),
+           Some (balance_as, balance_zs),
+           Some (out1_bits, out1_comps, out1_amount_as, out1_amount_zs, out1_pair_ass, out1_pair_zss),
+           Some (out2_bits, out2_comps, out2_amount_as, out2_amount_zs, out2_pair_ass, out2_pair_zss) ->
+           Some {
+             bignum_in1_member = in1_member;
+             bignum_in2_member = in2_member;
+             bignum_in1_nullifier = {
+               bignum_nf_a_commits = in1_a_commits;
+               bignum_nf_a_nullifiers = in1_a_nullifiers;
+               bignum_nf_z_msgs = in1_z_msgs;
+               bignum_nf_z_rands = in1_z_rands;
+             };
+             bignum_in2_nullifier = {
+               bignum_nf_a_commits = in2_a_commits;
+               bignum_nf_a_nullifiers = in2_a_nullifiers;
+               bignum_nf_z_msgs = in2_z_msgs;
+               bignum_nf_z_rands = in2_z_rands;
+             };
+             bignum_balance = {
+               bignum_balance_as = balance_as;
+               bignum_balance_zs = balance_zs;
+             };
+             bignum_out1_range = {
+               bignum_range_bits = out1_bits;
+               bignum_range_comps = out1_comps;
+               bignum_range_amount_as = out1_amount_as;
+               bignum_range_amount_zs = out1_amount_zs;
+               bignum_range_pair_ass = out1_pair_ass;
+               bignum_range_pair_zss = out1_pair_zss;
+             };
+             bignum_out2_range = {
+               bignum_range_bits = out2_bits;
+               bignum_range_comps = out2_comps;
+               bignum_range_amount_as = out2_amount_as;
+               bignum_range_amount_zs = out2_amount_zs;
+               bignum_range_pair_ass = out2_pair_ass;
+               bignum_range_pair_zss = out2_pair_zss;
+             };
+           }
+         | _ -> None)
+      | _ -> None
+  with Invalid_argument _ -> None
+
 let json_of_cb_params params =
   Printf.sprintf
     "{\"n1\":%d,\"n2\":%d,\"m\":%d,\"q\":%d,\"beta\":%d}"
@@ -1733,6 +1821,39 @@ let json_of_ct_merkle_transaction_proof proof =
     (json_of_cb_proof proof.Confidential_transaction.tx_merkle_balance)
     (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out1_range)
     (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out2_range)
+
+let json_of_bignum_merkle_transaction_proof proof =
+  Printf.sprintf
+    "{\"in1Member\":%s,\"in2Member\":%s,\"in1Nullifier\":%s,\"in2Nullifier\":%s,\"balance\":%s,\"out1Range\":%s,\"out2Range\":%s}"
+    (json_of_merkle_membership_proof proof.bignum_in1_member)
+    (json_of_merkle_membership_proof proof.bignum_in2_member)
+    (json_of_bigint_nullifier_proof
+       proof.bignum_in1_nullifier.bignum_nf_a_commits
+       proof.bignum_in1_nullifier.bignum_nf_a_nullifiers
+       proof.bignum_in1_nullifier.bignum_nf_z_msgs
+       proof.bignum_in1_nullifier.bignum_nf_z_rands)
+    (json_of_bigint_nullifier_proof
+       proof.bignum_in2_nullifier.bignum_nf_a_commits
+       proof.bignum_in2_nullifier.bignum_nf_a_nullifiers
+       proof.bignum_in2_nullifier.bignum_nf_z_msgs
+       proof.bignum_in2_nullifier.bignum_nf_z_rands)
+    (json_of_bigint_balance_proof
+       proof.bignum_balance.bignum_balance_as
+       proof.bignum_balance.bignum_balance_zs)
+    (json_of_bigint_range_proof
+       proof.bignum_out1_range.bignum_range_bits
+       proof.bignum_out1_range.bignum_range_comps
+       proof.bignum_out1_range.bignum_range_amount_as
+       proof.bignum_out1_range.bignum_range_amount_zs
+       proof.bignum_out1_range.bignum_range_pair_ass
+       proof.bignum_out1_range.bignum_range_pair_zss)
+    (json_of_bigint_range_proof
+       proof.bignum_out2_range.bignum_range_bits
+       proof.bignum_out2_range.bignum_range_comps
+       proof.bignum_out2_range.bignum_range_amount_as
+       proof.bignum_out2_range.bignum_range_amount_zs
+       proof.bignum_out2_range.bignum_range_pair_ass
+       proof.bignum_out2_range.bignum_range_pair_zss)
 
 let parse_ct_merkle_membership_proof index_str root siblings_str directions_str =
   match parse_canonical_int index_str, parse_string_list siblings_str, parse_canonical_bool_vec01 directions_str with
@@ -3257,6 +3378,98 @@ let cmd_ct_bignum_merkle_member_verify args =
      | _ -> output_error "Expected canonical bignum ledger matrix and commitment vector")
   | _ -> output_error "Usage: ct-bignum-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
 
+let cmd_ct_bignum_prove_merkle args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; public_fee_str;
+     c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str;
+     in1_amount_str; in1_rand_str; in2_amount_str; in2_rand_str;
+     out1_amount_str; out1_rand_str; out2_amount_str; out2_rand_str;
+     out1_bits_str; out1_bit_rands_str; out1_comps_str; out1_comp_rands_str;
+     out2_bits_str; out2_bit_rands_str; out2_comps_str; out2_comp_rands_str;
+     y_in1_msgs_str; y_in1_rands_str; y_in2_msgs_str; y_in2_rands_str;
+     y_balance_str; y_out1_amounts_str; y_out1_pairss_str; y_out2_amounts_str; y_out2_pairss_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_int k_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_mat nk_str,
+       parse_canonical_bigint_mat ledger_str,
+       parse_canonical_bigint_mat spent_str,
+       parse_canonical_bigint public_fee_str,
+       parse_canonical_bigint_vec c_in1_str,
+       parse_canonical_bigint_vec c_in2_str,
+       parse_canonical_bigint_vec c_out1_str,
+       parse_canonical_bigint_vec c_out2_str,
+       parse_canonical_bigint_vec nf1_str,
+       parse_canonical_bigint_vec nf2_str,
+       parse_canonical_bigint in1_amount_str,
+       parse_canonical_bigint_vec in1_rand_str,
+       parse_canonical_bigint in2_amount_str,
+       parse_canonical_bigint_vec in2_rand_str,
+       parse_canonical_bigint out1_amount_str,
+       parse_canonical_bigint_vec out1_rand_str,
+       parse_canonical_bigint out2_amount_str,
+       parse_canonical_bigint_vec out2_rand_str,
+       parse_canonical_bigint_vec out1_bits_str,
+       parse_canonical_bigint_mat out1_bit_rands_str,
+       parse_canonical_bigint_vec out1_comps_str,
+       parse_canonical_bigint_mat out1_comp_rands_str,
+       parse_canonical_bigint_vec out2_bits_str,
+       parse_canonical_bigint_mat out2_bit_rands_str,
+       parse_canonical_bigint_vec out2_comps_str,
+       parse_canonical_bigint_mat out2_comp_rands_str,
+       parse_canonical_bigint_vec y_in1_msgs_str,
+       parse_canonical_bigint_mat y_in1_rands_str,
+       parse_canonical_bigint_vec y_in2_msgs_str,
+       parse_canonical_bigint_mat y_in2_rands_str,
+       parse_canonical_bigint_mat y_balance_str,
+       parse_canonical_bigint_mat y_out1_amounts_str,
+       parse_canonical_bigint_cube y_out1_pairss_str,
+       parse_canonical_bigint_mat y_out2_amounts_str,
+       parse_canonical_bigint_cube y_out2_pairss_str
+     with
+     | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
+       Some in1_amount, Some in1_rand, Some in2_amount, Some in2_rand,
+       Some out1_amount, Some out1_rand, Some out2_amount, Some out2_rand,
+       Some out1_bits, Some out1_bit_rands, Some out1_comps, Some out1_comp_rands,
+       Some out2_bits, Some out2_bit_rands, Some out2_comps, Some out2_comp_rands,
+       Some y_in1_msgs, Some y_in1_rands, Some y_in2_msgs, Some y_in2_rands,
+       Some y_balance, Some y_out1_amounts, Some y_out1_pairss, Some y_out2_amounts, Some y_out2_pairss ->
+       (match
+          make_big_scalar_openings out1_bits out1_bit_rands,
+          make_big_scalar_openings out1_comps out1_comp_rands,
+          make_big_scalar_openings out2_bits out2_bit_rands,
+          make_big_scalar_openings out2_comps out2_comp_rands,
+          make_big_scalar_openings y_in1_msgs y_in1_rands,
+          make_big_scalar_openings y_in2_msgs y_in2_rands
+        with
+        | Some out1_bit_ops, Some out1_comp_ops, Some out2_bit_ops, Some out2_comp_ops, Some y_in1_ops, Some y_in2_ops ->
+          (match
+             ct_bignum_prove_merkle_with_fee
+               params gamma k ck nk ledger spent public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2
+               (big_opening [in1_amount] in1_rand)
+               (big_opening [in2_amount] in2_rand)
+               (big_opening [out1_amount] out1_rand)
+               (big_opening [out2_amount] out2_rand)
+               out1_bit_ops out1_comp_ops out2_bit_ops out2_comp_ops
+               y_in1_ops y_in2_ops y_balance y_out1_amounts y_out1_pairss y_out2_amounts y_out2_pairss
+           with
+           | Some proof ->
+             (match !output_format with
+              | Human -> Printf.printf "ct_bignum_merkle_proof = %s\n" (json_of_bignum_merkle_transaction_proof proof)
+              | Json -> Printf.printf "%s\n" (json_of_bignum_merkle_transaction_proof proof))
+           | None ->
+             (match !output_format with
+              | Human -> print_endline "ct_bignum_merkle_proof = null"
+              | Json -> print_endline "null"))
+        | _ -> output_error "Bit, complement, and nullifier-mask counts must match their randomness matrices")
+     | _ -> output_error "Expected bignum params, keys, ledger, commitments, openings, bit decompositions, and mask vectors")
+  | _ ->
+    output_error "Usage: ct-bignum-prove-merkle M N2 Q BETA G K CK NK LEDGER SPENT FEE C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
+
 let cmd_ct_bignum_transaction_context args =
   match args with
   | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
@@ -4445,6 +4658,7 @@ let show_help () =
   print_endline "  ct-bignum-merkle-root LEDGER Compute bignum cryptographic Merkle root";
   print_endline "  ct-bignum-merkle-member-prove LEDGER C Build bignum Merkle membership proof";
   print_endline "  ct-bignum-merkle-member-verify LEDGER C Verify bignum Merkle membership proof";
+  print_endline "  ct-bignum-prove-merkle ... Build deterministic bignum Merkle transaction proof";
   print_endline "  ct-bignum-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2";
   print_endline "  ct-bignum-merkle-proof-digest ... Hash canonical bignum Merkle transaction proof bytes";
   print_endline "  ct-bignum-merkle-envelope-digest ... Hash canonical bignum context digest and proof digest bytes";
@@ -4576,6 +4790,7 @@ let run_command cmd args =
   | "ct-bignum-merkle-root" -> cmd_ct_bignum_merkle_root args
   | "ct-bignum-merkle-member-prove" -> cmd_ct_bignum_merkle_member_prove args
   | "ct-bignum-merkle-member-verify" -> cmd_ct_bignum_merkle_member_verify args
+  | "ct-bignum-prove-merkle" -> cmd_ct_bignum_prove_merkle args
   | "ct-bignum-transaction-context" -> cmd_ct_bignum_transaction_context args
   | "ct-bignum-merkle-proof-digest" -> cmd_ct_bignum_merkle_proof_digest args
   | "ct-bignum-merkle-envelope-digest" -> cmd_ct_bignum_merkle_envelope_digest args
