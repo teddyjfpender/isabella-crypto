@@ -235,6 +235,28 @@ describe('Confidential transaction context vectors', () => {
       .toThrow();
     expect(() => tx.transactionEnvelopeDigest({ ...envelope, extension: 1 }))
       .toThrow();
+    expect(() => tx.transactionMerkleProofDigest({ ...proof, extension: 1 } as typeof proof))
+      .toThrow();
+    expect(() => tx.transactionMerkleProofDigest({
+      ...proof,
+      in1Member: { ...proof.in1Member, extension: 1 } as typeof proof.in1Member,
+    } as typeof proof))
+      .toThrow();
+    expect(() => tx.transactionMerkleProofDigest({
+      ...proof,
+      in1Nullifier: { ...proof.in1Nullifier, extension: 1 } as typeof proof.in1Nullifier,
+    } as typeof proof))
+      .toThrow();
+    expect(() => tx.transactionMerkleProofDigest({
+      ...proof,
+      balance: { ...proof.balance, extension: 1 } as typeof proof.balance,
+    } as typeof proof))
+      .toThrow();
+    expect(() => tx.transactionMerkleProofDigest({
+      ...proof,
+      out1Range: { ...proof.out1Range, extension: 1 } as typeof proof.out1Range,
+    } as typeof proof))
+      .toThrow();
   });
 
   it('matches the TypeScript wallet proof request serialization API', async () => {
@@ -548,6 +570,51 @@ describe('Confidential transaction context vectors', () => {
       {
         ...envelope,
         proof: { ...proof, in2Member: proof.in1Member },
+      },
+      policy
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        proof: { ...proof, extension: 1 } as typeof proof,
+      },
+      policy
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        proof: {
+          ...proof,
+          in1Nullifier: { ...proof.in1Nullifier, extension: 1 } as typeof proof.in1Nullifier,
+        },
+      },
+      policy
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        proof: {
+          ...proof,
+          out1Range: { ...proof.out1Range, extension: 1 } as typeof proof.out1Range,
+        },
       },
       policy
     )).toBe(false);

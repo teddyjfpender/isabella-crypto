@@ -644,6 +644,7 @@ function normalizeProof(proof: BalanceProof | null): BalanceProof | null {
   if (proof === null) {
     return null;
   }
+  assertExactObjectKeys(proof, ['as', 'zs'], 'balanceProof');
   const as = normalizeMat(proof.as);
   const zs = normalizeMat(proof.zs);
   if (as === proof.as && zs === proof.zs) {
@@ -656,6 +657,12 @@ function normalizeProof(proof: BalanceProof | null): BalanceProof | null {
 }
 
 function normalizeRangeRound(round: RangeRound): RangeRound {
+  assertExactObjectKeysWithOptional(
+    round,
+    ['amountA', 'amountZ', 'pairAs', 'pairZs'],
+    ['challenge'],
+    'rangeRound'
+  );
   const amountA = normalizeVec(round.amountA);
   const amountZ = normalizeVec(round.amountZ);
   const pairAs = normalizeMat(round.pairAs);
@@ -685,6 +692,7 @@ function normalizeRangeProof(proof: RangeProofLike | null): RangeProofLike | nul
     return null;
   }
   if ('rounds' in proof && Array.isArray(proof.rounds)) {
+    assertExactObjectKeys(proof, ['bits', 'comps', 'rounds'], 'rangeProof');
     const bits = normalizeMat(proof.bits);
     const comps = normalizeMat(proof.comps);
     const rounds = normalizeArray(proof.rounds, normalizeRangeRound);
@@ -698,6 +706,12 @@ function normalizeRangeProof(proof: RangeProofLike | null): RangeProofLike | nul
     };
   }
   if ('amountAs' in proof && 'amountZs' in proof && 'pairAss' in proof && 'pairZss' in proof) {
+    assertExactObjectKeysWithOptional(
+      proof,
+      ['bits', 'comps', 'amountAs', 'amountZs', 'pairAss', 'pairZss'],
+      ['challenges'],
+      'rangeProof'
+    );
     const bits = normalizeMat(proof.bits);
     const comps = normalizeMat(proof.comps);
     const amountAs = normalizeMat(proof.amountAs);
@@ -727,6 +741,11 @@ function normalizeRangeProof(proof: RangeProofLike | null): RangeProofLike | nul
     };
   }
   const legacy = proof as RangeProof;
+  assertExactObjectKeys(
+    legacy,
+    ['bits', 'comps', 'amountA', 'amountZ', 'pairAs', 'pairZs'],
+    'rangeProof'
+  );
   const bits = normalizeMat(legacy.bits);
   const comps = normalizeMat(legacy.comps);
   const amountA = normalizeVec(legacy.amountA);
@@ -754,6 +773,12 @@ function normalizeRangeProof(proof: RangeProofLike | null): RangeProofLike | nul
 }
 
 function normalizeNullifierRound(round: NullifierRound): NullifierRound {
+  assertExactObjectKeysWithOptional(
+    round,
+    ['aCommit', 'aNullifier', 'zMsg', 'zRand'],
+    ['challenge'],
+    'nullifierRound'
+  );
   const aCommit = normalizeVec(round.aCommit);
   const aNullifier = normalizeVec(round.aNullifier);
   const zMsg = normalizeVec(round.zMsg);
@@ -785,6 +810,7 @@ function normalizeNullifierProof(
     return null;
   }
   if ('rounds' in proof && Array.isArray(proof.rounds)) {
+    assertExactObjectKeys(proof, ['rounds'], 'nullifierProof');
     const rounds = normalizeArray(proof.rounds, normalizeNullifierRound);
     if (rounds === proof.rounds) {
       return proof;
@@ -799,6 +825,12 @@ function normalizeNullifierProof(
     'zMsgs' in proof &&
     'zRands' in proof
   ) {
+    assertExactObjectKeysWithOptional(
+      proof,
+      ['aCommits', 'aNullifiers', 'zMsgs', 'zRands'],
+      ['challenges'],
+      'nullifierProof'
+    );
     const aCommits = normalizeMat(proof.aCommits);
     const aNullifiers = normalizeMat(proof.aNullifiers);
     const zMsgs = normalizeMat(proof.zMsgs);
@@ -822,6 +854,7 @@ function normalizeNullifierProof(
     };
   }
   const legacy = proof as NullifierProof;
+  assertExactObjectKeys(legacy, ['aCommit', 'aNullifier', 'zMsg', 'zRand'], 'nullifierProof');
   const aCommit = normalizeVec(legacy.aCommit);
   const aNullifier = normalizeVec(legacy.aNullifier);
   const zMsg = normalizeVec(legacy.zMsg);
@@ -846,6 +879,7 @@ function normalizeMembershipProof(proof: MembershipProof | null): MembershipProo
   if (proof === null) {
     return null;
   }
+  assertExactObjectKeys(proof, ['index', 'root', 'siblings', 'directions'], 'membershipProof');
   const index = normalizeInt(proof.index);
   const root = normalizeVec(proof.root);
   const siblings = normalizeMat(proof.siblings);
@@ -860,7 +894,22 @@ function normalizeMembershipProof(proof: MembershipProof | null): MembershipProo
   };
 }
 
+function normalizeMerkleMembershipProof(proof: MerkleMembershipProof): MerkleMembershipProof {
+  assertExactObjectKeys(proof, ['index', 'root', 'siblings', 'directions'], 'merkleMembershipProof');
+  const index = normalizeInt(proof.index);
+  if (index === proof.index) {
+    return proof;
+  }
+  return {
+    index,
+    root: proof.root,
+    siblings: proof.siblings,
+    directions: proof.directions,
+  };
+}
+
 function normalizeVerifiedNote(note: VerifiedNote): VerifiedNote {
+  assertExactObjectKeys(note, ['commitment', 'rangeProof'], 'verifiedNote');
   const commitment = normalizeVec(note.commitment);
   const rangeProof = normalizeRangeProof(note.rangeProof)!;
   if (commitment === note.commitment && rangeProof === note.rangeProof) {
@@ -880,6 +929,11 @@ function normalizeTransactionProof(proof: TransactionProof | null): TransactionP
   if (proof === null) {
     return null;
   }
+  assertExactObjectKeys(
+    proof,
+    ['in1Member', 'in2Member', 'in1Nullifier', 'in2Nullifier', 'balance', 'out1Range', 'out2Range'],
+    'transactionProof'
+  );
   const in1Member = normalizeMembershipProof(proof.in1Member)!;
   const in2Member = normalizeMembershipProof(proof.in2Member)!;
   const in1Nullifier = normalizeNullifierProof(proof.in1Nullifier)!;
@@ -915,12 +969,21 @@ function normalizeMerkleTransactionProof(
   if (proof === null) {
     return null;
   }
+  assertExactObjectKeys(
+    proof,
+    ['in1Member', 'in2Member', 'in1Nullifier', 'in2Nullifier', 'balance', 'out1Range', 'out2Range'],
+    'merkleTransactionProof'
+  );
+  const in1Member = normalizeMerkleMembershipProof(proof.in1Member);
+  const in2Member = normalizeMerkleMembershipProof(proof.in2Member);
   const in1Nullifier = normalizeNullifierProof(proof.in1Nullifier)!;
   const in2Nullifier = normalizeNullifierProof(proof.in2Nullifier)!;
   const balance = normalizeProof(proof.balance)!;
   const out1Range = normalizeRangeProof(proof.out1Range)!;
   const out2Range = normalizeRangeProof(proof.out2Range)!;
   if (
+    in1Member === proof.in1Member &&
+    in2Member === proof.in2Member &&
     in1Nullifier === proof.in1Nullifier &&
     in2Nullifier === proof.in2Nullifier &&
     balance === proof.balance &&
@@ -930,8 +993,8 @@ function normalizeMerkleTransactionProof(
     return proof;
   }
   return {
-    in1Member: proof.in1Member,
-    in2Member: proof.in2Member,
+    in1Member,
+    in2Member,
     in1Nullifier,
     in2Nullifier,
     balance,
@@ -1069,12 +1132,21 @@ function encodeDigestVector(digests: MerkleDigest[], label: string): Buffer {
 }
 
 function assertExactObjectKeys(value: unknown, keys: string[], label: string): void {
+  assertExactObjectKeysWithOptional(value, keys, [], label);
+}
+
+function assertExactObjectKeysWithOptional(
+  value: unknown,
+  requiredKeys: string[],
+  optionalKeys: string[],
+  label: string
+): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
-  const allowed = new Set(keys);
+  const allowed = new Set([...requiredKeys, ...optionalKeys]);
   const present = Object.keys(value);
-  const missing = keys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
+  const missing = requiredKeys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
   if (missing.length > 0) {
     throw new Error(`${label} is missing required fields: ${missing.join(', ')}`);
   }
@@ -1280,6 +1352,8 @@ function transactionTaggedPreimage(tag: number, body: Buffer): Buffer {
 }
 
 function listedNullifierProof(proof: NullifierProofLike): ListedNullifierProof {
+  const checkedProof = normalizeNullifierProof(proof)!;
+  proof = checkedProof;
   if ('rounds' in proof && Array.isArray(proof.rounds)) {
     return {
       aCommits: proof.rounds.map((round) => round.aCommit),
@@ -1306,6 +1380,8 @@ function listedNullifierProof(proof: NullifierProofLike): ListedNullifierProof {
 }
 
 function listedRangeProof(proof: RangeProofLike): ListedRangeProof {
+  const checkedProof = normalizeRangeProof(proof)!;
+  proof = checkedProof;
   if ('rounds' in proof && Array.isArray(proof.rounds)) {
     return {
       bits: proof.bits,
@@ -1334,6 +1410,7 @@ function transactionMerkleMembershipPreimage(
   proof: MerkleMembershipProof,
   label: string
 ): Buffer {
+  proof = normalizeMerkleMembershipProof(proof);
   if (proof.siblings.length !== proof.directions.length) {
     throw new Error(`${label}.siblings and ${label}.directions must have the same length`);
   }
@@ -1360,6 +1437,7 @@ function transactionNullifierProofPreimage(
 }
 
 function transactionBalanceProofPreimage(proof: BalanceProof, label: string): Buffer {
+  proof = normalizeProof(proof)!;
   return Buffer.concat([
     encodeIntMatrix(proof.as, `${label}.as`),
     encodeIntMatrix(proof.zs, `${label}.zs`),
@@ -1379,6 +1457,7 @@ function transactionRangeProofPreimage(proof: RangeProofLike, label: string): Bu
 }
 
 function transactionMerkleProofPreimage(proof: MerkleTransactionProof): Buffer {
+  proof = normalizeMerkleTransactionProof(proof)!;
   return transactionTaggedPreimage(
     CT_TRANSACTION_TAGS.merkleProof,
     Buffer.concat([
@@ -2199,7 +2278,12 @@ export namespace ConfidentialBalance {
     c: IntVec,
     proof: BalanceProof
   ): boolean {
-    return Isabella.cbFsVerify(params, gamma, ck, c, proof);
+    try {
+      const checkedProof = normalizeProof(proof);
+      return checkedProof !== null && Isabella.cbFsVerify(params, gamma, ck, c, checkedProof);
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -2345,7 +2429,12 @@ export namespace ConfidentialRange {
     cAmount: IntVec,
     proof: RangeProofLike
   ): boolean {
-    return Isabella.crFsVerify(params, gamma, k, ck, cAmount, proof);
+    try {
+      const checkedProof = normalizeRangeProof(proof);
+      return checkedProof !== null && Isabella.crFsVerify(params, gamma, k, ck, cAmount, checkedProof);
+    } catch {
+      return false;
+    }
   }
 
   export function proofShape(proof: RangeProofLike): 'legacy' | 'rounds' | 'lists' {
@@ -2660,15 +2749,20 @@ export namespace ConfidentialTransaction {
     nf: IntVec,
     proof: NullifierProofLike
   ): boolean {
-    return Isabella.ctNullifierFsVerify(
-      params,
-      gamma,
-      ck,
-      nk,
-      c,
-      nf,
-      proof
-    );
+    try {
+      const checkedProof = normalizeNullifierProof(proof);
+      return checkedProof !== null && Isabella.ctNullifierFsVerify(
+        params,
+        gamma,
+        ck,
+        nk,
+        c,
+        nf,
+        checkedProof
+      );
+    } catch {
+      return false;
+    }
   }
 
   export function ledgerRoot(params: ScalarCommitParams, ledger: IntMatrix): IntVec {
@@ -3066,22 +3160,27 @@ export namespace ConfidentialTransaction {
     nf2: IntVec,
     proof: TransactionProof
   ): boolean {
-    return Isabella.ctFsVerify(
-      params,
-      gamma,
-      k,
-      ck,
-      nk,
-      root,
-      spent,
-      cIn1,
-      cIn2,
-      cOut1,
-      cOut2,
-      nf1,
-      nf2,
-      proof
-    );
+    try {
+      const checkedProof = normalizeTransactionProof(proof);
+      return checkedProof !== null && Isabella.ctFsVerify(
+        params,
+        gamma,
+        k,
+        ck,
+        nk,
+        root,
+        spent,
+        cIn1,
+        cIn2,
+        cOut1,
+        cOut2,
+        nf1,
+        nf2,
+        checkedProof
+      );
+    } catch {
+      return false;
+    }
   }
 
   export function fsProveMerkle(
@@ -3291,29 +3390,34 @@ export namespace ConfidentialTransaction {
     nf2: IntVec,
     proof: MerkleTransactionProof
   ): boolean {
-    return (
-      validCommitKeyShape(params, ck) &&
-      validCommitKeyShape(params, nk) &&
-      ConfidentialMerkle.membershipVerify(cIn1, proof.in1Member) &&
-      ConfidentialMerkle.membershipVerify(cIn2, proof.in2Member) &&
-      proof.in1Member.root === root &&
-      proof.in2Member.root === root &&
-      proof.in1Member.index !== proof.in2Member.index &&
-      !containsVec(spent, nf1) &&
-      !containsVec(spent, nf2) &&
-      !sameVec(nf1, nf2) &&
-      nullifierFsVerify(params, gamma, ck, nk, cIn1, nf1, proof.in1Nullifier) &&
-      nullifierFsVerify(params, gamma, ck, nk, cIn2, nf2, proof.in2Nullifier) &&
-      ConfidentialBalance.fsVerify(
-        params,
-        gamma,
-        ck,
-        ConfidentialBalance.balanceCommitment(cIn1, cIn2, cOut1, cOut2, params.q),
-        proof.balance
-      ) &&
-      ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, proof.out1Range) &&
-      ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, proof.out2Range)
-    );
+    try {
+      const checkedProof = normalizeMerkleTransactionProof(proof);
+      return checkedProof !== null && (
+        validCommitKeyShape(params, ck) &&
+        validCommitKeyShape(params, nk) &&
+        ConfidentialMerkle.membershipVerify(cIn1, checkedProof.in1Member) &&
+        ConfidentialMerkle.membershipVerify(cIn2, checkedProof.in2Member) &&
+        checkedProof.in1Member.root === root &&
+        checkedProof.in2Member.root === root &&
+        checkedProof.in1Member.index !== checkedProof.in2Member.index &&
+        !containsVec(spent, nf1) &&
+        !containsVec(spent, nf2) &&
+        !sameVec(nf1, nf2) &&
+        nullifierFsVerify(params, gamma, ck, nk, cIn1, nf1, checkedProof.in1Nullifier) &&
+        nullifierFsVerify(params, gamma, ck, nk, cIn2, nf2, checkedProof.in2Nullifier) &&
+        ConfidentialBalance.fsVerify(
+          params,
+          gamma,
+          ck,
+          ConfidentialBalance.balanceCommitment(cIn1, cIn2, cOut1, cOut2, params.q),
+          checkedProof.balance
+        ) &&
+        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, checkedProof.out1Range) &&
+        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, checkedProof.out2Range)
+      );
+    } catch {
+      return false;
+    }
   }
 
   export function fsVerifyMerkleWithFee(
@@ -3335,19 +3439,21 @@ export namespace ConfidentialTransaction {
   ): boolean {
     try {
       assertNonNegativeSafeI64(publicFee, 'publicFee');
+      const checkedProof = normalizeMerkleTransactionProof(proof);
       return (
+        checkedProof !== null &&
         validCommitKeyShape(params, ck) &&
         validCommitKeyShape(params, nk) &&
-        ConfidentialMerkle.membershipVerify(cIn1, proof.in1Member) &&
-        ConfidentialMerkle.membershipVerify(cIn2, proof.in2Member) &&
-        proof.in1Member.root === root &&
-        proof.in2Member.root === root &&
-        proof.in1Member.index !== proof.in2Member.index &&
+        ConfidentialMerkle.membershipVerify(cIn1, checkedProof.in1Member) &&
+        ConfidentialMerkle.membershipVerify(cIn2, checkedProof.in2Member) &&
+        checkedProof.in1Member.root === root &&
+        checkedProof.in2Member.root === root &&
+        checkedProof.in1Member.index !== checkedProof.in2Member.index &&
         !containsVec(spent, nf1) &&
         !containsVec(spent, nf2) &&
         !sameVec(nf1, nf2) &&
-        nullifierFsVerify(params, gamma, ck, nk, cIn1, nf1, proof.in1Nullifier) &&
-        nullifierFsVerify(params, gamma, ck, nk, cIn2, nf2, proof.in2Nullifier) &&
+        nullifierFsVerify(params, gamma, ck, nk, cIn1, nf1, checkedProof.in1Nullifier) &&
+        nullifierFsVerify(params, gamma, ck, nk, cIn2, nf2, checkedProof.in2Nullifier) &&
         ConfidentialBalance.fsVerify(
           params,
           gamma,
@@ -3361,10 +3467,10 @@ export namespace ConfidentialTransaction {
             cOut2,
             publicFee
           ),
-          proof.balance
+          checkedProof.balance
         ) &&
-        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, proof.out1Range) &&
-        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, proof.out2Range)
+        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, checkedProof.out1Range) &&
+        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, checkedProof.out2Range)
       );
     } catch {
       return false;

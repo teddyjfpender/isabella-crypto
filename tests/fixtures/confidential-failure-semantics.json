@@ -289,7 +289,7 @@
       ]
     },
     {
-      "id": "unsupported_extension_field_public_surface",
+      "id": "unsupported_extension_field",
       "status": "covered",
       "specSnippets": [
         "unsupported extension field",
@@ -308,7 +308,10 @@
           "snippets": [
             "extension: 1",
             "transactionEnvelopeDigest({ ...envelope, extension: 1 })",
-            "transactionWalletProofRequestDigest({"
+            "transactionWalletProofRequestDigest({",
+            "transactionMerkleProofDigest({ ...proof, extension: 1 }",
+            "in1Nullifier: { ...proof.in1Nullifier, extension: 1 }",
+            "out1Range: { ...proof.out1Range, extension: 1 }"
           ]
         }
       ]
@@ -330,13 +333,23 @@
     },
     {
       "id": "proof_subobject_extension_field_rejection",
-      "status": "open",
+      "status": "closed",
       "evidence": [
         {
-          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "file": "isabella.ts/src/index.ts",
           "snippets": [
-            "generated conformance for all exported Merkle transaction surfaces",
-            "broader native fuzz tests"
+            "assertExactObjectKeysWithOptional",
+            "merkleTransactionProof",
+            "normalizeMerkleTransactionProof(proof)"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "transactionMerkleProofDigest({ ...proof, extension: 1 }",
+            "in1Member: { ...proof.in1Member, extension: 1 }",
+            "balance: { ...proof.balance, extension: 1 }",
+            "out1Range: { ...proof.out1Range, extension: 1 }"
           ]
         }
       ]
