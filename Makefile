@@ -12,6 +12,7 @@
         check-confidential-parameter-readiness \
         check-confidential-production-readiness \
         run-confidential-lattice-estimator \
+        run-confidential-lazer-parameter-report \
         bench-typescript-confidential bench-confidential-verify \
         bench-confidential-realistic
 
@@ -24,6 +25,7 @@ CANON_SESSIONS ?= Canon_Rings Canon_Crypto Canon_ZK
 CANON_EXPORT_SESSION ?= Canon_Crypto_Export
 NICE ?= nice -n 10
 CONFIDENTIAL_ESTIMATOR_REPORT_OUT ?= /tmp/confidential-lattice-estimator-reports.json
+CONFIDENTIAL_LAZER_REPORT_OUT ?= /tmp/confidential-lazer-parameter-reports.json
 
 # Isabelle build profiles
 ISABELLE_COOL_OPTS ?= -j1 -o threads=2 -o parallel_limit=2 -o parallel_proofs=0
@@ -133,6 +135,16 @@ check-confidential-parameter-readiness:
 	@python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json
 	@echo "Checking confidential parameter readiness negative regressions..."
 	@python3 scripts/check_confidential_parameter_readiness_regressions.py
+	@echo "Checking confidential LaZer parameter report schema..."
+	@python3 scripts/run_confidential_lazer_parameter_report.py \
+		--parameter-screen bench/data/confidential-parameter-screen.json \
+		--out /tmp/confidential-lazer-parameter-reports.check.json \
+		--generated-at 2026-06-06T00:00:00+00:00 >/tmp/confidential-lazer-parameter-reports.check.stdout
+	@python3 scripts/confidential_parameter_screen.py \
+		--lazer-parameter-report /tmp/confidential-lazer-parameter-reports.check.json \
+		--out /tmp/confidential-parameter-screen-with-lazer.json >/tmp/confidential-parameter-screen-with-lazer.stdout
+	@python3 scripts/check_confidential_parameter_readiness.py \
+		--report /tmp/confidential-parameter-screen-with-lazer.json
 
 run-confidential-lattice-estimator:
 	@echo "Screening confidential transfer parameters..."
@@ -142,6 +154,15 @@ run-confidential-lattice-estimator:
 		--parameter-screen bench/data/confidential-parameter-screen.json \
 		--out $(CONFIDENTIAL_ESTIMATOR_REPORT_OUT)
 	@echo "Wrote $(CONFIDENTIAL_ESTIMATOR_REPORT_OUT)"
+
+run-confidential-lazer-parameter-report:
+	@echo "Screening confidential transfer parameters..."
+	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
+	@echo "Running confidential LaZer parameter report generator..."
+	@python3 scripts/run_confidential_lazer_parameter_report.py \
+		--parameter-screen bench/data/confidential-parameter-screen.json \
+		--out $(CONFIDENTIAL_LAZER_REPORT_OUT)
+	@echo "Wrote $(CONFIDENTIAL_LAZER_REPORT_OUT)"
 
 check-confidential-production-readiness:
 	@echo "Screening confidential transfer parameters..."
@@ -267,6 +288,7 @@ help:
 	@echo "  check-confidential-parameter-readiness Run soft confidential parameter honesty gate"
 	@echo "  check-confidential-production-readiness Run strict launch parameter gate"
 	@echo "  run-confidential-lattice-estimator Generate external lattice-estimator report collection"
+	@echo "  run-confidential-lazer-parameter-report Generate LaZer parameter report collection"
 	@echo "  bench-typescript-confidential Benchmark TypeScript confidential proof APIs"
 	@echo "  bench-confidential-verify   Compare JS and native confidential verifier hot paths"
 	@echo "  bench-confidential-realistic Benchmark 1024-dimensional confidential balance proof"

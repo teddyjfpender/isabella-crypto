@@ -343,6 +343,15 @@ jobs:
           git diff --exit-code -- bench/data/confidential-parameter-screen.json
           python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json
           python3 scripts/check_confidential_parameter_readiness_regressions.py
+          python3 scripts/run_confidential_lazer_parameter_report.py \
+            --parameter-screen bench/data/confidential-parameter-screen.json \
+            --out /tmp/confidential-lazer-parameter-reports.check.json \
+            --generated-at 2026-06-06T00:00:00+00:00
+          python3 scripts/confidential_parameter_screen.py \
+            --lazer-parameter-report /tmp/confidential-lazer-parameter-reports.check.json \
+            --out /tmp/confidential-parameter-screen-with-lazer.json
+          python3 scripts/check_confidential_parameter_readiness.py \
+            --report /tmp/confidential-parameter-screen-with-lazer.json
           python3 scripts/check_confidential_scaffold_quarantine.py
 
       - name: Run confidential balance benchmark budget gates

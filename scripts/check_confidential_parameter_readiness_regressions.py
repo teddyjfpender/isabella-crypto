@@ -54,17 +54,23 @@ def estimator_report(
     return report
 
 
-def lazer_report(candidate: dict, security_bits: int, parameter_set: dict) -> dict:
-    return {
+def lazer_report(candidate: dict, security_bits: int | None, parameter_set: dict, status: str = "generated") -> dict:
+    report = {
         "candidate": candidate["name"],
         "tool": "regression-lazer-params",
         "source": "scripts/check_confidential_parameter_readiness_regressions.py",
         "generated_at": "2026-06-06T00:00:00Z",
         "command": ["regression-lazer-params", candidate["name"]],
-        "security_level_bits": security_bits,
+        "status": status,
         "parameter_set": parameter_set,
-        "proof_size_estimate": {"bytes": 1},
+        "assumptions": ["regression fixture; not production LaZer parameter evidence"],
     }
+    if status == "generated":
+        report["security_level_bits"] = security_bits
+        report["proof_size_estimate"] = {"bytes": 1}
+    else:
+        report["reason"] = "regression fixture preserves a non-generated request status"
+    return report
 
 
 def expect_checker_failure(path: Path, expected: str) -> None:
@@ -112,6 +118,19 @@ def main() -> None:
         blocked_proc = run(["python3", str(CHECKER), "--report", str(blocked_estimator_path)])
         if blocked_proc.returncode != 0:
             raise SystemExit(blocked_proc.stdout + blocked_proc.stderr)
+
+        blocked_lazer = copy.deepcopy(base_report)
+        blocked_lazer["candidates"][0]["lazer_parameter_generation_report"] = lazer_report(
+            candidate,
+            None,
+            params,
+            status="blocked_by_formal_modulus",
+        )
+        blocked_lazer_path = tmpdir / "blocked-lazer.json"
+        write_report(blocked_lazer_path, blocked_lazer)
+        blocked_lazer_proc = run(["python3", str(CHECKER), "--report", str(blocked_lazer_path)])
+        if blocked_lazer_proc.returncode != 0:
+            raise SystemExit(blocked_lazer_proc.stdout + blocked_lazer_proc.stderr)
 
         dishonest_estimated = copy.deepcopy(base_report)
         dishonest_estimated["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
@@ -183,6 +202,33 @@ def main() -> None:
         ready_failed_proc = run(["python3", str(CHECKER), "--report", str(ready_failed_path)])
         if ready_failed_proc.returncode != 0:
             raise SystemExit(ready_failed_proc.stdout + ready_failed_proc.stderr)
+
+        ready_runtime_blocked_lazer = copy.deepcopy(base_report)
+        ready_runtime_blocked_lazer["candidates"][1]["lazer_parameter_generation_report"] = lazer_report(
+            estimator_ready_candidate,
+            None,
+            estimator_ready_params,
+            status="blocked_by_runtime_integer_model",
+        )
+        ready_runtime_blocked_path = tmpdir / "ready-runtime-blocked-lazer.json"
+        write_report(ready_runtime_blocked_path, ready_runtime_blocked_lazer)
+        ready_runtime_blocked_proc = run(["python3", str(CHECKER), "--report", str(ready_runtime_blocked_path)])
+        if ready_runtime_blocked_proc.returncode != 0:
+            raise SystemExit(ready_runtime_blocked_proc.stdout + ready_runtime_blocked_proc.stderr)
+
+        dishonest_ready_generated_lazer = copy.deepcopy(base_report)
+        dishonest_ready_generated_lazer["candidates"][1]["lazer_parameter_generation_report"] = lazer_report(
+            estimator_ready_candidate,
+            estimator_ready_candidate["target_security_bits"],
+            estimator_ready_params,
+            status="generated",
+        )
+        dishonest_ready_generated_path = tmpdir / "dishonest-ready-generated-lazer.json"
+        write_report(dishonest_ready_generated_path, dishonest_ready_generated_lazer)
+        expect_checker_failure(
+            dishonest_ready_generated_path,
+            "status must be blocked_by_runtime_integer_model",
+        )
 
         ready_low_security_estimator = copy.deepcopy(base_report)
         ready_low_security_estimator["candidates"][1]["external_lattice_estimator_report"] = estimator_report(

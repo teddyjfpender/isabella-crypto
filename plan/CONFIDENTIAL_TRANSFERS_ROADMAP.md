@@ -240,6 +240,7 @@ JSON report collections, keyed by candidate:
 
 ```bash
 make run-confidential-lattice-estimator
+make run-confidential-lazer-parameter-report
 
 python3 scripts/confidential_parameter_screen.py \
   --external-estimator-report path/to/estimator-reports.json \
@@ -254,11 +255,16 @@ equality, and the arithmetic behind each formal proof-margin modulus requirement
 before any candidate can be marked production-ready. Non-estimated
 external-estimator reports are accepted as audit evidence but remain explicit
 blockers; only `status: "estimated"` can satisfy the production estimator gate.
+`scripts/run_confidential_lazer_parameter_report.py` emits structured
+LaZer-style report collections for the current candidates. Those reports record
+`blocked_by_formal_modulus`, `blocked_by_runtime_integer_model`, `failed`, or
+`not_applicable` without pretending to generate LaZer security evidence; only
+`status: "generated"` can satisfy the production LaZer gate.
 The regression gate
 `scripts/check_confidential_parameter_readiness_regressions.py` checks that
-honest blocked estimator reports are accepted, dishonest estimated reports for
-blocked requests are rejected, and mismatched estimator/LaZer parameter
-snapshots are rejected.
+honest blocked estimator and LaZer reports are accepted, dishonest estimated or
+generated reports for blocked requests are rejected, missing runtime blockers
+are rejected, and mismatched estimator/LaZer parameter snapshots are rejected.
 
 Selected baseline candidates:
 

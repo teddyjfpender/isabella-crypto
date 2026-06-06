@@ -302,11 +302,60 @@ def validate_lazer_parameter_report(report: dict[str, Any], candidate: dict[str,
     require_string(report.get("source"), f"{label}.source")
     require_string(report.get("generated_at"), f"{label}.generated_at")
     validate_command(report.get("command"), f"{label}.command")
+    status = require_string(report.get("status"), f"{label}.status")
+    allowed_statuses = {
+        "generated",
+        "blocked_by_formal_modulus",
+        "blocked_by_runtime_integer_model",
+        "failed",
+        "not_applicable",
+    }
+    if status not in allowed_statuses:
+        fail(f"{label}.status must be one of {sorted(allowed_statuses)}")
     parameter_set = require_object(
         report.get("parameter_set"),
         f"{label}.parameter_set",
     )
     validate_parameter_snapshot(parameter_set, candidate, f"{label}.parameter_set")
+    assumptions = require_list(
+        report.get("assumptions"),
+        f"{label}.assumptions",
+    )
+    if not assumptions or not all(isinstance(assumption, str) and assumption for assumption in assumptions):
+        fail(f"{label}.assumptions must contain non-empty strings")
+
+    margins = require_object(candidate.get("formal_proof_margins"), f"{candidate_id}.formal_proof_margins")
+    if not margins.get("applicable", False):
+        if status != "not_applicable":
+            fail(f"{label}.status must be not_applicable when formal proof margins are not applicable")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
+    warnings = margins.get("warnings", [])
+    if not isinstance(warnings, list):
+        fail(f"{candidate_id}.formal_proof_margins.warnings must be a list when present")
+    if warnings:
+        if status != "blocked_by_formal_modulus":
+            fail(f"{label}.status must be blocked_by_formal_modulus when formal modulus checks fail")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
+    runtime = require_object(
+        candidate.get("runtime_integer_compatibility"),
+        f"{candidate_id}.runtime_integer_compatibility",
+    )
+    if runtime.get("compatible") is not True:
+        if status != "blocked_by_runtime_integer_model":
+            fail(f"{label}.status must be blocked_by_runtime_integer_model when runtime integer compatibility fails")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
+    if status != "generated":
+        if status != "failed":
+            fail(f"{label}.status must be generated or failed when formal and runtime gates pass")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
     require_object(
         report.get("proof_size_estimate"),
         f"{label}.proof_size_estimate",
@@ -612,6 +661,8 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
             fail(f"{name} is ready without external_lattice_estimator_report")
         if lazer_report is None:
             fail(f"{name} is ready without lazer_parameter_generation_report")
+        if not isinstance(lazer_report, dict) or lazer_report.get("status") != "generated":
+            fail(f"{name} is ready without generated LaZer parameter report")
         if not margins.get("applicable", False):
             fail(f"{name} is ready without applicable formal proof margins")
         if warnings:

@@ -342,18 +342,22 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
 
     lazer_report = screened.get("lazer_parameter_generation_report")
     if isinstance(lazer_report, dict):
-        security_bits = lazer_report.get("security_level_bits")
-        if (
-            not isinstance(security_bits, (int, float))
-            or isinstance(security_bits, bool)
-            or not isinstance(target_security_bits, (int, float))
-            or isinstance(target_security_bits, bool)
-            or security_bits < target_security_bits
-        ):
-            blockers.append("lazer_parameter_security_below_target")
-        parameter_set = lazer_report.get("parameter_set")
-        if not isinstance(parameter_set, dict) or not parameter_snapshot_matches(screened, parameter_set):
-            blockers.append("lazer_parameter_set_mismatch")
+        status = lazer_report.get("status")
+        if status != "generated":
+            blockers.append(f"lazer_parameter_generation_report_not_generated:{status}")
+        else:
+            security_bits = lazer_report.get("security_level_bits")
+            if (
+                not isinstance(security_bits, (int, float))
+                or isinstance(security_bits, bool)
+                or not isinstance(target_security_bits, (int, float))
+                or isinstance(target_security_bits, bool)
+                or security_bits < target_security_bits
+            ):
+                blockers.append("lazer_parameter_security_below_target")
+            parameter_set = lazer_report.get("parameter_set")
+            if not isinstance(parameter_set, dict) or not parameter_snapshot_matches(screened, parameter_set):
+                blockers.append("lazer_parameter_set_mismatch")
 
     margins = screened.get("formal_proof_margins", {})
     if not margins.get("applicable", False):
