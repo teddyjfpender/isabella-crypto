@@ -16,7 +16,7 @@ type TransactionContext = {
   networkId: string;
   assetId: number;
   ledgerEpoch: number;
-  root: string;
+  root: { digest: string; depth: number };
   publicFee: number;
   cIn1: number[];
   cIn2: number[];
@@ -47,7 +47,7 @@ type EnvelopeVector = DigestVector & {
 
 type WalletProofRequest = {
   context: TransactionContext;
-  acceptedRoots: string[];
+  acceptedRoots: Array<{ digest: string; depth: number }>;
   spentNullifiers: number[][];
 };
 
@@ -76,6 +76,14 @@ function sha3Hex(preimageHex: string): string {
   return createHash('sha3-256')
     .update(Buffer.from(preimageHex, 'hex'))
     .digest('hex');
+}
+
+function mutateDigest(digest: string): string {
+  return digest.replace(/^./, digest[0] === '0' ? '1' : '0');
+}
+
+function rootKey(root: { digest: string; depth: number }): string {
+  return `${root.digest}:${root.depth}`;
 }
 
 describe('Confidential transaction context vectors', () => {
@@ -132,7 +140,14 @@ describe('Confidential transaction context vectors', () => {
       .not.toBe(entry.digest);
     expect(tx.transactionContextDigest({
       ...entry.context,
-      root: entry.context.root.replace(/^./, entry.context.root[0] === '0' ? '1' : '0'),
+      root: {
+        ...entry.context.root,
+        digest: mutateDigest(entry.context.root.digest),
+      },
+    })).not.toBe(entry.digest);
+    expect(tx.transactionContextDigest({
+      ...entry.context,
+      root: { ...entry.context.root, depth: entry.context.root.depth + 1 },
     })).not.toBe(entry.digest);
   });
 
@@ -147,7 +162,15 @@ describe('Confidential transaction context vectors', () => {
       .toThrow();
     expect(() => tx.transactionContextDigest({ ...entry.context, networkId: 'isabella-\u2603' }))
       .toThrow();
-    expect(() => tx.transactionContextDigest({ ...entry.context, root: entry.context.root.toUpperCase() }))
+    expect(() => tx.transactionContextDigest({
+      ...entry.context,
+      root: { ...entry.context.root, digest: entry.context.root.digest.toUpperCase() },
+    }))
+      .toThrow();
+    expect(() => tx.transactionContextDigest({
+      ...entry.context,
+      root: { ...entry.context.root, depth: -1 },
+    }))
       .toThrow();
   });
 
@@ -208,7 +231,7 @@ describe('Confidential transaction context vectors', () => {
     const [requestVector] = vectors.walletProofRequestCases;
     const request = requestVector.request;
     const mutableAcceptedRootIndex = request.acceptedRoots.findIndex(
-      (root) => root !== request.context.root
+      (root) => !root || rootKey(root) !== rootKey(request.context.root)
     );
     expect(mutableAcceptedRootIndex).toBeGreaterThanOrEqual(0);
 
@@ -219,9 +242,9 @@ describe('Confidential transaction context vectors', () => {
       ...request,
       acceptedRoots: request.acceptedRoots.map((root, index) =>
         index === mutableAcceptedRootIndex
-          ? root.replace(/^./, root[0] === '0' ? '1' : '0')
+          ? { ...root, digest: mutateDigest(root.digest) }
           : root
-      ).sort(),
+      ).sort((left, right) => rootKey(left).localeCompare(rootKey(right))),
     })).not.toBe(requestVector.digest);
     expect(tx.transactionWalletProofRequestDigest({
       ...request,
@@ -247,13 +270,13 @@ describe('Confidential transaction context vectors', () => {
     })).toThrow();
     expect(() => tx.transactionWalletProofRequestDigest({
       ...request,
-      acceptedRoots: request.acceptedRoots.filter((root) => root !== request.context.root),
+      acceptedRoots: request.acceptedRoots.filter((root) => rootKey(root) !== rootKey(request.context.root)),
     })).toThrow();
     expect(() => tx.transactionWalletProofRequestDigest({
       ...request,
       acceptedRoots: duplicateRoots,
     })).toThrow();
-    if (unsortedRoots.join('|') !== request.acceptedRoots.join('|')) {
+    if (unsortedRoots.map(rootKey).join('|') !== request.acceptedRoots.map(rootKey).join('|')) {
       expect(() => tx.transactionWalletProofRequestDigest({
         ...request,
         acceptedRoots: unsortedRoots,
@@ -262,7 +285,13 @@ describe('Confidential transaction context vectors', () => {
     expect(() => tx.transactionWalletProofRequestDigest({
       ...request,
       acceptedRoots: request.acceptedRoots.map((root, index) =>
-        index === 0 ? `${root.slice(0, -1)}A` : root
+        index === 0 ? { ...root, digest: `${root.digest.slice(0, -1)}A` } : root
+      ),
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.map((root, index) =>
+        index === 0 ? { ...root, depth: -1 } : root
       ),
     })).toThrow();
     expect(() => tx.transactionWalletProofRequestDigest({

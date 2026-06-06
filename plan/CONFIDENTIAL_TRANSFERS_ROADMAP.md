@@ -130,8 +130,8 @@ benchmarks are independently checked.
   asset IDs, version contexts, wallet proof generation, and failure semantics.
 - The runtime now pins the public SIS-note transaction context with canonical
   bytes and a SHA3-256 digest over protocol version, network ID, asset ID,
-  ledger epoch, Merkle root, public fee, two input commitments, two output
-  commitments, and two revealed nullifiers. The fixture lives in
+  ledger epoch, depth-tagged Merkle root, public fee, two input commitments, two
+  output commitments, and two revealed nullifiers. The fixture lives in
   `tests/fixtures/confidential-transaction-vectors.json`, and OCaml, Haskell,
   and TypeScript expose matching `ct-transaction-context` /
   `transactionContextDigest` surfaces checked by the SDK-equivalence harnesses.
@@ -146,15 +146,15 @@ benchmarks are independently checked.
   hashing or policy checks.
   The same fixture now pins wallet proof request preimage/digest bytes under a
   separate `walletProofRequest` tag. That request binds the canonical public
-  transaction context digest, a sorted duplicate-free accepted-root window
-  containing the context root, and a sorted duplicate-free spent-nullifier
+  transaction context digest, a sorted duplicate-free accepted-root window of
+  `(digest, depth)` pairs containing the context root, and a sorted duplicate-free spent-nullifier
   snapshot that must not contain either revealed transaction nullifier.
   TypeScript, OCaml, and Haskell expose matching wallet-request digest APIs
   checked by the SDK-equivalence harnesses, including native rejection checks
   for malformed accepted-root windows and spent-nullifier snapshots.
   TypeScript exposes `fsVerifyMerkleEnvelope`, and OCaml/Haskell expose a
   matching `ct-verify-merkle-envelope` command, so callers can verify the
-  canonical context digest, expected network/asset/root policy, and explicit
+  canonical context digest, expected network/asset/root/depth policy, and explicit
   Merkle transaction proof as one step. The native verifier commands parse the
   proof's Merkle membership fields instead of deriving membership from the
   supplied ledger. The SDK-equivalence validators exercise the TS and native
@@ -198,13 +198,12 @@ The formalization still needs these before production:
    remaining algebraic scaffold compatibility APIs, replace the
    hand-maintained native transaction digest/envelope command wrappers with
    generated or vector-locked surfaces, broaden native transaction-level
-   negative/fuzz conformance for Merkle proofs, and migrate runtime and
-   consensus accepted-root contexts from digest-only roots to the depth-tagged
-   Merkle root model.
+   negative/fuzz conformance for Merkle proofs, and extend the runtime
+   depth-tagged accepted-root model into consensus/indexer API contracts.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
-7. Extend the pinned wallet proof request serialization into consensus/indexer
-   API contracts with non-canonical encoding rejection.
+7. Extend the pinned depth-tagged wallet proof request serialization into
+   consensus/indexer API contracts with non-canonical encoding rejection.
 8. Extend fee-aware proof support from the envelope verifier into the remaining
    consensus/indexer and wallet APIs, including change-output policy and
    negative tests for every failure class.

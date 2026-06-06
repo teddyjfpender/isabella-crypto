@@ -116,7 +116,13 @@ export async function buildMerkleTransactionFixture(options: { publicFee?: numbe
   if (proof === null) {
     throw new Error('failed to build Merkle transaction fixture');
   }
-  const root = sdk.ConfidentialTransaction.merkleLedgerRoot(ledger);
+  if (proof.in1Member.siblings.length !== proof.in2Member.siblings.length) {
+    throw new Error('fixture input proofs must have the same Merkle depth');
+  }
+  const root = {
+    digest: sdk.ConfidentialTransaction.merkleLedgerRoot(ledger),
+    depth: proof.in1Member.siblings.length,
+  };
   return {
     sdk,
     params,

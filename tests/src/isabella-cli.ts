@@ -1114,7 +1114,7 @@ export interface TransactionContext {
   networkId: string;
   assetId: number;
   ledgerEpoch: number;
-  root: string;
+  root: { digest: string; depth: number };
   publicFee: number;
   cIn1: number[];
   cIn2: number[];
@@ -1129,14 +1129,22 @@ export interface TransactionContextPolicy {
   networkId: string;
   assetId: number;
   ledgerEpoch: number;
-  root: string;
+  root: { digest: string; depth: number };
   publicFee: number;
 }
 
 export interface WalletProofRequest {
   context: TransactionContext;
-  acceptedRoots: string[];
+  acceptedRoots: Array<{ digest: string; depth: number }>;
   spentNullifiers: number[][];
+}
+
+function acceptedRootDigests(roots: Array<{ digest: string; depth: number }>): string[] {
+  return roots.map((root) => root.digest);
+}
+
+function acceptedRootDepths(roots: Array<{ digest: string; depth: number }>): number[] {
+  return roots.map((root) => root.depth);
 }
 
 export function ctNullifier(
@@ -1319,7 +1327,7 @@ export function ctTransactionContext(
   networkId: string,
   assetId: number,
   ledgerEpoch: number,
-  root: string,
+  root: { digest: string; depth: number },
   publicFee: number,
   cIn1: number[],
   cIn2: number[],
@@ -1334,7 +1342,8 @@ export function ctTransactionContext(
     networkId,
     assetId.toString(),
     ledgerEpoch.toString(),
-    root,
+    root.digest,
+    root.depth.toString(),
     publicFee.toString(),
     JSON.stringify(cIn1),
     JSON.stringify(cIn2),
@@ -1354,7 +1363,8 @@ export function ctWalletProofRequestDigest(request: WalletProofRequest): string 
     context.networkId,
     context.assetId.toString(),
     context.ledgerEpoch.toString(),
-    context.root,
+    context.root.digest,
+    context.root.depth.toString(),
     context.publicFee.toString(),
     JSON.stringify(context.cIn1),
     JSON.stringify(context.cIn2),
@@ -1362,7 +1372,8 @@ export function ctWalletProofRequestDigest(request: WalletProofRequest): string 
     JSON.stringify(context.cOut2),
     JSON.stringify(context.nf1),
     JSON.stringify(context.nf2),
-    JSON.stringify(request.acceptedRoots),
+    JSON.stringify(acceptedRootDigests(request.acceptedRoots)),
+    JSON.stringify(acceptedRootDepths(request.acceptedRoots)),
     JSON.stringify(request.spentNullifiers),
   ]);
   return parseCliResult<{ result: string }>(output).result;
@@ -1665,7 +1676,8 @@ export function ctMerkleEnvelopeDigest(
     context.networkId,
     context.assetId.toString(),
     context.ledgerEpoch.toString(),
-    context.root,
+    context.root.digest,
+    context.root.depth.toString(),
     context.publicFee.toString(),
     JSON.stringify(context.cIn1),
     JSON.stringify(context.cIn2),
@@ -1919,14 +1931,16 @@ export function ctVerifyMerkleEnvelopeArgs(
     policy.networkId,
     policy.assetId.toString(),
     policy.ledgerEpoch.toString(),
-    policy.root,
+    policy.root.digest,
+    policy.root.depth.toString(),
     policy.publicFee.toString(),
     contextDigest,
     context.protocolVersion.toString(),
     context.networkId,
     context.assetId.toString(),
     context.ledgerEpoch.toString(),
-    context.root,
+    context.root.digest,
+    context.root.depth.toString(),
     context.publicFee.toString(),
     JSON.stringify(context.cIn1),
     JSON.stringify(context.cIn2),

@@ -1271,12 +1271,13 @@ let cmd_ct_merkle_member_verify args =
 
 let cmd_ct_transaction_context args =
   match args with
-  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root;
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
      public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str] ->
     (match
        parse_canonical_int protocol_version_str,
        parse_canonical_int asset_id_str,
        parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
        parse_canonical_int public_fee_str,
        parse_canonical_vec c_in1_str,
        parse_canonical_vec c_in2_str,
@@ -1285,17 +1286,17 @@ let cmd_ct_transaction_context args =
        parse_canonical_vec nf1_str,
        parse_canonical_vec nf2_str
      with
-     | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some root_depth, Some public_fee,
        Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2 ->
        (try
           output_string_result "ct_transaction_context"
             (Confidential_transaction.transaction_context_digest
-               protocol_version network_id asset_id ledger_epoch root public_fee
+               protocol_version network_id asset_id ledger_epoch root root_depth public_fee
                c_in1 c_in2 c_out1 c_out2 nf1 nf2)
         with Invalid_argument msg -> output_error msg)
      | _ -> output_error "Expected transaction context fields")
   | _ ->
-    output_error "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
+    output_error "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
 
 let cmd_ct_merkle_proof_digest args =
   match parse_ct_merkle_proof_digest_args args with
@@ -1310,12 +1311,13 @@ let cmd_ct_merkle_proof_digest args =
 let cmd_ct_merkle_envelope_digest args =
   match args with
   | context_digest :: protocol_version_str :: network_id :: asset_id_str :: ledger_epoch_str ::
-    root :: public_fee_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
+    root :: root_depth_str :: public_fee_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
     nf1_str :: nf2_str :: proof_args ->
     (match
        parse_canonical_int protocol_version_str,
        parse_canonical_int asset_id_str,
        parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
        parse_canonical_int public_fee_str,
        parse_canonical_vec c_in1_str,
        parse_canonical_vec c_in2_str,
@@ -1325,29 +1327,30 @@ let cmd_ct_merkle_envelope_digest args =
        parse_canonical_vec nf2_str,
        parse_ct_merkle_proof_digest_args proof_args
      with
-     | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some root_depth, Some public_fee,
        Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
        Ok proof ->
        (try
           output_string_result
             "ct_merkle_envelope_digest"
             (Confidential_transaction.transaction_envelope_digest
-               context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+               context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
                c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof)
         with Invalid_argument msg -> output_error msg)
      | _ -> output_error "Expected context digest, context fields, and Merkle proof fields")
   | _ ->
-    output_error ("Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ ct_merkle_proof_args_usage)
+    output_error ("Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ ct_merkle_proof_args_usage)
 
 let cmd_ct_wallet_proof_request_digest args =
   match args with
-  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root;
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
      public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str;
-     accepted_roots_str; spent_nullifiers_str] ->
+     accepted_roots_str; accepted_root_depths_str; spent_nullifiers_str] ->
     (match
        parse_canonical_int protocol_version_str,
        parse_canonical_int asset_id_str,
        parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
        parse_canonical_int public_fee_str,
        parse_canonical_vec c_in1_str,
        parse_canonical_vec c_in2_str,
@@ -1356,21 +1359,22 @@ let cmd_ct_wallet_proof_request_digest args =
        parse_canonical_vec nf1_str,
        parse_canonical_vec nf2_str,
        parse_string_list accepted_roots_str,
+       parse_canonical_vec accepted_root_depths_str,
        parse_canonical_mat spent_nullifiers_str
      with
-     | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some root_depth, Some public_fee,
        Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
-       Some accepted_roots, Some spent_nullifiers ->
+       Some accepted_roots, Some accepted_root_depths, Some spent_nullifiers ->
        (try
           output_string_result
             "ct_wallet_proof_request_digest"
             (Confidential_transaction.transaction_wallet_proof_request_digest
-               protocol_version network_id asset_id ledger_epoch root public_fee
-               c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers)
+               protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers)
         with Invalid_argument msg -> output_error msg)
      | _ -> output_error "Expected wallet proof request context, accepted roots, and spent nullifiers")
   | _ ->
-    output_error "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS SPENT_NULLIFIERS"
+    output_error "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS ACCEPTED_ROOT_DEPTHS SPENT_NULLIFIERS"
 
 (** {1 Confidential Transaction Commands} *)
 
@@ -1855,17 +1859,19 @@ let cmd_ct_verify_merkle_envelope args =
   | m_str :: n2_str :: q_str :: beta_str :: gamma_str :: k_str :: ck_str :: nk_str ::
     ledger_str :: spent_str :: expected_version_str :: expected_network_id ::
     expected_asset_id_str :: expected_ledger_epoch_str :: expected_root ::
-    expected_public_fee_str :: context_digest :: protocol_version_str :: network_id ::
-    asset_id_str :: ledger_epoch_str :: root :: public_fee_str :: c_in1_str ::
+    expected_root_depth_str :: expected_public_fee_str :: context_digest :: protocol_version_str :: network_id ::
+    asset_id_str :: ledger_epoch_str :: root :: root_depth_str :: public_fee_str :: c_in1_str ::
     c_in2_str :: c_out1_str :: c_out2_str :: nf1_str :: nf2_str :: proof_args ->
     (match
        parse_canonical_int expected_version_str,
        parse_canonical_int expected_asset_id_str,
        parse_canonical_int expected_ledger_epoch_str,
+       parse_canonical_int expected_root_depth_str,
        parse_canonical_int expected_public_fee_str,
        parse_canonical_int protocol_version_str,
        parse_canonical_int asset_id_str,
        parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
        parse_canonical_int public_fee_str,
        parse_canonical_vec c_in1_str,
        parse_canonical_vec c_in2_str,
@@ -1874,13 +1880,13 @@ let cmd_ct_verify_merkle_envelope args =
        parse_canonical_vec nf1_str,
        parse_canonical_vec nf2_str with
      | Some expected_version, Some expected_asset_id, Some expected_ledger_epoch,
-       Some expected_public_fee, Some protocol_version, Some asset_id,
-       Some ledger_epoch, Some public_fee, Some c_in1, Some c_in2,
+       Some expected_root_depth, Some expected_public_fee, Some protocol_version, Some asset_id,
+       Some ledger_epoch, Some root_depth, Some public_fee, Some c_in1, Some c_in2,
        Some c_out1, Some c_out2, Some nf1, Some nf2 ->
        (try
           let computed_digest =
             Confidential_transaction.transaction_context_digest
-              protocol_version network_id asset_id ledger_epoch root public_fee
+              protocol_version network_id asset_id ledger_epoch root root_depth public_fee
               c_in1 c_in2 c_out1 c_out2 nf1 nf2
           in
           let policy_ok =
@@ -1890,6 +1896,7 @@ let cmd_ct_verify_merkle_envelope args =
             asset_id = expected_asset_id &&
             ledger_epoch = expected_ledger_epoch &&
             root = expected_root &&
+            root_depth = expected_root_depth &&
             context_digest = computed_digest
           in
           if not policy_ok then
@@ -1908,7 +1915,7 @@ let cmd_ct_verify_merkle_envelope args =
         with Invalid_argument msg -> output_error msg)
      | _ -> output_error "Expected envelope policy, context, and proof fields")
   | _ ->
-    output_error "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+    output_error "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_ROOT_DEPTH EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
 let cmd_ct_verify_bench_with_usage command prepare args =
   match args with
@@ -2195,7 +2202,7 @@ let show_help () =
   print_endline "  ct-merkle-root LEDGER        Compute cryptographic Merkle root";
   print_endline "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof";
   print_endline "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof";
-  print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2";
+  print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2";
   print_endline "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes";
   print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
   print_endline "  ct-wallet-proof-request-digest ... Hash canonical wallet proof request bytes";

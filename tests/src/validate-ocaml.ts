@@ -930,7 +930,8 @@ const transactionContextArgs = [
   transactionContext.networkId,
   transactionContext.assetId.toString(),
   transactionContext.ledgerEpoch.toString(),
-  transactionContext.root,
+  transactionContext.root.digest,
+  transactionContext.root.depth.toString(),
   transactionContext.publicFee.toString(),
   JSON.stringify(transactionContext.cIn1),
   JSON.stringify(transactionContext.cIn2),
@@ -942,7 +943,7 @@ const transactionContextArgs = [
 for (const { name, args } of [
   {
     name: 'negative-zero public fee',
-    args: transactionContextArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+    args: transactionContextArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
   },
   {
     name: 'plus-signed asset id',
@@ -957,13 +958,13 @@ for (const { name, args } of [
   {
     name: 'leading-zero input vector element',
     args: transactionContextArgs.map((arg, index) =>
-      index === 7 ? nonCanonicalFirstInteger(arg) : arg
+      index === 8 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe input vector element',
     args: transactionContextArgs.map((arg, index) =>
-      index === 7 ? unsafeFirstInteger(arg) : arg
+      index === 8 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -986,12 +987,15 @@ assert.equal(
 );
 function ctWalletProofRequestDigestArgs(request: any): string[] {
   const context = request.context;
+  const acceptedRootDigests = request.acceptedRoots.map((root: any) => root.digest);
+  const acceptedRootDepths = request.acceptedRoots.map((root: any) => root.depth);
   return [
     context.protocolVersion.toString(),
     context.networkId,
     context.assetId.toString(),
     context.ledgerEpoch.toString(),
-    context.root,
+    context.root.digest,
+    context.root.depth.toString(),
     context.publicFee.toString(),
     JSON.stringify(context.cIn1),
     JSON.stringify(context.cIn2),
@@ -999,7 +1003,8 @@ function ctWalletProofRequestDigestArgs(request: any): string[] {
     JSON.stringify(context.cOut2),
     JSON.stringify(context.nf1),
     JSON.stringify(context.nf2),
-    JSON.stringify(request.acceptedRoots),
+    JSON.stringify(acceptedRootDigests),
+    JSON.stringify(acceptedRootDepths),
     JSON.stringify(request.spentNullifiers),
   ];
 }
@@ -1022,7 +1027,9 @@ const walletProofRequestRejectionCases = [
     request: {
       ...walletProofRequest,
       acceptedRoots: walletProofRequest.acceptedRoots.filter(
-        (root: string) => root !== walletProofRequest.context.root
+        (root: any) =>
+          root.digest !== walletProofRequest.context.root.digest ||
+          root.depth !== walletProofRequest.context.root.depth
       ),
     },
   },
@@ -1033,7 +1040,8 @@ const walletProofRequestRejectionCases = [
       acceptedRoots: [walletProofRequest.context.root, walletProofRequest.context.root],
     },
   },
-  ...(reversedAcceptedRoots.join('|') === walletProofRequest.acceptedRoots.join('|')
+  ...(reversedAcceptedRoots.map((root: any) => `${root.digest}:${root.depth}`).join('|') ===
+    walletProofRequest.acceptedRoots.map((root: any) => `${root.digest}:${root.depth}`).join('|')
     ? []
     : [{
         name: 'unsorted accepted roots',
@@ -1077,7 +1085,7 @@ const walletProofRequestArgs = [
 for (const { name, args } of [
   {
     name: 'negative-zero public fee',
-    args: walletProofRequestArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+    args: walletProofRequestArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
   },
   {
     name: 'leading-zero protocol version',
@@ -1094,13 +1102,13 @@ for (const { name, args } of [
   {
     name: 'non-canonical spent-nullifier integer',
     args: walletProofRequestArgs.map((arg, index) =>
-      index === 14 ? nonCanonicalFirstInteger(arg) : arg
+      index === 16 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe spent-nullifier integer',
     args: walletProofRequestArgs.map((arg, index) =>
-      index === 14 ? unsafeFirstInteger(arg) : arg
+      index === 16 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1519,7 +1527,8 @@ const merkleEnvelopeDigestArgs = [
   transactionEnvelopeVector.context.networkId,
   transactionEnvelopeVector.context.assetId.toString(),
   transactionEnvelopeVector.context.ledgerEpoch.toString(),
-  transactionEnvelopeVector.context.root,
+  transactionEnvelopeVector.context.root.digest,
+  transactionEnvelopeVector.context.root.depth.toString(),
   transactionEnvelopeVector.context.publicFee.toString(),
   JSON.stringify(transactionEnvelopeVector.context.cIn1),
   JSON.stringify(transactionEnvelopeVector.context.cIn2),
@@ -1536,24 +1545,24 @@ for (const { name, args } of [
   },
   {
     name: 'negative-zero public fee',
-    args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
+    args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 8 ? '-0' : arg)),
   },
   {
     name: 'unsafe public fee',
     args: merkleEnvelopeDigestArgs.map((arg, index) =>
-      index === 7 ? unsafeProtocolInteger : arg
+      index === 8 ? unsafeProtocolInteger : arg
     ),
   },
   {
     name: 'non-canonical context vector integer',
     args: merkleEnvelopeDigestArgs.map((arg, index) =>
-      index === 8 ? nonCanonicalFirstInteger(arg) : arg
+      index === 9 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe context vector integer',
     args: merkleEnvelopeDigestArgs.map((arg, index) =>
-      index === 8 ? unsafeFirstInteger(arg) : arg
+      index === 9 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1564,7 +1573,10 @@ const ocamlEnvelopeContext = {
   networkId: 'isabella-ocaml-conformance',
   assetId: 7,
   ledgerEpoch: 42,
-  root: ctMerkleLedgerRoot,
+  root: {
+    digest: ctMerkleLedgerRoot,
+    depth: ctMerkleProof!.in1Member.siblings.length,
+  },
   publicFee: 0,
   cIn1: ctCIn1,
   cIn2: ctCIn2,
@@ -1647,28 +1659,28 @@ const merkleEnvelopeVerifyArgs = [
 for (const { name, args } of [
   {
     name: 'non-canonical expected public fee',
-    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 16 ? '-0' : arg)),
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 17 ? '-0' : arg)),
   },
   {
     name: 'unsafe expected public fee',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
-      index === 16 ? unsafeProtocolInteger : arg
+      index === 17 ? unsafeProtocolInteger : arg
     ),
   },
   {
     name: 'plus-signed context protocol version',
-    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 18 ? `+${arg}` : arg)),
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 19 ? `+${arg}` : arg)),
   },
   {
     name: 'non-canonical context vector integer',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
-      index === 24 ? nonCanonicalFirstInteger(arg) : arg
+      index === 26 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe context vector integer',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
-      index === 24 ? unsafeFirstInteger(arg) : arg
+      index === 26 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1840,7 +1852,13 @@ assert.equal(
 );
 const ocamlWrongRootContext = {
   ...ocamlEnvelopeContext,
-  root: ocamlEnvelopeContext.root.replace(/^./, ocamlEnvelopeContext.root[0] === '0' ? '1' : '0'),
+  root: {
+    ...ocamlEnvelopeContext.root,
+    digest: ocamlEnvelopeContext.root.digest.replace(
+      /^./,
+      ocamlEnvelopeContext.root.digest[0] === '0' ? '1' : '0'
+    ),
+  },
 };
 const ocamlWrongRootDigest = ctTransactionContext(
   ocamlWrongRootContext.protocolVersion,
@@ -1879,17 +1897,23 @@ assert.equal(
 for (const mutation of merkleTransactionProofMutations(
   ctMerkleProof!,
   ctSpent,
-  ocamlEnvelopeContext.root,
+  ocamlEnvelopeContext.root.digest,
   ctNf1
 )) {
   const mutatedContext =
-    mutation.root === ocamlEnvelopeContext.root
+    mutation.root === ocamlEnvelopeContext.root.digest
       ? ocamlEnvelopeContext
-      : { ...ocamlEnvelopeContext, root: mutation.root };
+      : {
+          ...ocamlEnvelopeContext,
+          root: { ...ocamlEnvelopeContext.root, digest: mutation.root },
+        };
   const mutatedPolicy =
-    mutation.root === ocamlEnvelopePolicy.root
+    mutation.root === ocamlEnvelopePolicy.root.digest
       ? ocamlEnvelopePolicy
-      : { ...ocamlEnvelopePolicy, root: mutation.root };
+      : {
+          ...ocamlEnvelopePolicy,
+          root: { ...ocamlEnvelopePolicy.root, digest: mutation.root },
+        };
   const mutatedContextDigest =
     mutatedContext === ocamlEnvelopeContext
       ? ocamlEnvelopeContextDigest

@@ -757,7 +757,7 @@ Current status and roadmap:
   Merkle-backed verifier; scaffold ledger-step calls remain available only as
   explicit compatibility APIs until they are retired.
 - The transaction vector fixture also pins wallet proof request bytes for the
-  SIS-note MVP: canonical context digest, accepted-root window, and
+  SIS-note MVP: canonical context digest, depth-tagged accepted-root window, and
   spent-nullifier snapshot. TypeScript, OCaml, and Haskell expose matching
   digest APIs; consensus/indexer API contracts are still open production
   blockers. Native OCaml/Haskell transaction CLIs reject non-canonical

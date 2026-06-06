@@ -71,6 +71,17 @@ function encodeDigestVector(digests) {
   return Buffer.concat([i64le(digests.length), ...digests.map(encodeDigest)]);
 }
 
+function encodeAcceptedRoot(root) {
+  return Buffer.concat([
+    encodeDigest(root.digest),
+    nonNegativeI64le(root.depth, 'root.depth'),
+  ]);
+}
+
+function encodeAcceptedRootVector(roots) {
+  return Buffer.concat([i64le(roots.length), ...roots.map(encodeAcceptedRoot)]);
+}
+
 function contextPreimage(context) {
   return Buffer.concat([
     dst,
@@ -80,7 +91,7 @@ function contextPreimage(context) {
     encodeAscii(context.networkId, 'networkId'),
     nonNegativeI64le(context.assetId, 'assetId'),
     nonNegativeI64le(context.ledgerEpoch, 'ledgerEpoch'),
-    encodeDigest(context.root),
+    encodeAcceptedRoot(context.root),
     nonNegativeI64le(context.publicFee, 'publicFee'),
     encodeIntVec(context.cIn1),
     encodeIntVec(context.cIn2),
@@ -128,6 +139,35 @@ function assertCanonicalDigestSet(digests, label) {
   }
 }
 
+function compareAcceptedRoots(left, right) {
+  if (left.digest < right.digest) {
+    return -1;
+  }
+  if (left.digest > right.digest) {
+    return 1;
+  }
+  return Math.sign(left.depth - right.depth);
+}
+
+function sameAcceptedRoot(left, right) {
+  return left.digest === right.digest && left.depth === right.depth;
+}
+
+function assertCanonicalAcceptedRootSet(roots, label) {
+  if (roots.length === 0) {
+    throw new Error(`${label} must not be empty`);
+  }
+  let previous = null;
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index];
+    encodeAcceptedRoot(root);
+    if (previous !== null && compareAcceptedRoots(previous, root) >= 0) {
+      throw new Error(`${label} must be sorted by digest/depth with no duplicates`);
+    }
+    previous = root;
+  }
+}
+
 function assertCanonicalIntMatrixSet(rows, label) {
   let previous = null;
   for (let index = 0; index < rows.length; index += 1) {
@@ -151,10 +191,10 @@ function containsVec(rows, value) {
 }
 
 function walletProofRequestPreimage(request) {
-  assertCanonicalDigestSet(request.acceptedRoots, 'acceptedRoots');
+  assertCanonicalAcceptedRootSet(request.acceptedRoots, 'acceptedRoots');
   assertCanonicalIntMatrixSet(request.spentNullifiers, 'spentNullifiers');
   const contextDigest = digestHex(contextPreimage(request.context));
-  if (!request.acceptedRoots.includes(request.context.root)) {
+  if (!request.acceptedRoots.some((root) => sameAcceptedRoot(root, request.context.root))) {
     throw new Error('context.root must be inside acceptedRoots');
   }
   if (sameVec(request.context.nf1, request.context.nf2)) {
@@ -170,7 +210,7 @@ function walletProofRequestPreimage(request) {
     tags.walletProofRequest,
     Buffer.concat([
       encodeDigest(contextDigest),
-      encodeDigestVector(request.acceptedRoots),
+      encodeAcceptedRootVector(request.acceptedRoots),
       encodeIntMatrix(request.spentNullifiers),
     ])
   );
@@ -252,9 +292,15 @@ async function buildMerkleTransactionFixture() {
   if (proof === null) {
     throw new Error('failed to build Merkle transaction fixture');
   }
+  if (proof.in1Member.siblings.length !== proof.in2Member.siblings.length) {
+    throw new Error('fixture input proofs must use the same Merkle depth');
+  }
   return {
     sdk,
-    root: sdk.ConfidentialTransaction.merkleLedgerRoot(ledger),
+    root: {
+      digest: sdk.ConfidentialTransaction.merkleLedgerRoot(ledger),
+      depth: proof.in1Member.siblings.length,
+    },
     cIn1,
     cIn2,
     cOut1,
@@ -272,7 +318,7 @@ const baseContext = {
   networkId: 'isabella-local-devnet',
   assetId: 7,
   ledgerEpoch: 42,
-  root: merkleVectors.sampleRoot,
+  root: { digest: merkleVectors.sampleRoot, depth: 1 },
   publicFee: 3,
   cIn1: leaf0.commitment,
   cIn2: leaf1.commitment,
@@ -308,10 +354,13 @@ const envelope = {
 };
 const envelopePreimageHex = tx.transactionEnvelopePreimageHex(envelope);
 const envelopeDigest = tx.transactionEnvelopeDigest(envelope);
-const extraAcceptedRoot = digestHex(Buffer.from('isabella-accepted-root-window-extra', 'ascii'));
+const extraAcceptedRoot = {
+  digest: digestHex(Buffer.from('isabella-accepted-root-window-extra', 'ascii')),
+  depth: proofFixture.root.depth,
+};
 const walletProofRequest = {
   context: envelopeContext,
-  acceptedRoots: [proofFixture.root, extraAcceptedRoot].sort(),
+  acceptedRoots: [proofFixture.root, extraAcceptedRoot].sort(compareAcceptedRoots),
   spentNullifiers: [
     [-9, 0, 9],
     [10, 11, 12],

@@ -153,6 +153,18 @@ let encode_transaction_digest_vec label digests =
          (fun index digest -> encode_transaction_digest (Printf.sprintf "%s[%d]" label index) digest)
          digests)
 
+let encode_transaction_accepted_root label (digest, depth) =
+  encode_transaction_digest (label ^ ".digest") digest
+  @ encode_transaction_int (label ^ ".depth") depth
+
+let encode_transaction_accepted_root_vec label roots =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length roots))
+  @ List.concat
+      (List.mapi
+         (fun index root ->
+            encode_transaction_accepted_root (Printf.sprintf "%s[%d]" label index) root)
+         roots)
+
 let rec compare_int_lists left right =
   match left, right with
   | [], [] -> 0
@@ -162,6 +174,10 @@ let rec compare_int_lists left right =
     if l < r then -1
     else if l > r then 1
     else compare_int_lists ls rs
+
+let compare_accepted_roots (left_digest, left_depth) (right_digest, right_depth) =
+  let digest_cmp = String.compare left_digest right_digest in
+  if digest_cmp <> 0 then digest_cmp else compare left_depth right_depth
 
 let require_sorted_unique compare label values =
   let rec loop previous = function
@@ -182,6 +198,14 @@ let require_canonical_digest_set label digests =
     digests;
   require_sorted_unique String.compare label digests
 
+let require_canonical_accepted_root_set label roots =
+  if roots = [] then invalid_arg (label ^ " must not be empty");
+  List.iteri
+    (fun index root ->
+       ignore (encode_transaction_accepted_root (Printf.sprintf "%s[%d]" label index) root))
+    roots;
+  require_sorted_unique compare_accepted_roots label roots
+
 let require_canonical_int_matrix_set label rows =
   require_sorted_unique compare_int_lists label rows
 
@@ -191,6 +215,7 @@ let transaction_context_preimage
     asset_id
     ledger_epoch
     root
+    root_depth
     public_fee
     c_in1
     c_in2
@@ -205,7 +230,7 @@ let transaction_context_preimage
   @ encode_ascii "networkId" network_id
   @ encode_transaction_int "assetId" asset_id
   @ encode_transaction_int "ledgerEpoch" ledger_epoch
-  @ encode_transaction_digest "root" root
+  @ encode_transaction_accepted_root "root" (root, root_depth)
   @ encode_transaction_int "publicFee" public_fee
   @ encode_transaction_vec c_in1
   @ encode_transaction_vec c_in2
@@ -271,6 +296,7 @@ let transaction_envelope_preimage
     asset_id
     ledger_epoch
     root
+    root_depth
     public_fee
     c_in1
     c_in2
@@ -281,7 +307,7 @@ let transaction_envelope_preimage
     proof =
   let computed_digest =
     transaction_context_preimage
-      protocol_version network_id asset_id ledger_epoch root public_fee
+      protocol_version network_id asset_id ledger_epoch root root_depth public_fee
       c_in1 c_in2 c_out1 c_out2 nf1 nf2
     |> Confidential_merkle.digest
   in
@@ -293,18 +319,18 @@ let transaction_envelope_preimage
      @ encode_transaction_digest "proofDigest" (transaction_merkle_proof_digest proof))
 
 let transaction_envelope_preimage_hex
-    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
   transaction_envelope_preimage
-    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
   |> Confidential_merkle.digest_hex
 
 let transaction_envelope_digest
-    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
   transaction_envelope_preimage
-    context_digest protocol_version network_id asset_id ledger_epoch root public_fee
+    context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
   |> Confidential_merkle.digest
 
@@ -314,6 +340,7 @@ let transaction_wallet_proof_request_preimage
     asset_id
     ledger_epoch
     root
+    root_depth
     public_fee
     c_in1
     c_in2
@@ -322,16 +349,20 @@ let transaction_wallet_proof_request_preimage
     nf1
     nf2
     accepted_roots
+    accepted_root_depths
     spent_nullifiers =
-  require_canonical_digest_set "acceptedRoots" accepted_roots;
+  if List.length accepted_roots <> List.length accepted_root_depths then
+    invalid_arg "acceptedRoots and acceptedRootDepths must have the same length";
+  let accepted_root_pairs = List.combine accepted_roots accepted_root_depths in
+  require_canonical_accepted_root_set "acceptedRoots" accepted_root_pairs;
   require_canonical_int_matrix_set "spentNullifiers" spent_nullifiers;
   let context_digest =
     transaction_context_preimage
-      protocol_version network_id asset_id ledger_epoch root public_fee
+      protocol_version network_id asset_id ledger_epoch root root_depth public_fee
       c_in1 c_in2 c_out1 c_out2 nf1 nf2
     |> Confidential_merkle.digest
   in
-  if not (List.mem root accepted_roots) then
+  if not (List.mem (root, root_depth) accepted_root_pairs) then
     invalid_arg "context.root must be inside acceptedRoots";
   if nf1 = nf2 then
     invalid_arg "context nullifiers must be distinct";
@@ -340,38 +371,38 @@ let transaction_wallet_proof_request_preimage
   transaction_tagged_preimage
     transaction_wallet_proof_request_tag
     (encode_transaction_digest "contextDigest" context_digest
-     @ encode_transaction_digest_vec "acceptedRoots" accepted_roots
+     @ encode_transaction_accepted_root_vec "acceptedRoots" accepted_root_pairs
      @ encode_transaction_mat spent_nullifiers)
 
 let transaction_wallet_proof_request_preimage_hex
-    protocol_version network_id asset_id ledger_epoch root public_fee
-    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers =
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers =
   transaction_wallet_proof_request_preimage
-    protocol_version network_id asset_id ledger_epoch root public_fee
-    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers
   |> Confidential_merkle.digest_hex
 
 let transaction_wallet_proof_request_digest
-    protocol_version network_id asset_id ledger_epoch root public_fee
-    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers =
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers =
   transaction_wallet_proof_request_preimage
-    protocol_version network_id asset_id ledger_epoch root public_fee
-    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers
   |> Confidential_merkle.digest
 
 let transaction_context_preimage_hex
-    protocol_version network_id asset_id ledger_epoch root public_fee
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 =
   transaction_context_preimage
-    protocol_version network_id asset_id ledger_epoch root public_fee
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2
   |> Confidential_merkle.digest_hex
 
 let transaction_context_digest
-    protocol_version network_id asset_id ledger_epoch root public_fee
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 =
   transaction_context_preimage
-    protocol_version network_id asset_id ledger_epoch root public_fee
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2
   |> Confidential_merkle.digest
 

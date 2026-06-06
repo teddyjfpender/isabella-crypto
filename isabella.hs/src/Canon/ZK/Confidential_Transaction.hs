@@ -285,6 +285,19 @@ encodeTransactionDigestVector label digests =
     | (index, digest) <- zip [0 :: Int ..] digests
     ]
 
+encodeTransactionAcceptedRoot :: String -> (String, Int) -> [Word8]
+encodeTransactionAcceptedRoot label (digest, depth) =
+  encodeTransactionDigest (label ++ ".digest") digest ++
+  encodeTransactionInt (label ++ ".depth") depth
+
+encodeTransactionAcceptedRootVector :: String -> [(String, Int)] -> [Word8]
+encodeTransactionAcceptedRootVector label roots =
+  transactionInt64LeBytes (length roots) ++
+  concat
+    [ encodeTransactionAcceptedRoot (label ++ "[" ++ show index ++ "]") root
+    | (index, root) <- zip [0 :: Int ..] roots
+    ]
+
 requireSortedUnique :: Ord a => String -> [a] -> ()
 requireSortedUnique label values
   | any (uncurry (>=)) (zip values (drop 1 values)) =
@@ -298,6 +311,13 @@ requireCanonicalDigestSet label digests
       let digestBytes = encodeTransactionDigestVector label digests
        in length digestBytes `seq` requireSortedUnique label digests
 
+requireCanonicalAcceptedRootSet :: String -> [(String, Int)] -> ()
+requireCanonicalAcceptedRootSet label roots
+  | null roots = error (label ++ " must not be empty")
+  | otherwise =
+      let encoded = encodeTransactionAcceptedRootVector label roots
+       in length encoded `seq` requireSortedUnique label roots
+
 requireCanonicalIntMatrixSet :: String -> [[Int]] -> ()
 requireCanonicalIntMatrixSet = requireSortedUnique
 
@@ -307,6 +327,7 @@ transactionContextPreimage ::
   Int ->
   Int ->
   String ->
+  Int ->
   Int ->
   [Int] ->
   [Int] ->
@@ -321,6 +342,7 @@ transactionContextPreimage
   assetId
   ledgerEpoch
   rt
+  rootDepth
   publicFee
   cIn1
   cIn2
@@ -335,7 +357,7 @@ transactionContextPreimage
   encodeTransactionAscii "networkId" networkId ++
   encodeTransactionInt "assetId" assetId ++
   encodeTransactionInt "ledgerEpoch" ledgerEpoch ++
-  encodeTransactionDigest "root" rt ++
+  encodeTransactionAcceptedRoot "root" (rt, rootDepth) ++
   encodeTransactionInt "publicFee" publicFee ++
   encodeTransactionVec cIn1 ++
   encodeTransactionVec cIn2 ++
@@ -345,24 +367,24 @@ transactionContextPreimage
   encodeTransactionVec nf2
 
 transactionContextPreimageHex ::
-  Int -> String -> Int -> Int -> String -> Int ->
+  Int -> String -> Int -> Int -> String -> Int -> Int ->
   [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> String
-transactionContextPreimageHex protocolVersion networkId assetId ledgerEpoch rt publicFee
+transactionContextPreimageHex protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
   cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
   transactionDigestHex
     (transactionContextPreimage
-      protocolVersion networkId assetId ledgerEpoch rt publicFee
+      protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
       cIn1 cIn2 cOut1 cOut2 nf1 nf2)
 
 transactionContextDigest ::
-  Int -> String -> Int -> Int -> String -> Int ->
+  Int -> String -> Int -> Int -> String -> Int -> Int ->
   [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> String
-transactionContextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+transactionContextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
   cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
   transactionDigestHex
     (RepeatedFS.sha3_256
       (transactionContextPreimage
-        protocolVersion networkId assetId ledgerEpoch rt publicFee
+        protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
         cIn1 cIn2 cOut1 cOut2 nf1 nf2))
 
 transactionTaggedPreimage :: Int -> [Word8] -> [Word8]
@@ -431,6 +453,7 @@ transactionEnvelopePreimage ::
   Int ->
   String ->
   Int ->
+  Int ->
   [Int] ->
   [Int] ->
   [Int] ->
@@ -446,6 +469,7 @@ transactionEnvelopePreimage
   assetId
   ledgerEpoch
   rt
+  rootDepth
   publicFee
   cIn1
   cIn2
@@ -456,7 +480,7 @@ transactionEnvelopePreimage
   proof =
   let computedDigest =
         transactionContextDigest
-          protocolVersion networkId assetId ledgerEpoch rt publicFee
+          protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
           cIn1 cIn2 cOut1 cOut2 nf1 nf2
    in if contextDigest /= computedDigest
         then error "contextDigest does not match canonical transaction context"
@@ -466,26 +490,26 @@ transactionEnvelopePreimage
             encodeTransactionDigest "proofDigest" (transactionMerkleProofDigest proof)
 
 transactionEnvelopePreimageHex ::
-  String -> Int -> String -> Int -> Int -> String -> Int ->
+  String -> Int -> String -> Int -> Int -> String -> Int -> Int ->
   [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
   MerkleTransactionProof -> String
-transactionEnvelopePreimageHex contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+transactionEnvelopePreimageHex contextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
   cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
   transactionDigestHex .
     transactionEnvelopePreimage
-      contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+      contextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
       cIn1 cIn2 cOut1 cOut2 nf1 nf2
 
 transactionEnvelopeDigest ::
-  String -> Int -> String -> Int -> Int -> String -> Int ->
+  String -> Int -> String -> Int -> Int -> String -> Int -> Int ->
   [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
   MerkleTransactionProof -> String
-transactionEnvelopeDigest contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+transactionEnvelopeDigest contextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
   cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
   transactionDigestHex .
     RepeatedFS.sha3_256 .
     transactionEnvelopePreimage
-      contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+      contextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
       cIn1 cIn2 cOut1 cOut2 nf1 nf2
 
 transactionWalletProofRequestPreimage ::
@@ -495,6 +519,7 @@ transactionWalletProofRequestPreimage ::
   Int ->
   String ->
   Int ->
+  Int ->
   [Int] ->
   [Int] ->
   [Int] ->
@@ -502,6 +527,7 @@ transactionWalletProofRequestPreimage ::
   [Int] ->
   [Int] ->
   [String] ->
+  [Int] ->
   [[Int]] ->
   [Word8]
 transactionWalletProofRequestPreimage
@@ -510,6 +536,7 @@ transactionWalletProofRequestPreimage
   assetId
   ledgerEpoch
   rt
+  rootDepth
   publicFee
   cIn1
   cIn2
@@ -518,14 +545,21 @@ transactionWalletProofRequestPreimage
   nf1
   nf2
   acceptedRoots
+  acceptedRootDepths
   spentNullifiers =
-  requireCanonicalDigestSet "acceptedRoots" acceptedRoots `seq`
-  requireCanonicalIntMatrixSet "spentNullifiers" spentNullifiers `seq`
-  let contextDigest =
+  let acceptedRootPairs = zip acceptedRoots acceptedRootDepths
+      rootLengthsOk =
+        if length acceptedRoots == length acceptedRootDepths
+          then ()
+          else error "acceptedRoots and acceptedRootDepths must have the same length"
+      contextDigest =
         transactionContextDigest
-          protocolVersion networkId assetId ledgerEpoch rt publicFee
+          protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
           cIn1 cIn2 cOut1 cOut2 nf1 nf2
-   in if rt `notElem` acceptedRoots
+   in rootLengthsOk `seq`
+      requireCanonicalAcceptedRootSet "acceptedRoots" acceptedRootPairs `seq`
+      requireCanonicalIntMatrixSet "spentNullifiers" spentNullifiers `seq`
+      if (rt, rootDepth) `notElem` acceptedRootPairs
         then error "context.root must be inside acceptedRoots"
         else
           if nf1 == nf2
@@ -536,31 +570,31 @@ transactionWalletProofRequestPreimage
                 else
                   transactionTaggedPreimage transactionWalletProofRequestTag $
                     encodeTransactionDigest "contextDigest" contextDigest ++
-                    encodeTransactionDigestVector "acceptedRoots" acceptedRoots ++
+                    encodeTransactionAcceptedRootVector "acceptedRoots" acceptedRootPairs ++
                     encodeTransactionMat spentNullifiers
 
 transactionWalletProofRequestPreimageHex ::
-  Int -> String -> Int -> Int -> String -> Int ->
+  Int -> String -> Int -> Int -> String -> Int -> Int ->
   [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
-  [String] -> [[Int]] -> String
-transactionWalletProofRequestPreimageHex protocolVersion networkId assetId ledgerEpoch rt publicFee
-  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots =
+  [String] -> [Int] -> [[Int]] -> String
+transactionWalletProofRequestPreimageHex protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots acceptedRootDepths =
   transactionDigestHex .
     transactionWalletProofRequestPreimage
-      protocolVersion networkId assetId ledgerEpoch rt publicFee
-      cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots
+      protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots acceptedRootDepths
 
 transactionWalletProofRequestDigest ::
-  Int -> String -> Int -> Int -> String -> Int ->
+  Int -> String -> Int -> Int -> String -> Int -> Int ->
   [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
-  [String] -> [[Int]] -> String
-transactionWalletProofRequestDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
-  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots =
+  [String] -> [Int] -> [[Int]] -> String
+transactionWalletProofRequestDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots acceptedRootDepths =
   transactionDigestHex .
     RepeatedFS.sha3_256 .
     transactionWalletProofRequestPreimage
-      protocolVersion networkId assetId ledgerEpoch rt publicFee
-      cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots
+      protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots acceptedRootDepths
 
 validCommitment :: Commit.CommitParams -> [Int] -> Bool
 validCommitment p = Listvec.valid_vec (Commit.cp_m p)

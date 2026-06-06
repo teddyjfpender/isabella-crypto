@@ -995,7 +995,8 @@ assert.equal(
       transactionContext.networkId,
       transactionContext.assetId.toString(),
       transactionContext.ledgerEpoch.toString(),
-      transactionContext.root,
+      transactionContext.root.digest,
+      transactionContext.root.depth.toString(),
       transactionContext.publicFee.toString(),
       JSON.stringify(transactionContext.cIn1),
       JSON.stringify(transactionContext.cIn2),
@@ -1019,7 +1020,8 @@ const transactionContextArgs = [
   transactionContext.networkId,
   transactionContext.assetId.toString(),
   transactionContext.ledgerEpoch.toString(),
-  transactionContext.root,
+  transactionContext.root.digest,
+  transactionContext.root.depth.toString(),
   transactionContext.publicFee.toString(),
   JSON.stringify(transactionContext.cIn1),
   JSON.stringify(transactionContext.cIn2),
@@ -1031,7 +1033,7 @@ const transactionContextArgs = [
 for (const { name, args } of [
   {
     name: 'negative-zero public fee',
-    args: transactionContextArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+    args: transactionContextArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
   },
   {
     name: 'plus-signed asset id',
@@ -1046,13 +1048,13 @@ for (const { name, args } of [
   {
     name: 'leading-zero input vector element',
     args: transactionContextArgs.map((arg, index) =>
-      index === 7 ? nonCanonicalFirstInteger(arg) : arg
+      index === 8 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe input vector element',
     args: transactionContextArgs.map((arg, index) =>
-      index === 7 ? unsafeFirstInteger(arg) : arg
+      index === 8 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1067,7 +1069,8 @@ const haskellWalletProofRequestDigest = parseResult<string>(
     haskellWalletProofRequestContext.networkId,
     haskellWalletProofRequestContext.assetId.toString(),
     haskellWalletProofRequestContext.ledgerEpoch.toString(),
-    haskellWalletProofRequestContext.root,
+    haskellWalletProofRequestContext.root.digest,
+    haskellWalletProofRequestContext.root.depth.toString(),
     haskellWalletProofRequestContext.publicFee.toString(),
     JSON.stringify(haskellWalletProofRequestContext.cIn1),
     JSON.stringify(haskellWalletProofRequestContext.cIn2),
@@ -1075,7 +1078,8 @@ const haskellWalletProofRequestDigest = parseResult<string>(
     JSON.stringify(haskellWalletProofRequestContext.cOut2),
     JSON.stringify(haskellWalletProofRequestContext.nf1),
     JSON.stringify(haskellWalletProofRequestContext.nf2),
-    JSON.stringify(haskellWalletProofRequest.acceptedRoots),
+    JSON.stringify(haskellWalletProofRequest.acceptedRoots.map((root: any) => root.digest)),
+    JSON.stringify(haskellWalletProofRequest.acceptedRoots.map((root: any) => root.depth)),
     JSON.stringify(haskellWalletProofRequest.spentNullifiers),
   ])
 );
@@ -1097,7 +1101,8 @@ function ctWalletProofRequestDigestArgs(request: any): string[] {
     context.networkId,
     context.assetId.toString(),
     context.ledgerEpoch.toString(),
-    context.root,
+    context.root.digest,
+    context.root.depth.toString(),
     context.publicFee.toString(),
     JSON.stringify(context.cIn1),
     JSON.stringify(context.cIn2),
@@ -1105,7 +1110,8 @@ function ctWalletProofRequestDigestArgs(request: any): string[] {
     JSON.stringify(context.cOut2),
     JSON.stringify(context.nf1),
     JSON.stringify(context.nf2),
-    JSON.stringify(request.acceptedRoots),
+    JSON.stringify(request.acceptedRoots.map((root: any) => root.digest)),
+    JSON.stringify(request.acceptedRoots.map((root: any) => root.depth)),
     JSON.stringify(request.spentNullifiers),
   ];
 }
@@ -1124,7 +1130,9 @@ const walletProofRequestRejectionCases = [
     request: {
       ...haskellWalletProofRequest,
       acceptedRoots: haskellWalletProofRequest.acceptedRoots.filter(
-        (root: string) => root !== haskellWalletProofRequest.context.root
+        (root: any) =>
+          root.digest !== haskellWalletProofRequest.context.root.digest ||
+          root.depth !== haskellWalletProofRequest.context.root.depth
       ),
     },
   },
@@ -1138,7 +1146,8 @@ const walletProofRequestRejectionCases = [
       ],
     },
   },
-  ...(reversedAcceptedRoots.join('|') === haskellWalletProofRequest.acceptedRoots.join('|')
+  ...(reversedAcceptedRoots.map((root: any) => `${root.digest}:${root.depth}`).join('|') ===
+    haskellWalletProofRequest.acceptedRoots.map((root: any) => `${root.digest}:${root.depth}`).join('|')
     ? []
     : [{
         name: 'unsorted accepted roots',
@@ -1188,7 +1197,7 @@ const walletProofRequestArgs = ctWalletProofRequestDigestArgs(haskellWalletProof
 for (const { name, args } of [
   {
     name: 'negative-zero public fee',
-    args: walletProofRequestArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+    args: walletProofRequestArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
   },
   {
     name: 'leading-zero protocol version',
@@ -1205,13 +1214,13 @@ for (const { name, args } of [
   {
     name: 'non-canonical spent-nullifier integer',
     args: walletProofRequestArgs.map((arg, index) =>
-      index === 14 ? nonCanonicalFirstInteger(arg) : arg
+      index === 16 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe spent-nullifier integer',
     args: walletProofRequestArgs.map((arg, index) =>
-      index === 14 ? unsafeFirstInteger(arg) : arg
+      index === 16 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1560,7 +1569,8 @@ const haskellVectorEnvelopeDigest = parseResult<string>(
     haskellVectorEnvelopeContext.networkId,
     haskellVectorEnvelopeContext.assetId.toString(),
     haskellVectorEnvelopeContext.ledgerEpoch.toString(),
-    haskellVectorEnvelopeContext.root,
+    haskellVectorEnvelopeContext.root.digest,
+    haskellVectorEnvelopeContext.root.depth.toString(),
     haskellVectorEnvelopeContext.publicFee.toString(),
     JSON.stringify(haskellVectorEnvelopeContext.cIn1),
     JSON.stringify(haskellVectorEnvelopeContext.cIn2),
@@ -1592,7 +1602,8 @@ const merkleEnvelopeDigestArgs = [
   haskellVectorEnvelopeContext.networkId,
   haskellVectorEnvelopeContext.assetId.toString(),
   haskellVectorEnvelopeContext.ledgerEpoch.toString(),
-  haskellVectorEnvelopeContext.root,
+  haskellVectorEnvelopeContext.root.digest,
+  haskellVectorEnvelopeContext.root.depth.toString(),
   haskellVectorEnvelopeContext.publicFee.toString(),
   JSON.stringify(haskellVectorEnvelopeContext.cIn1),
   JSON.stringify(haskellVectorEnvelopeContext.cIn2),
@@ -1729,7 +1740,10 @@ const haskellEnvelopeContext = {
   networkId: 'isabella-haskell-conformance',
   assetId: 7,
   ledgerEpoch: 42,
-  root: ctMerkleRoot,
+  root: {
+    digest: ctMerkleRoot,
+    depth: ctMerkleProof!.in1Member.siblings.length,
+  },
   publicFee: 0,
   cIn1: ctCIn1,
   cIn2: ctCIn2,
@@ -1753,7 +1767,8 @@ const haskellEnvelopeContextDigest = parseResult<string>(
     haskellEnvelopeContext.networkId,
     haskellEnvelopeContext.assetId.toString(),
     haskellEnvelopeContext.ledgerEpoch.toString(),
-    haskellEnvelopeContext.root,
+    haskellEnvelopeContext.root.digest,
+    haskellEnvelopeContext.root.depth.toString(),
     haskellEnvelopeContext.publicFee.toString(),
     JSON.stringify(haskellEnvelopeContext.cIn1),
     JSON.stringify(haskellEnvelopeContext.cIn2),
@@ -1833,28 +1848,28 @@ const merkleEnvelopeVerifyArgs = [
 for (const { name, args } of [
   {
     name: 'non-canonical expected public fee',
-    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 16 ? '-0' : arg)),
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 17 ? '-0' : arg)),
   },
   {
     name: 'unsafe expected public fee',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
-      index === 16 ? unsafeProtocolInteger : arg
+      index === 17 ? unsafeProtocolInteger : arg
     ),
   },
   {
     name: 'plus-signed context protocol version',
-    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 18 ? `+${arg}` : arg)),
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 19 ? `+${arg}` : arg)),
   },
   {
     name: 'non-canonical context vector integer',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
-      index === 24 ? nonCanonicalFirstInteger(arg) : arg
+      index === 26 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
     name: 'unsafe context vector integer',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
-      index === 24 ? unsafeFirstInteger(arg) : arg
+      index === 26 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1934,7 +1949,8 @@ const haskellFeeEnvelopeContextDigest = parseResult<string>(
     haskellFeeEnvelopeContext.networkId,
     haskellFeeEnvelopeContext.assetId.toString(),
     haskellFeeEnvelopeContext.ledgerEpoch.toString(),
-    haskellFeeEnvelopeContext.root,
+    haskellFeeEnvelopeContext.root.digest,
+    haskellFeeEnvelopeContext.root.depth.toString(),
     haskellFeeEnvelopeContext.publicFee.toString(),
     JSON.stringify(haskellFeeEnvelopeContext.cIn1),
     JSON.stringify(haskellFeeEnvelopeContext.cIn2),
@@ -1989,7 +2005,13 @@ assert.equal(
 );
 const haskellWrongRootContext = {
   ...haskellEnvelopeContext,
-  root: haskellEnvelopeContext.root.replace(/^./, haskellEnvelopeContext.root[0] === '0' ? '1' : '0'),
+  root: {
+    ...haskellEnvelopeContext.root,
+    digest: haskellEnvelopeContext.root.digest.replace(
+      /^./,
+      haskellEnvelopeContext.root.digest[0] === '0' ? '1' : '0'
+    ),
+  },
 };
 const haskellWrongRootDigest = parseResult<string>(
   runHaskell([
@@ -1998,7 +2020,8 @@ const haskellWrongRootDigest = parseResult<string>(
     haskellWrongRootContext.networkId,
     haskellWrongRootContext.assetId.toString(),
     haskellWrongRootContext.ledgerEpoch.toString(),
-    haskellWrongRootContext.root,
+    haskellWrongRootContext.root.digest,
+    haskellWrongRootContext.root.depth.toString(),
     haskellWrongRootContext.publicFee.toString(),
     JSON.stringify(haskellWrongRootContext.cIn1),
     JSON.stringify(haskellWrongRootContext.cIn2),
@@ -2021,17 +2044,23 @@ assert.equal(
 for (const mutation of merkleTransactionProofMutations(
   ctMerkleProof!,
   ctSpent,
-  haskellEnvelopeContext.root,
+  haskellEnvelopeContext.root.digest,
   ctNf1
 )) {
   const mutatedContext =
-    mutation.root === haskellEnvelopeContext.root
+    mutation.root === haskellEnvelopeContext.root.digest
       ? haskellEnvelopeContext
-      : { ...haskellEnvelopeContext, root: mutation.root };
+      : {
+          ...haskellEnvelopeContext,
+          root: { ...haskellEnvelopeContext.root, digest: mutation.root },
+        };
   const mutatedPolicy =
-    mutation.root === haskellEnvelopePolicy.root
+    mutation.root === haskellEnvelopePolicy.root.digest
       ? haskellEnvelopePolicy
-      : { ...haskellEnvelopePolicy, root: mutation.root };
+      : {
+          ...haskellEnvelopePolicy,
+          root: { ...haskellEnvelopePolicy.root, digest: mutation.root },
+        };
   const mutatedContextDigest =
     mutatedContext === haskellEnvelopeContext
       ? haskellEnvelopeContextDigest
@@ -2042,7 +2071,8 @@ for (const mutation of merkleTransactionProofMutations(
             mutatedContext.networkId,
             mutatedContext.assetId.toString(),
             mutatedContext.ledgerEpoch.toString(),
-            mutatedContext.root,
+            mutatedContext.root.digest,
+            mutatedContext.root.depth.toString(),
             mutatedContext.publicFee.toString(),
             JSON.stringify(mutatedContext.cIn1),
             JSON.stringify(mutatedContext.cIn2),

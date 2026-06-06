@@ -1255,6 +1255,7 @@ cmdCtTransactionContext format
     , assetIdStr
     , ledgerEpochStr
     , rootDigest
+    , rootDepthStr
     , publicFeeStr
     , cIn1Str
     , cIn2Str
@@ -1267,6 +1268,7 @@ cmdCtTransactionContext format
         ( parseCanonicalInt protocolVersionStr
         , parseCanonicalInt assetIdStr
         , parseCanonicalInt ledgerEpochStr
+        , parseCanonicalInt rootDepthStr
         , parseCanonicalInt publicFeeStr
         , parseCanonicalVec cIn1Str
         , parseCanonicalVec cIn2Str
@@ -1279,6 +1281,7 @@ cmdCtTransactionContext format
         ( Just protocolVersion
           , Just assetId
           , Just ledgerEpoch
+          , Just rootDepth
           , Just publicFee
           , Just cIn1
           , Just cIn2
@@ -1294,6 +1297,7 @@ cmdCtTransactionContext format
                     assetId
                     ledgerEpoch
                     rootDigest
+                    rootDepth
                     publicFee
                     cIn1
                     cIn2
@@ -1303,7 +1307,7 @@ cmdCtTransactionContext format
                     nf2
         _ -> outputError format "Expected transaction context fields"
 cmdCtTransactionContext format _ =
-    outputUsage format "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
+    outputUsage format "Usage: ct-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
 
 cmdCtMerkleProofDigest :: OutputFormat -> [String] -> IO ()
 cmdCtMerkleProofDigest format args =
@@ -1318,13 +1322,14 @@ cmdCtMerkleProofDigest format args =
 cmdCtMerkleEnvelopeDigest :: OutputFormat -> [String] -> IO ()
 cmdCtMerkleEnvelopeDigest format
     ( contextDigest : protocolVersionStr : networkId : assetIdStr : ledgerEpochStr
-      : rootDigest : publicFeeStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
+      : rootDigest : rootDepthStr : publicFeeStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
       : nf1Str : nf2Str : proofArgs
     ) =
         case
             ( parseCanonicalInt protocolVersionStr
             , parseCanonicalInt assetIdStr
             , parseCanonicalInt ledgerEpochStr
+            , parseCanonicalInt rootDepthStr
             , parseCanonicalInt publicFeeStr
             , parseCanonicalVec cIn1Str
             , parseCanonicalVec cIn2Str
@@ -1338,6 +1343,7 @@ cmdCtMerkleEnvelopeDigest format
             ( Just protocolVersion
               , Just assetId
               , Just ledgerEpoch
+              , Just rootDepth
               , Just publicFee
               , Just cIn1
               , Just cIn2
@@ -1355,6 +1361,7 @@ cmdCtMerkleEnvelopeDigest format
                         assetId
                         ledgerEpoch
                         rootDigest
+                        rootDepth
                         publicFee
                         cIn1
                         cIn2
@@ -1365,7 +1372,7 @@ cmdCtMerkleEnvelopeDigest format
                         proof
             _ -> outputError format "Expected context digest, context fields, and Merkle proof fields"
 cmdCtMerkleEnvelopeDigest format _ =
-    outputUsage format "Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ..."
+    outputUsage format "Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ..."
 
 cmdCtWalletProofRequestDigest :: OutputFormat -> [String] -> IO ()
 cmdCtWalletProofRequestDigest
@@ -1375,6 +1382,7 @@ cmdCtWalletProofRequestDigest
     , assetIdStr
     , ledgerEpochStr
     , rootDigest
+    , rootDepthStr
     , publicFeeStr
     , cIn1Str
     , cIn2Str
@@ -1383,12 +1391,14 @@ cmdCtWalletProofRequestDigest
     , nf1Str
     , nf2Str
     , acceptedRootsStr
+    , acceptedRootDepthsStr
     , spentNullifiersStr
     ] =
     case
         ( parseCanonicalInt protocolVersionStr
         , parseCanonicalInt assetIdStr
         , parseCanonicalInt ledgerEpochStr
+        , parseCanonicalInt rootDepthStr
         , parseCanonicalInt publicFeeStr
         , parseCanonicalVec cIn1Str
         , parseCanonicalVec cIn2Str
@@ -1397,12 +1407,14 @@ cmdCtWalletProofRequestDigest
         , parseCanonicalVec nf1Str
         , parseCanonicalVec nf2Str
         , parseStringList acceptedRootsStr
+        , parseCanonicalVec acceptedRootDepthsStr
         , parseCanonicalMat spentNullifiersStr
         )
     of
         ( Just protocolVersion
           , Just assetId
           , Just ledgerEpoch
+          , Just rootDepth
           , Just publicFee
           , Just cIn1
           , Just cIn2
@@ -1411,6 +1423,7 @@ cmdCtWalletProofRequestDigest
           , Just nf1
           , Just nf2
           , Just acceptedRoots
+          , Just acceptedRootDepths
           , Just spentNullifiers
           ) ->
             let digest =
@@ -1420,6 +1433,7 @@ cmdCtWalletProofRequestDigest
                         assetId
                         ledgerEpoch
                         rootDigest
+                        rootDepth
                         publicFee
                         cIn1
                         cIn2
@@ -1428,12 +1442,13 @@ cmdCtWalletProofRequestDigest
                         nf1
                         nf2
                         acceptedRoots
+                        acceptedRootDepths
                         spentNullifiers
              in (evaluate digest >>= outputStringResult format "ct_wallet_proof_request_digest = ")
                     `catch` handleSampleError format
         _ -> outputError format "Expected wallet proof request context, accepted roots, and spent nullifiers"
 cmdCtWalletProofRequestDigest format _ =
-    outputUsage format "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS SPENT_NULLIFIERS"
+    outputUsage format "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS ACCEPTED_ROOT_DEPTHS SPENT_NULLIFIERS"
 
 cmdCtSampleOpening :: OutputFormat -> [String] -> IO ()
 cmdCtSampleOpening format [msgLenStr, randLenStr, boundStr] =
@@ -1841,18 +1856,20 @@ cmdCtVerifyMerkleEnvelope format
     ( mStr : n2Str : qStr : betaStr : gammaStr : kStr : ckStr : nkStr
       : ledgerStr : spentStr : expectedVersionStr : expectedNetworkId
       : expectedAssetIdStr : expectedLedgerEpochStr : expectedRoot
-      : expectedPublicFeeStr : contextDigest : protocolVersionStr : networkId
-      : assetIdStr : ledgerEpochStr : rootDigest : publicFeeStr : cIn1Str
+      : expectedRootDepthStr : expectedPublicFeeStr : contextDigest : protocolVersionStr : networkId
+      : assetIdStr : ledgerEpochStr : rootDigest : rootDepthStr : publicFeeStr : cIn1Str
       : cIn2Str : cOut1Str : cOut2Str : nf1Str : nf2Str : proofArgs
     ) =
         case
             ( parseCanonicalInt expectedVersionStr
             , parseCanonicalInt expectedAssetIdStr
             , parseCanonicalInt expectedLedgerEpochStr
+            , parseCanonicalInt expectedRootDepthStr
             , parseCanonicalInt expectedPublicFeeStr
             , parseCanonicalInt protocolVersionStr
             , parseCanonicalInt assetIdStr
             , parseCanonicalInt ledgerEpochStr
+            , parseCanonicalInt rootDepthStr
             , parseCanonicalInt publicFeeStr
             , parseCanonicalVec cIn1Str
             , parseCanonicalVec cIn2Str
@@ -1865,10 +1882,12 @@ cmdCtVerifyMerkleEnvelope format
             ( Just expectedVersion
               , Just expectedAssetId
               , Just expectedLedgerEpoch
+              , Just expectedRootDepth
               , Just expectedPublicFee
               , Just protocolVersion
               , Just assetId
               , Just ledgerEpoch
+              , Just rootDepth
               , Just publicFee
               , Just cIn1
               , Just cIn2
@@ -1884,6 +1903,7 @@ cmdCtVerifyMerkleEnvelope format
                             assetId
                             ledgerEpoch
                             rootDigest
+                            rootDepth
                             publicFee
                             cIn1
                             cIn2
@@ -1898,6 +1918,7 @@ cmdCtVerifyMerkleEnvelope format
                             && assetId == expectedAssetId
                             && ledgerEpoch == expectedLedgerEpoch
                             && rootDigest == expectedRoot
+                            && rootDepth == expectedRootDepth
                             && contextDigest == computedDigest
                     merkleArgs =
                         [ mStr
@@ -1928,7 +1949,7 @@ cmdCtVerifyMerkleEnvelope format
                             | otherwise -> outputError format err
             _ -> outputError format "Expected envelope policy, context, and proof fields"
 cmdCtVerifyMerkleEnvelope format _ =
-    outputUsage format "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+    outputUsage format "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_ROOT_DEPTH EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
 cmdCtVerifyBenchWithUsage :: String -> ([String] -> Either String (() -> Bool)) -> OutputFormat -> [String] -> IO ()
 cmdCtVerifyBenchWithUsage command prepare format (iterationsStr:warmupStr:rest) =

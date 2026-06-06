@@ -53,10 +53,10 @@ verification failures.
 3. Wallets track note openings and the authenticated path for each spendable
    note.
 4. Spending consumes one or more input notes by revealing nullifiers and proving
-   membership against an accepted root.
+   membership against an accepted `(digest, depth)` Merkle root.
 5. Spending creates output notes, including change notes when needed.
 6. A note is spendable only while its nullifier is absent from the accepted
-   nullifier set and its membership root is inside the accepted root window.
+   nullifier set and its membership `(digest, depth)` root is inside the accepted root window.
 
 Wallets must treat missing openings, stale paths, unsupported roots, duplicated
 nullifiers, malformed proofs, and asset mismatches as local proof-generation
@@ -151,8 +151,8 @@ balance, range, membership, or nullifier statement being verified.
 4. Derive nullifiers for inputs.
 5. Build the public statement and bind protocol/network/asset/root/fee contexts.
    The MVP wallet proof request serialization commits to the canonical public
-   context digest, a sorted duplicate-free accepted-root window containing the
-   selected root, and a sorted duplicate-free spent-nullifier snapshot that does
+   context digest, a sorted duplicate-free accepted-root window of `(digest,
+   depth)` pairs containing the selected root, and a sorted duplicate-free spent-nullifier snapshot that does
    not already contain either requested nullifier.
 6. Sample masks with a CSPRNG.
 7. Generate balance, nullifier, membership, and output range proofs.

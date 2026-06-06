@@ -156,6 +156,12 @@ export interface MembershipProof {
 /** Hex-encoded SHA3-256 Merkle digest */
 export type MerkleDigest = string;
 
+/** Accepted Merkle root bound to its tree depth */
+export interface MerkleAcceptedRoot {
+  digest: MerkleDigest;
+  depth: number;
+}
+
 /** Cryptographic Merkle membership proof over note commitment leaves */
 export interface MerkleMembershipProof {
   index: number;
@@ -198,7 +204,7 @@ export interface ConfidentialTransactionContext {
   networkId: string;
   assetId: number;
   ledgerEpoch: number;
-  root: MerkleDigest;
+  root: MerkleAcceptedRoot;
   publicFee: number;
   cIn1: IntVec;
   cIn2: IntVec;
@@ -218,7 +224,7 @@ export interface ConfidentialTransactionEnvelope {
 /** Public wallet proof request snapshot bound before local proof generation */
 export interface ConfidentialWalletProofRequest {
   context: ConfidentialTransactionContext;
-  acceptedRoots: MerkleDigest[];
+  acceptedRoots: MerkleAcceptedRoot[];
   spentNullifiers: IntMatrix;
 }
 
@@ -228,7 +234,7 @@ export interface ConfidentialTransactionContextPolicy {
   networkId: string;
   assetId: number;
   ledgerEpoch?: number;
-  root?: MerkleDigest;
+  root?: MerkleAcceptedRoot;
   publicFee?: number;
 }
 
@@ -1062,6 +1068,22 @@ function encodeDigestVector(digests: MerkleDigest[], label: string): Buffer {
   ]);
 }
 
+function encodeAcceptedRoot(root: MerkleAcceptedRoot, label: string): Buffer {
+  assertNonNegativeSafeI64(root.depth, `${label}.depth`);
+  return Buffer.concat([
+    encodeDigest(root.digest, `${label}.digest`),
+    encodeI64LE(root.depth, `${label}.depth`),
+  ]);
+}
+
+function encodeAcceptedRootVector(roots: MerkleAcceptedRoot[], label: string): Buffer {
+  assertNonNegativeSafeI64(roots.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(roots.length, `${label}.length`),
+    ...roots.map((root, index) => encodeAcceptedRoot(root, `${label}[${index}]`)),
+  ]);
+}
+
 function compareIntVectors(left: IntVec, right: IntVec): number {
   const width = Math.min(left.length, right.length);
   for (let index = 0; index < width; index += 1) {
@@ -1073,6 +1095,20 @@ function compareIntVectors(left: IntVec, right: IntVec): number {
     }
   }
   return Math.sign(left.length - right.length);
+}
+
+function compareAcceptedRoots(left: MerkleAcceptedRoot, right: MerkleAcceptedRoot): number {
+  if (left.digest < right.digest) {
+    return -1;
+  }
+  if (left.digest > right.digest) {
+    return 1;
+  }
+  return Math.sign(left.depth - right.depth);
+}
+
+function sameAcceptedRoot(left: MerkleAcceptedRoot, right: MerkleAcceptedRoot): boolean {
+  return left.digest === right.digest && left.depth === right.depth;
 }
 
 function assertCanonicalDigestSet(digests: MerkleDigest[], label: string): void {
@@ -1087,6 +1123,21 @@ function assertCanonicalDigestSet(digests: MerkleDigest[], label: string): void 
       throw new Error(`${label} must be sorted lexicographically with no duplicates`);
     }
     previous = digest;
+  }
+}
+
+function assertCanonicalAcceptedRootSet(roots: MerkleAcceptedRoot[], label: string): void {
+  if (roots.length === 0) {
+    throw new Error(`${label} must not be empty`);
+  }
+  let previous: MerkleAcceptedRoot | null = null;
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index];
+    encodeAcceptedRoot(root, `${label}[${index}]`);
+    if (previous !== null && compareAcceptedRoots(previous, root) >= 0) {
+      throw new Error(`${label} must be sorted by digest/depth with no duplicates`);
+    }
+    previous = root;
   }
 }
 
@@ -1173,7 +1224,7 @@ function transactionContextPreimage(context: ConfidentialTransactionContext): Bu
     encodeAsciiString(context.networkId, 'networkId'),
     encodeI64LE(context.assetId, 'assetId'),
     encodeI64LE(context.ledgerEpoch, 'ledgerEpoch'),
-    encodeDigest(context.root, 'root'),
+    encodeAcceptedRoot(context.root, 'root'),
     encodeI64LE(context.publicFee, 'publicFee'),
     encodeIntVector(context.cIn1, 'cIn1'),
     encodeIntVector(context.cIn2, 'cIn2'),
@@ -1324,10 +1375,10 @@ function transactionEnvelopePreimage(envelope: ConfidentialTransactionEnvelope):
 function transactionWalletProofRequestPreimage(
   request: ConfidentialWalletProofRequest
 ): Buffer {
-  assertCanonicalDigestSet(request.acceptedRoots, 'acceptedRoots');
+  assertCanonicalAcceptedRootSet(request.acceptedRoots, 'acceptedRoots');
   assertCanonicalIntMatrixSet(request.spentNullifiers, 'spentNullifiers');
   const contextDigest = sha3Hex(transactionContextPreimage(request.context));
-  if (!request.acceptedRoots.includes(request.context.root)) {
+  if (!request.acceptedRoots.some((root) => sameAcceptedRoot(root, request.context.root))) {
     throw new Error('context.root must be inside acceptedRoots');
   }
   if (sameVec(request.context.nf1, request.context.nf2)) {
@@ -1343,7 +1394,7 @@ function transactionWalletProofRequestPreimage(
     CT_TRANSACTION_TAGS.walletProofRequest,
     Buffer.concat([
       encodeDigest(contextDigest, 'contextDigest'),
-      encodeDigestVector(request.acceptedRoots, 'acceptedRoots'),
+      encodeAcceptedRootVector(request.acceptedRoots, 'acceptedRoots'),
       encodeIntMatrix(request.spentNullifiers, 'spentNullifiers'),
     ])
   );
@@ -2473,7 +2524,7 @@ export namespace ConfidentialTransaction {
         context.assetId === policy.assetId &&
         context.publicFee === publicFee &&
         (policy.ledgerEpoch === undefined || context.ledgerEpoch === policy.ledgerEpoch) &&
-        (policy.root === undefined || context.root === policy.root)
+        (policy.root === undefined || sameAcceptedRoot(context.root, policy.root))
       );
     } catch {
       return false;
@@ -3274,7 +3325,7 @@ export namespace ConfidentialTransaction {
           k,
           ck,
           nk,
-          envelope.context.root,
+          envelope.context.root.digest,
           spent,
           envelope.context.publicFee,
           envelope.context.cIn1,
@@ -3284,7 +3335,9 @@ export namespace ConfidentialTransaction {
           envelope.context.nf1,
           envelope.context.nf2,
           envelope.proof
-        )
+        ) &&
+        envelope.proof.in1Member.siblings.length === envelope.context.root.depth &&
+        envelope.proof.in2Member.siblings.length === envelope.context.root.depth
       );
     } catch {
       return false;
