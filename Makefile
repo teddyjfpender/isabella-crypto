@@ -173,6 +173,8 @@ check-confidential-production-readiness:
 	@echo "Screening confidential transfer parameters..."
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
 	@git diff --exit-code -- bench/data/confidential-parameter-screen.json
+	@echo "Checking strict confidential runtime-surface gate..."
+	@python3 scripts/check_confidential_runtime_surface.py --require-production
 	@echo "Checking strict confidential launch-readiness gate..."
 	@python3 scripts/check_confidential_launch_readiness.py --require-production
 	@echo "Checking strict confidential production-readiness gate..."

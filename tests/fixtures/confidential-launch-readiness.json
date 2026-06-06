@@ -102,7 +102,7 @@
       "id": "runtime_bignum_representation",
       "category": "implementation_boundary",
       "status": "open",
-      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec; TypeScript has q83 BigInt balance, 64-bit range, and nullifier reference paths; balance, range, and nullifier now have OCaml/Haskell preview parity. Every production proof API and transaction/runtime integer field still needs multiprecision integration before launch.",
+      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec; TypeScript has q83 BigInt balance, 64-bit range, and nullifier reference paths; balance, range, and nullifier now have OCaml/Haskell preview parity. The runtime-surface manifest now carries a strict bignum boundary that rejects production while Merkle leaves, transaction contexts, and proof digests still use signed-64 encodings. Every production proof API and transaction/runtime integer field still needs multiprecision integration before launch.",
       "acceptanceGate": "Move every production proof API, proof arithmetic path, and transaction/runtime integer field that can carry widened parameter values to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
       "evidence": [
         {
@@ -143,6 +143,22 @@
             "\"runtime_integer_model_incompatible\"",
             "\"runtime_integer_model_exceeds:typescript_number_safe_integer\"",
             "\"runtime_integer_model_exceeds:signed_64_bit_encoding\""
+          ]
+        },
+        {
+          "file": "tests/fixtures/confidential-runtime-surface.json",
+          "snippets": [
+            "\"runtimeIntegerBoundary\"",
+            "\"blocked_by_transaction_i64_encoding\"",
+            "\"requiredProductionEncoding\": \"sign_u8 || len_i64_le || magnitude_le_minimal\""
+          ]
+        },
+        {
+          "file": "scripts/check_confidential_runtime_surface.py",
+          "snippets": [
+            "--require-production",
+            "runtime bignum boundary is blocked",
+            "i64TransactionSnippets"
           ]
         },
         {

@@ -344,10 +344,14 @@ TypeScript, OCaml, and Haskell. The balance slice now has a q83 BigInt
 reference vector with OCaml/Haskell multiprecision preview parity, the range
 slice now has a q83 `k = 64` BigInt reference vector with OCaml/Haskell
 multiprecision preview parity, and the nullifier slice now has q83 BigInt
-reference and native preview parity, but production still needs full native launch
-parity, canonical bignum serialization for every proof API and
-transaction/runtime integer field that can carry widened values, and regenerated
-parity vectors.
+reference and native preview parity. The runtime-surface manifest now records
+`runtimeIntegerBoundary.status = "blocked_by_transaction_i64_encoding"`, and
+`scripts/check_confidential_runtime_surface.py --require-production` fails while
+Merkle leaves, transaction contexts, and transaction proof digests still use
+signed-64 encodings. Production still needs full native launch parity,
+canonical bignum serialization for every proof API and transaction/runtime
+integer field that can carry widened values, a versioned bignum transaction
+namespace, and regenerated parity vectors.
 External estimator evidence alone is not enough to
 mark the candidate launchable.
 

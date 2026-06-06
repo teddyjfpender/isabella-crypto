@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path
@@ -55,6 +56,12 @@ def require_string_list(value: Any, label: str) -> list[str]:
 def require_object(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         fail(f"{label} must be an object")
+    return value
+
+
+def require_string(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        fail(f"{label} must be a non-empty string")
     return value
 
 
@@ -216,6 +223,81 @@ def check_typescript_sdk(manifest: dict[str, Any]) -> dict[str, int]:
     return {"required_exports": export_count}
 
 
+def check_runtime_integer_boundary(
+    manifest: dict[str, Any],
+    require_production: bool,
+) -> dict[str, Any]:
+    boundary = require_object(
+        manifest.get("runtimeIntegerBoundary"),
+        "runtimeIntegerBoundary",
+    )
+    status = require_string(boundary.get("status"), "runtimeIntegerBoundary.status")
+    allowed_statuses = {"blocked_by_transaction_i64_encoding", "bignum_ready"}
+    if status not in allowed_statuses:
+        fail(f"runtimeIntegerBoundary.status must be one of {sorted(allowed_statuses)}")
+    if require_production and status != "bignum_ready":
+        fail(f"runtime bignum boundary is blocked: status={status}")
+
+    production_encoding = require_string(
+        boundary.get("productionIntegerEncoding"),
+        "runtimeIntegerBoundary.productionIntegerEncoding",
+    )
+    required_encoding = require_string(
+        boundary.get("requiredProductionEncoding"),
+        "runtimeIntegerBoundary.requiredProductionEncoding",
+    )
+    if production_encoding != "signed-64-bit-little-endian":
+        fail("runtimeIntegerBoundary.productionIntegerEncoding is stale")
+    if required_encoding != "sign_u8 || len_i64_le || magnitude_le_minimal":
+        fail("runtimeIntegerBoundary.requiredProductionEncoding must be the confidential bignum codec")
+
+    registry_path = path_from_manifest(
+        boundary.get("domainRegistry"),
+        "runtimeIntegerBoundary.domainRegistry",
+    )
+    registry = read_json(registry_path)
+    namespaces = require_object(registry.get("namespaces"), "domain registry namespaces")
+    for namespace_name in ("merkle", "transaction"):
+        namespace = require_object(namespaces.get(namespace_name), f"domain registry {namespace_name}")
+        actual_encoding = require_string(
+            namespace.get("integerEncoding"),
+            f"domain registry {namespace_name}.integerEncoding",
+        )
+        if actual_encoding != production_encoding:
+            fail(
+                f"runtimeIntegerBoundary.productionIntegerEncoding disagrees with "
+                f"{namespace_name} registry encoding: {actual_encoding}"
+            )
+
+    sdk_path = path_from_manifest(
+        boundary.get("typescriptSdkFile"),
+        "runtimeIntegerBoundary.typescriptSdkFile",
+    )
+    i64_snippets = require_string_list(
+        boundary.get("i64TransactionSnippets"),
+        "runtimeIntegerBoundary.i64TransactionSnippets",
+    )
+    preview_snippets = require_string_list(
+        boundary.get("bigintPreviewSnippets"),
+        "runtimeIntegerBoundary.bigintPreviewSnippets",
+    )
+    for snippet in i64_snippets:
+        require_snippet(sdk_path, snippet, "runtime i64 transaction-boundary snippet")
+    for snippet in preview_snippets:
+        require_snippet(sdk_path, snippet, "runtime BigInt preview snippet")
+    require_string_list(
+        boundary.get("requiredForProduction"),
+        "runtimeIntegerBoundary.requiredForProduction",
+    )
+    return {
+        "status": status,
+        "production_integer_encoding": production_encoding,
+        "required_production_encoding": required_encoding,
+        "i64_transaction_snippets": len(i64_snippets),
+        "bigint_preview_snippets": len(preview_snippets),
+    }
+
+
 def check_validator_coverage(manifest: dict[str, Any]) -> dict[str, int]:
     validators = require_object(manifest.get("validators"), "validators")
     checked = 0
@@ -245,6 +327,14 @@ def check_gate_wiring(manifest: dict[str, Any]) -> dict[str, int]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--require-production",
+        action="store_true",
+        help="fail unless the runtime integer boundary is production bignum-ready",
+    )
+    args = parser.parse_args()
+
     manifest = read_json(MANIFEST)
     if manifest.get("version") != 1:
         fail("runtime-surface manifest version must be 1")
@@ -253,6 +343,10 @@ def main() -> None:
         "native_cli": check_native_cli(manifest),
         "typescript_cli_harness": check_typescript_cli(manifest),
         "typescript_sdk": check_typescript_sdk(manifest),
+        "runtime_integer_boundary": check_runtime_integer_boundary(
+            manifest,
+            args.require_production,
+        ),
         "validator_coverage": check_validator_coverage(manifest),
         "gate_wiring": check_gate_wiring(manifest),
     }
@@ -261,6 +355,7 @@ def main() -> None:
         "gate": "confidential-runtime-surface",
         "status": "passed",
         "manifest": str(MANIFEST.relative_to(ROOT)),
+        "require_production": args.require_production,
         "summary": summary,
     }, indent=2))
 

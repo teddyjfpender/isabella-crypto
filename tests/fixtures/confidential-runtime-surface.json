@@ -214,6 +214,35 @@
       "ctLedgerStepValid("
     ]
   },
+  "runtimeIntegerBoundary": {
+    "status": "blocked_by_transaction_i64_encoding",
+    "productionIntegerEncoding": "signed-64-bit-little-endian",
+    "requiredProductionEncoding": "sign_u8 || len_i64_le || magnitude_le_minimal",
+    "domainRegistry": "tests/fixtures/confidential-domain-registry.json",
+    "typescriptSdkFile": "isabella.ts/src/index.ts",
+    "i64TransactionSnippets": [
+      "function merkleLeafPreimage(commitment: IntVec)",
+      "encodeIntVector(commitment, 'commitment')",
+      "function transactionContextPreimage(context: ConfidentialTransactionContext)",
+      "encodeIntVector(context.cIn1, 'cIn1')",
+      "function transactionBalanceProofPreimage(proof: BalanceProof, label: string)",
+      "encodeIntMatrix(proof.as, `${label}.as`)",
+      "function transactionRangeProofPreimage(proof: RangeProofLike, label: string)",
+      "encodeIntMatrix(listed.amountAs, `${label}.amountAs`)"
+    ],
+    "bigintPreviewSnippets": [
+      "encodeConfidentialBigIntVector(",
+      "export namespace ConfidentialBalanceBigInt",
+      "export namespace ConfidentialRangeBigInt",
+      "export namespace ConfidentialNullifierBigInt"
+    ],
+    "requiredForProduction": [
+      "Define a versioned transaction/Merkle bignum namespace before digest compatibility changes.",
+      "Move commitment, nullifier, proof, Merkle leaf, context, proof-digest, envelope, accepted-root, wallet-request, and native CLI encodings that can carry widened q83 values to canonical bignum fields.",
+      "Regenerate transaction, Merkle, proof-digest, envelope, accepted-root-window, wallet-request, and backend parity vectors under the selected bignum namespace.",
+      "Run realistic widened-modulus prover/verifier benchmarks across TypeScript, OCaml, and Haskell before clearing runtime_integer_model_incompatible."
+    ]
+  },
   "validators": {
     "tests/src/validate-ocaml.ts": [
       "ct-merkle-leaf",
@@ -300,13 +329,16 @@
   },
   "gateWiring": {
     "Makefile": [
-      "scripts/check_confidential_runtime_surface.py"
+      "scripts/check_confidential_runtime_surface.py",
+      "--require-production"
     ],
     ".github/workflows/ci.yml": [
-      "scripts/check_confidential_runtime_surface.py"
+      "scripts/check_confidential_runtime_surface.py",
+      "--require-production"
     ],
     "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md": [
-      "confidential runtime-surface manifest"
+      "confidential runtime-surface manifest",
+      "strict `--require-production` runtime-surface"
     ]
   }
 }
