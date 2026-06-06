@@ -312,7 +312,7 @@ const bigMasks = integerMatText(bigintBalanceVectors.case.masks);
 const bigProofAs = integerMatText(bigintBalanceVectors.case.proof.as);
 const bigProofZs = integerMatText(bigintBalanceVectors.case.proof.zs);
 
-assert.equal(bigintBalanceVectors.status, 'typescript-reference-with-haskell-preview-parity');
+assert.equal(bigintBalanceVectors.status, 'typescript-reference-with-native-preview-parity');
 assert.deepEqual(
   parseResult<string[]>(runHaskell([
     'ct-balance-bigint-rand-commit',

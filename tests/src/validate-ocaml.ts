@@ -75,6 +75,7 @@ const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
   ? path.resolve(process.env.ISABELLA_TS_ENTRY)
   : path.join(projectRoot, 'isabella.ts', 'dist', 'index.mjs');
 const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
+const bigintBalanceVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-balance-vectors.json');
 
 function ensureFileExists(filePath: string, hint: string): void {
   if (!fs.existsSync(filePath)) {
@@ -96,6 +97,7 @@ const bignumVectors = JSON.parse(fs.readFileSync(bignumVectorsPath, 'utf8')) as 
 };
 
 type SampleOpening = { msg: number[]; rand: number[] };
+type BigintBalanceProofJson = { as: string[][]; zs: string[][] };
 
 function expectOcamlCommandRejected(args: string[], label: string): void {
   const output = runCli(args);
@@ -115,6 +117,14 @@ const unsafeProtocolInteger = '9007199254740992';
 
 function unsafeFirstInteger(value: string): string {
   return value.replace(/-?\d+/, unsafeProtocolInteger);
+}
+
+function integerVecText(values: string[]): string {
+  return `[${values.join(',')}]`;
+}
+
+function integerMatText(rows: string[][]): string {
+  return `[${rows.map(integerVecText).join(',')}]`;
 }
 
 function allBounded(values: number[], bound: number): boolean {
@@ -156,6 +166,111 @@ for (const entry of bignumVectors.vectorCases) {
 for (const decimal of bignumVectors.rejectedDecimals) {
   expectOcamlCommandRejected(['ct-bignum-encode', decimal], `ct-bignum-encode OCaml rejects ${decimal}`);
 }
+
+const bigintBalanceVectors = JSON.parse(fs.readFileSync(bigintBalanceVectorsPath, 'utf8')) as {
+  status: string;
+  params: { m: number; n2: number; q: string; beta: string; gamma: string };
+  transcript: { fields: string[]; firstRounds: Array<{ round: number; challenge: number }> };
+  case: {
+    name: string;
+    commitmentKey: string[][];
+    witness: string[];
+    commitment: string[];
+    masks: string[][];
+    proof: BigintBalanceProofJson;
+  };
+};
+
+const bigParamsArgs = [
+  bigintBalanceVectors.params.m.toString(),
+  bigintBalanceVectors.params.n2.toString(),
+  bigintBalanceVectors.params.q,
+  bigintBalanceVectors.params.beta,
+];
+const bigGamma = bigintBalanceVectors.params.gamma;
+const bigCommitmentKey = integerMatText(bigintBalanceVectors.case.commitmentKey);
+const bigCommitment = integerVecText(bigintBalanceVectors.case.commitment);
+const bigWitness = integerVecText(bigintBalanceVectors.case.witness);
+const bigMasks = integerMatText(bigintBalanceVectors.case.masks);
+const bigProofAs = integerMatText(bigintBalanceVectors.case.proof.as);
+const bigProofZs = integerMatText(bigintBalanceVectors.case.proof.zs);
+
+assert.equal(bigintBalanceVectors.status, 'typescript-reference-with-native-preview-parity');
+assert.deepEqual(
+  parseCliResult<{ result: string[] }>(runCli([
+    'ct-balance-bigint-rand-commit',
+    ...bigParamsArgs,
+    bigCommitmentKey,
+    bigWitness,
+  ])).result,
+  bigintBalanceVectors.case.commitment,
+  `ct-balance-bigint-rand-commit OCaml/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.deepEqual(
+  parseCliResult<{ result: string[] }>(runCli([
+    'ct-balance-bigint-fs-fields',
+    bigCommitmentKey,
+    bigCommitment,
+    bigProofAs,
+  ])).result,
+  bigintBalanceVectors.transcript.fields,
+  `ct-balance-bigint-fs-fields OCaml/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.deepEqual(
+  parseCliResult<{ result: number[] }>(runCli([
+    'ct-balance-bigint-fs-challenges',
+    ...bigParamsArgs,
+    bigCommitmentKey,
+    bigCommitment,
+    bigProofAs,
+    bigintBalanceVectors.transcript.firstRounds.length.toString(),
+  ])).result,
+  bigintBalanceVectors.transcript.firstRounds.map((entry) => entry.challenge),
+  `ct-balance-bigint-fs-challenges OCaml/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.equal(
+  parseCliResult<{ result: boolean }>(runCli([
+    'ct-balance-bigint-verify',
+    ...bigParamsArgs,
+    bigGamma,
+    bigCommitmentKey,
+    bigCommitment,
+    bigProofAs,
+    bigProofZs,
+  ])).result,
+  true,
+  `ct-balance-bigint-verify OCaml accepts ${bigintBalanceVectors.case.name}`
+);
+assert.deepEqual(
+  parseCliResult<{ result: BigintBalanceProofJson }>(runCli([
+    'ct-balance-bigint-prove',
+    ...bigParamsArgs,
+    bigGamma,
+    bigCommitmentKey,
+    bigCommitment,
+    bigWitness,
+    bigMasks,
+  ])).result,
+  bigintBalanceVectors.case.proof,
+  `ct-balance-bigint-prove OCaml/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.equal(
+  parseCliResult<{ result: boolean }>(runCli([
+    'ct-balance-bigint-verify',
+    ...bigParamsArgs,
+    bigGamma,
+    bigCommitmentKey,
+    integerVecText([
+      (BigInt(bigintBalanceVectors.case.commitment[0]) + 1n).toString(),
+      ...bigintBalanceVectors.case.commitment.slice(1),
+    ]),
+    bigProofAs,
+    bigProofZs,
+  ])).result,
+  false,
+  `ct-balance-bigint-verify OCaml rejects tampered q83 commitment for ${bigintBalanceVectors.case.name}`
+);
+console.log('validate-ocaml: confidential BigInt balance q83 preview surface passed');
 
 const modCenteredCases = [
   { x: 7, q: 5 },

@@ -15,6 +15,7 @@
     - {!Ntt} - Number Theoretic Transform (O(n log n) Cooley-Tukey)
     - {!Regev_pke} - Regev public-key encryption
     - {!Commit_sis} - SIS-based commitment scheme
+    - {!Repeated_fs} - Domain-separated Fiat-Shamir transcript helpers
     - {!Confidential_sampling} - CSPRNG-backed confidential-transfer mask sampling
     - {!Confidential_balance} - Confidential balance proof helpers
     - {!Confidential_range} - Confidential range proof helpers
@@ -34,6 +35,7 @@ module Modulelwe = Modulelwe
 module Ntt = Ntt
 module Regev_pke = Regev_pke
 module Commit_sis = Commit_sis
+module Repeated_fs = Repeated_fs
 module Confidential_sampling = Confidential_sampling
 module Confidential_balance = Confidential_balance
 module Confidential_range = Confidential_range

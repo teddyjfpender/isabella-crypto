@@ -254,6 +254,462 @@ let encode_bignum_decimal_vec values =
          (fun index value -> encode_bignum_decimal (Printf.sprintf "values[%d]" index) value)
          values)
 
+let bigint_base = 1_000_000
+let bigint_base_width = 6
+
+type cli_bigint = {
+  big_neg : bool;
+  big_limbs : int list;  (* little-endian limbs in base 1_000_000 *)
+}
+
+let normalize_bigint_limbs limbs =
+  let rec drop_high_zeroes = function
+    | 0 :: rest -> drop_high_zeroes rest
+    | rest -> rest
+  in
+  List.rev (drop_high_zeroes (List.rev limbs))
+
+let make_bigint neg limbs =
+  let limbs = normalize_bigint_limbs limbs in
+  { big_neg = neg && limbs <> []; big_limbs = limbs }
+
+let bigint_zero = { big_neg = false; big_limbs = [] }
+let bigint_one = { big_neg = false; big_limbs = [1] }
+
+let bigint_is_zero value =
+  value.big_limbs = []
+
+let bigint_abs value =
+  { value with big_neg = false }
+
+let bigint_negate value =
+  if bigint_is_zero value then value
+  else { value with big_neg = not value.big_neg }
+
+let bigint_of_int value =
+  if value = 0 then bigint_zero
+  else make_bigint (value < 0) [abs value]
+
+let compare_bigint_abs left right =
+  let left_len = List.length left.big_limbs in
+  let right_len = List.length right.big_limbs in
+  if left_len <> right_len then compare left_len right_len
+  else
+    let rec compare_rev left right =
+      match left, right with
+      | [], [] -> 0
+      | x :: xs, y :: ys ->
+          let cmp = compare x y in
+          if cmp <> 0 then cmp else compare_rev xs ys
+      | _ -> invalid_arg "limb lists have different lengths"
+    in
+    compare_rev (List.rev left.big_limbs) (List.rev right.big_limbs)
+
+let compare_bigint left right =
+  match left.big_neg, right.big_neg with
+  | true, false -> -1
+  | false, true -> 1
+  | false, false -> compare_bigint_abs left right
+  | true, true -> -compare_bigint_abs left right
+
+let add_bigint_abs_limbs left right =
+  let rec loop xs ys carry acc =
+    match xs, ys with
+    | [], [] ->
+        let acc = if carry = 0 then acc else carry :: acc in
+        List.rev acc
+    | x :: xt, [] | [], x :: xt ->
+        let total = x + carry in
+        loop xt [] (total / bigint_base) ((total mod bigint_base) :: acc)
+    | x :: xt, y :: yt ->
+        let total = x + y + carry in
+        loop xt yt (total / bigint_base) ((total mod bigint_base) :: acc)
+  in
+  loop left right 0 []
+
+let sub_bigint_abs_limbs left right =
+  let rec loop xs ys borrow acc =
+    match xs, ys with
+    | [], [] ->
+        if borrow = 0 then List.rev acc
+        else invalid_arg "negative absolute subtraction"
+    | x :: xt, [] ->
+        let diff = x - borrow in
+        if diff < 0 then loop xt [] 1 ((diff + bigint_base) :: acc)
+        else loop xt [] 0 (diff :: acc)
+    | x :: xt, y :: yt ->
+        let diff = x - y - borrow in
+        if diff < 0 then loop xt yt 1 ((diff + bigint_base) :: acc)
+        else loop xt yt 0 (diff :: acc)
+    | [], _ -> invalid_arg "negative absolute subtraction"
+  in
+  normalize_bigint_limbs (loop left right 0 [])
+
+let bigint_add left right =
+  if left.big_neg = right.big_neg then
+    make_bigint left.big_neg (add_bigint_abs_limbs left.big_limbs right.big_limbs)
+  else
+    match compare_bigint_abs left right with
+    | 0 -> bigint_zero
+    | cmp when cmp > 0 ->
+        make_bigint left.big_neg (sub_bigint_abs_limbs left.big_limbs right.big_limbs)
+    | _ ->
+        make_bigint right.big_neg (sub_bigint_abs_limbs right.big_limbs left.big_limbs)
+
+let rec bigint_mul_small value scalar =
+  if scalar = 0 || bigint_is_zero value then bigint_zero
+  else if scalar < 0 then bigint_negate (bigint_mul_small value (-scalar))
+  else
+    let rec loop limbs carry acc =
+      match limbs with
+      | [] ->
+          let rec emit_carry carry acc =
+            if carry = 0 then List.rev acc
+            else emit_carry (carry / bigint_base) ((carry mod bigint_base) :: acc)
+          in
+          emit_carry carry acc
+      | limb :: rest ->
+          let total = (limb * scalar) + carry in
+          loop rest (total / bigint_base) ((total mod bigint_base) :: acc)
+    in
+    make_bigint value.big_neg (loop value.big_limbs 0 [])
+
+let bigint_mul left right =
+  if bigint_is_zero left || bigint_is_zero right then bigint_zero
+  else
+    let left_len = List.length left.big_limbs in
+    let right_len = List.length right.big_limbs in
+    let accum = Array.make (left_len + right_len + 1) 0 in
+    List.iteri
+      (fun i x ->
+         List.iteri
+           (fun j y ->
+              accum.(i + j) <- accum.(i + j) + (x * y))
+           right.big_limbs)
+      left.big_limbs;
+    let carry = ref 0 in
+    for i = 0 to Array.length accum - 1 do
+      let total = accum.(i) + !carry in
+      accum.(i) <- total mod bigint_base;
+      carry := total / bigint_base
+    done;
+    make_bigint (left.big_neg <> right.big_neg) (Array.to_list accum)
+
+let bigint_shift_limbs value shift =
+  if bigint_is_zero value then value
+  else make_bigint value.big_neg (List.init shift (fun _ -> 0) @ value.big_limbs)
+
+let bigint_best_mod_digit remainder shifted =
+  let rec search low high best =
+    if low > high then best
+    else
+      let mid = (low + high) / 2 in
+      let candidate = bigint_mul_small shifted mid in
+      if compare_bigint_abs candidate remainder <= 0 then
+        search (mid + 1) high mid
+      else
+        search low (mid - 1) best
+  in
+  search 0 (bigint_base - 1) 0
+
+let bigint_mod_abs value modulus =
+  let value = bigint_abs value in
+  let modulus = bigint_abs modulus in
+  if compare_bigint_abs value modulus < 0 then value
+  else
+    let remainder = ref value in
+    let modulus_len = List.length modulus.big_limbs in
+    let max_shift = List.length value.big_limbs - modulus_len in
+    for shift = max_shift downto 0 do
+      let shifted = bigint_shift_limbs modulus shift in
+      if compare_bigint_abs !remainder shifted >= 0 then begin
+        let digit = bigint_best_mod_digit !remainder shifted in
+        if digit > 0 then
+          remainder :=
+            make_bigint false
+              (sub_bigint_abs_limbs
+                 (!remainder).big_limbs
+                 (bigint_mul_small shifted digit).big_limbs)
+      end
+    done;
+    !remainder
+
+let bigint_mod value modulus =
+  if compare_bigint modulus bigint_one <= 0 then
+    invalid_arg "modulus must be greater than 1";
+  let reduced = bigint_mod_abs value modulus in
+  if value.big_neg && not (bigint_is_zero reduced) then
+    make_bigint false (sub_bigint_abs_limbs modulus.big_limbs reduced.big_limbs)
+  else reduced
+
+let bigint_abs_leq value bound =
+  compare_bigint bound bigint_zero >= 0 &&
+  compare_bigint_abs value bound <= 0
+
+let bigint_to_abs_decimal value =
+  match List.rev value.big_limbs with
+  | [] -> "0"
+  | high :: rest ->
+      string_of_int high ^
+      String.concat ""
+        (List.map
+           (fun limb -> Printf.sprintf "%0*d" bigint_base_width limb)
+           rest)
+
+let string_of_bigint value =
+  let digits = bigint_to_abs_decimal value in
+  if value.big_neg then "-" ^ digits else digits
+
+let parse_canonical_bigint s =
+  try
+    let negative, digits = canonical_bignum_parts "integer" s in
+    let value =
+      String.fold_left
+        (fun acc digit ->
+           let digit_value = Char.code digit - Char.code '0' in
+           bigint_add (bigint_mul_small acc 10) (bigint_of_int digit_value))
+        bigint_zero
+        digits
+    in
+    Some (if negative then bigint_negate value else value)
+  with Invalid_argument _ -> None
+
+let bigint_vec_text values =
+  "[" ^ String.concat "," (List.map string_of_bigint values) ^ "]"
+
+let bigint_mat_text rows =
+  "[" ^ String.concat "," (List.map bigint_vec_text rows) ^ "]"
+
+let json_of_bigint value =
+  json_of_string (string_of_bigint value)
+
+let json_of_bigint_vec values =
+  "[" ^ String.concat "," (List.map json_of_bigint values) ^ "]"
+
+let json_of_bigint_mat rows =
+  "[" ^ String.concat "," (List.map json_of_bigint_vec rows) ^ "]"
+
+let parse_canonical_bigint_vec s =
+  let parse_inner inner =
+    if String.trim inner = "" then Some []
+    else
+      let rec parse_parts acc = function
+        | [] -> Some (List.rev acc)
+        | part :: rest ->
+            match parse_canonical_bigint part with
+            | Some value -> parse_parts (value :: acc) rest
+            | None -> None
+      in
+      parse_parts [] (split_top_level inner)
+  in
+  if String.length s >= 2 && s.[0] = '[' && s.[String.length s - 1] = ']' then
+    let inner = String.sub s 1 (String.length s - 2) in
+    match parse_inner inner with
+    | Some values when bigint_vec_text values = s -> Some values
+    | _ -> None
+  else None
+
+let parse_canonical_bigint_mat s =
+  let parse_inner inner =
+    if String.trim inner = "" then Some []
+    else
+      let rec parse_rows acc = function
+        | [] -> Some (List.rev acc)
+        | row :: rest ->
+            match parse_canonical_bigint_vec row with
+            | Some value -> parse_rows (value :: acc) rest
+            | None -> None
+      in
+      parse_rows [] (split_top_level inner)
+  in
+  if String.length s >= 2 && s.[0] = '[' && s.[String.length s - 1] = ']' then
+    let inner = String.sub s 1 (String.length s - 2) in
+    match parse_inner inner with
+    | Some rows when bigint_mat_text rows = s -> Some rows
+    | _ -> None
+  else None
+
+let encode_bigint_value value =
+  let magnitude = bignum_magnitude_le_bytes (bigint_to_abs_decimal value) in
+  let sign = if value.big_neg then 1 else 0 in
+  [sign] @ bignum_length_le_bytes (List.length magnitude) @ magnitude
+
+let ascii_bytes text =
+  List.init (String.length text) (fun index -> Char.code text.[index])
+
+let json_of_bigint_balance_proof as_ zs =
+  Printf.sprintf "{\"as\":%s,\"zs\":%s}" (json_of_bigint_mat as_) (json_of_bigint_mat zs)
+
+type big_cb_params = {
+  big_cb_n1 : int;
+  big_cb_n2 : int;
+  big_cb_m : int;
+  big_cb_q : cli_bigint;
+  big_cb_beta : cli_bigint;
+}
+
+let big_cb_fs_domain = 1001
+let big_cb_fs_rounds = 128
+let big_cb_transcript_dst = "ISABELLA-CT-FS-v1"
+
+let make_big_cb_params m_str n2_str q_str beta_str =
+  match
+    parse_canonical_int m_str,
+    parse_canonical_int n2_str,
+    parse_canonical_bigint q_str,
+    parse_canonical_bigint beta_str
+  with
+  | Some m, Some n2, Some q, Some beta ->
+      Some { big_cb_n1 = 1; big_cb_n2 = n2; big_cb_m = m; big_cb_q = q; big_cb_beta = beta }
+  | _ -> None
+
+let valid_big_cb_params params =
+  params.big_cb_n1 = 1 &&
+  params.big_cb_n2 > 0 &&
+  params.big_cb_m > 0 &&
+  compare_bigint params.big_cb_q bigint_one > 0 &&
+  compare_bigint params.big_cb_beta bigint_zero > 0
+
+let valid_big_vec expected values =
+  List.length values = expected
+
+let valid_big_commit_key params ck =
+  valid_big_cb_params params &&
+  List.length ck = params.big_cb_m &&
+  List.for_all (valid_big_vec (params.big_cb_n1 + params.big_cb_n2)) ck
+
+let rec drop_n count values =
+  if count <= 0 then values
+  else
+    match values with
+    | [] -> []
+    | _ :: rest -> drop_n (count - 1) rest
+
+let big_rand_commit_key params ck =
+  List.map (drop_n params.big_cb_n1) ck
+
+let bigint_vec_add left right =
+  List.map2 bigint_add left right
+
+let bigint_scalar_mult scalar values =
+  List.map (bigint_mul scalar) values
+
+let bigint_mat_vec_mult matrix vector =
+  List.map
+    (fun row ->
+       if List.length row <> List.length vector then
+         invalid_arg "matrix row length must match vector length";
+       List.fold_left2
+         (fun acc left right -> bigint_add acc (bigint_mul left right))
+         bigint_zero
+         row
+         vector)
+    matrix
+
+let bigint_vec_mod values modulus =
+  List.map (fun value -> bigint_mod value modulus) values
+
+let bigint_mat_vec_mult_mod matrix vector modulus =
+  bigint_vec_mod (bigint_mat_vec_mult matrix vector) modulus
+
+let big_rand_commit params ck r =
+  bigint_mat_vec_mult_mod (big_rand_commit_key params ck) r params.big_cb_q
+
+let bigint_all_bounded values bound =
+  compare_bigint bound bigint_zero >= 0 &&
+  List.for_all (fun value -> bigint_abs_leq value bound) values
+
+let valid_big_witness params r =
+  valid_big_cb_params params &&
+  valid_big_vec params.big_cb_n2 r &&
+  bigint_all_bounded r (bigint_mul_small params.big_cb_beta 4)
+
+let valid_big_mask params gamma y =
+  valid_big_cb_params params &&
+  valid_big_vec params.big_cb_n2 y &&
+  bigint_all_bounded y gamma
+
+let valid_big_response params gamma challenge z =
+  (challenge = 0 || challenge = 1) &&
+  valid_big_cb_params params &&
+  valid_big_vec params.big_cb_n2 z &&
+  bigint_all_bounded z
+    (bigint_add gamma (bigint_mul_small params.big_cb_beta (4 * challenge)))
+
+let big_balance_relation params ck c r =
+  try
+    valid_big_commit_key params ck &&
+    valid_big_vec params.big_cb_m c &&
+    valid_big_witness params r &&
+    big_rand_commit params ck r = c
+  with Invalid_argument _ -> false
+
+let big_sigma_respond r y challenge =
+  bigint_vec_add y (bigint_scalar_mult (bigint_of_int challenge) r)
+
+let big_fs_transcript_bytes domain round fields =
+  ascii_bytes big_cb_transcript_dst
+  @ bignum_length_le_bytes domain
+  @ bignum_length_le_bytes round
+  @ bignum_length_le_bytes (List.length fields)
+  @ List.concat (List.map encode_bigint_value fields)
+
+let big_binary_fs_challenge domain fields round =
+  match Repeated_fs.sha3_256 (big_fs_transcript_bytes domain round fields) with
+  | first :: _ -> first land 1
+  | [] -> failwith "sha3_256 produced no output"
+
+let bigint_sum values =
+  List.fold_left bigint_add bigint_zero values
+
+let bigint_matrix_sum rows =
+  List.fold_left (fun acc row -> bigint_add acc (bigint_sum row)) bigint_zero rows
+
+let big_fs_fields ck c as_ =
+  [bigint_matrix_sum ck; bigint_sum c; bigint_matrix_sum as_]
+
+let big_fs_challenges ck c as_ rounds =
+  let fields = big_fs_fields ck c as_ in
+  List.init rounds (fun round -> big_binary_fs_challenge big_cb_fs_domain fields round)
+
+let big_sigma_verify params gamma ck c a challenge z =
+  try
+    valid_big_commit_key params ck &&
+    valid_big_vec params.big_cb_m c &&
+    valid_big_vec params.big_cb_m a &&
+    valid_big_response params gamma challenge z &&
+    big_rand_commit params ck z =
+      bigint_vec_mod
+        (bigint_vec_add a (bigint_scalar_mult (bigint_of_int challenge) c))
+        params.big_cb_q
+  with Invalid_argument _ -> false
+
+let big_fs_prove params gamma ck c r ys =
+  try
+    let as_ = List.map (big_rand_commit params ck) ys in
+    let challenges = big_fs_challenges ck c as_ big_cb_fs_rounds in
+    let zs = List.map2 (big_sigma_respond r) ys challenges in
+    if List.length ys = big_cb_fs_rounds &&
+       big_balance_relation params ck c r &&
+       List.for_all (valid_big_mask params gamma) ys &&
+       List.for_all2 (valid_big_response params gamma) challenges zs
+    then Some (as_, zs)
+    else None
+  with Invalid_argument _ -> None
+
+let big_fs_verify params gamma ck c as_ zs =
+  try
+    let challenges = big_fs_challenges ck c as_ big_cb_fs_rounds in
+    valid_big_cb_params params &&
+    valid_big_commit_key params ck &&
+    List.length as_ = big_cb_fs_rounds &&
+    List.length zs = big_cb_fs_rounds &&
+    List.for_all2
+      (fun a (challenge, z) -> big_sigma_verify params gamma ck c a challenge z)
+      as_
+      (List.combine challenges zs)
+  with Invalid_argument _ -> false
+
 let hex_of_bytes bytes =
   String.concat "" (List.map (Printf.sprintf "%02x") bytes)
 
@@ -1212,6 +1668,101 @@ let cmd_cb_verify args =
        output_result "balance_fs_verify" (if result then "true" else "false")
      | _ -> output_error "Expected params, gamma, a commitment-key matrix, a commitment vector, an announcement matrix, and a response matrix")
   | _ -> output_error "Usage: cb-verify M N2 Q BETA GAMMA \"[[row1],[row2]]\" \"[c]\" \"[[a1],[a2],...]\" \"[[z1],[z2],...]\""
+
+let cmd_ct_balance_bigint_rand_commit args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; ck_str; r_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec r_str
+     with
+     | Some params, Some ck, Some r
+       when valid_big_commit_key params ck && valid_big_vec params.big_cb_n2 r ->
+         let result = big_rand_commit params ck r in
+         (match !output_format with
+          | Human -> Printf.printf "ct_balance_bigint_rand_commit = %s\n" (bigint_vec_text result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_bigint_vec result))
+     | _ -> output_error "Expected params (M N2 Q BETA), BigInt commitment key matrix, and witness vector")
+  | _ -> output_error "Usage: ct-balance-bigint-rand-commit M N2 Q BETA \"[[row1],[row2]]\" \"[r]\""
+
+let cmd_ct_balance_bigint_fs_fields args =
+  match args with
+  | [ck_str; c_str; as_str] ->
+    (match
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_mat as_str
+     with
+     | Some ck, Some c, Some as_ ->
+         let result = big_fs_fields ck c as_ in
+         (match !output_format with
+          | Human -> Printf.printf "ct_balance_bigint_fs_fields = %s\n" (bigint_vec_text result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_bigint_vec result))
+     | _ -> output_error "Expected BigInt commitment key matrix, commitment vector, and announcement matrix")
+  | _ -> output_error "Usage: ct-balance-bigint-fs-fields \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\""
+
+let cmd_ct_balance_bigint_fs_challenges args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; ck_str; c_str; as_str; rounds_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_mat as_str,
+       parse_canonical_int rounds_str
+     with
+     | Some params, Some ck, Some c, Some as_, Some rounds
+       when valid_big_cb_params params &&
+            valid_big_commit_key params ck &&
+            valid_big_vec params.big_cb_m c &&
+            rounds >= 0 ->
+         let result = big_fs_challenges ck c as_ rounds in
+         output_result "ct_balance_bigint_fs_challenges"
+           ("[" ^ String.concat "," (List.map string_of_int result) ^ "]")
+     | _ -> output_error "Expected params, BigInt commitment key matrix, commitment vector, announcement matrix, and round count")
+  | _ -> output_error "Usage: ct-balance-bigint-fs-challenges M N2 Q BETA \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\" ROUNDS"
+
+let cmd_ct_balance_bigint_prove args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; ck_str; c_str; r_str; ys_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_vec r_str,
+       parse_canonical_bigint_mat ys_str
+     with
+     | Some params, Some gamma, Some ck, Some c, Some r, Some ys ->
+         (match big_fs_prove params gamma ck c r ys with
+          | Some (as_, zs) ->
+              (match !output_format with
+               | Human -> Printf.printf "ct_balance_bigint_proof = %s\n" (json_of_bigint_balance_proof as_ zs)
+               | Json -> Printf.printf "{\"result\":%s}\n" (json_of_bigint_balance_proof as_ zs))
+          | None ->
+              (match !output_format with
+               | Human -> print_endline "ct_balance_bigint_proof = null"
+               | Json -> print_endline "{\"result\":null}"))
+     | _ -> output_error "Expected params, gamma, BigInt commitment key matrix, commitment vector, witness vector, and mask matrix")
+  | _ -> output_error "Usage: ct-balance-bigint-prove M N2 Q BETA GAMMA \"[[ck]]\" \"[c]\" \"[r]\" \"[[y1],[y2],...]\""
+
+let cmd_ct_balance_bigint_verify args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; ck_str; c_str; as_str; zs_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_str,
+       parse_canonical_bigint_mat as_str,
+       parse_canonical_bigint_mat zs_str
+     with
+     | Some params, Some gamma, Some ck, Some c, Some as_, Some zs ->
+         let result = big_fs_verify params gamma ck c as_ zs in
+         output_result "ct_balance_bigint_verify" (if result then "true" else "false")
+     | _ -> output_error "Expected params, gamma, BigInt commitment key matrix, commitment vector, announcement matrix, and response matrix")
+  | _ -> output_error "Usage: ct-balance-bigint-verify M N2 Q BETA GAMMA \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\" \"[[z1],[z2],...]\""
 
 (** {1 Confidential Range Commands} *)
 
@@ -2313,6 +2864,11 @@ let show_help () =
   print_endline "  cb-sigma-verify M N2 Q BETA G CK C A E Z  Verify sigma step";
   print_endline "  cb-prove M N2 Q BETA G CK C R Y     Build deterministic balance proof";
   print_endline "  cb-verify M N2 Q BETA G CK C A Z    Verify deterministic balance proof";
+  print_endline "  ct-balance-bigint-rand-commit M N2 Q BETA CK R  Commit with widened integer arithmetic";
+  print_endline "  ct-balance-bigint-fs-fields CK C AS  Compute widened balance Fiat-Shamir fields";
+  print_endline "  ct-balance-bigint-fs-challenges M N2 Q BETA CK C AS ROUNDS  Expand widened balance challenges";
+  print_endline "  ct-balance-bigint-prove M N2 Q BETA G CK C R YS  Build widened balance proof";
+  print_endline "  ct-balance-bigint-verify M N2 Q BETA G CK C AS ZS  Verify widened balance proof";
   print_endline "";
   print_endline "Confidential Range Commands:";
   print_endline "  cr-amount-commitment M N2 Q BETA CK C BITS  Build the amount residual commitment";
@@ -2422,6 +2978,11 @@ let run_command cmd args =
   | "cb-sigma-verify" -> cmd_cb_sigma_verify args
   | "cb-prove" -> cmd_cb_prove args
   | "cb-verify" -> cmd_cb_verify args
+  | "ct-balance-bigint-rand-commit" -> cmd_ct_balance_bigint_rand_commit args
+  | "ct-balance-bigint-fs-fields" -> cmd_ct_balance_bigint_fs_fields args
+  | "ct-balance-bigint-fs-challenges" -> cmd_ct_balance_bigint_fs_challenges args
+  | "ct-balance-bigint-prove" -> cmd_ct_balance_bigint_prove args
+  | "ct-balance-bigint-verify" -> cmd_ct_balance_bigint_verify args
   | "cr-amount-commitment" -> cmd_cr_amount_commitment args
   | "cr-prove" -> cmd_cr_prove args
   | "cr-verify" -> cmd_cr_verify args

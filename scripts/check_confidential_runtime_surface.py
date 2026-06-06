@@ -108,6 +108,10 @@ def check_native_cli(manifest: dict[str, Any]) -> dict[str, int]:
         native.get("haskellPreviewCommands", []),
         "nativeCli.haskellPreviewCommands",
     )
+    ocaml_preview_commands = require_string_list(
+        native.get("ocamlPreviewCommands", []),
+        "nativeCli.ocamlPreviewCommands",
+    )
     scaffold_commands = require_string_list(
         native.get("scaffoldCommands"),
         "nativeCli.scaffoldCommands",
@@ -137,12 +141,25 @@ def check_native_cli(manifest: dict[str, Any]) -> dict[str, int]:
             f"{missing_haskell_preview}"
         )
 
+    ocaml_commands = quoted_commands(ocaml_path)
+    missing_ocaml_preview = sorted(
+        command for command in ocaml_preview_commands if command not in ocaml_commands
+    )
+    if missing_ocaml_preview:
+        fail(
+            f"{ocaml_path.relative_to(ROOT)} is missing OCaml preview confidential commands: "
+            f"{missing_ocaml_preview}"
+        )
+
     for command in required_commands + haskell_preview_commands:
         require_snippet(help_path, command, "Haskell CLI help command")
+    for command in ocaml_preview_commands:
+        require_snippet(ocaml_path, command, "OCaml CLI help command")
 
     return {
         "production_commands": len(production_commands),
         "haskell_preview_commands": len(haskell_preview_commands),
+        "ocaml_preview_commands": len(ocaml_preview_commands),
         "scaffold_commands": len(scaffold_commands),
         "retired_commands": len(retired_commands),
     }

@@ -98,7 +98,7 @@ describe('Confidential balance BigInt vectors', () => {
     const sdk = await import(pathToFileURL(typeScriptEntry).href);
     expect(vectors.version).toBe(1);
     expect(vectors.algorithm).toBe('SHA3-256-counter-mode-low-bit');
-    expect(vectors.status).toBe('typescript-reference-with-haskell-preview-parity');
+    expect(vectors.status).toBe('typescript-reference-with-native-preview-parity');
     expect(vectors.transcript.dst).toBe('ISABELLA-CT-FS-v1');
     expect(vectors.transcript.domain).toBe(1001);
     expect(vectors.transcript.fieldEncoding).toBe('sign_u8 || len_i64_le || magnitude_le_minimal');
