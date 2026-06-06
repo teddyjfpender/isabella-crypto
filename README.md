@@ -644,9 +644,10 @@ make bench-confidential-verify
 cd isabella.ts && npm run bench:verify -- --iterations 2 --warmup 0
 ```
 
-The native benchmark commands are `cr-verify-bench` and `ct-verify-bench`.
-They keep the stable SDK surface unchanged and exist only to measure native
-verification without subprocess startup dominating the result.
+The native benchmark commands are `cr-verify-bench` and
+`ct-verify-bench-scaffold`. The scaffold transaction verifier is intentionally
+named as scaffold-only; production transaction validation uses the Merkle
+envelope verifier rather than the algebraic ledger-hash path.
 
 ## Tests
 

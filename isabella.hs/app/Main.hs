@@ -95,7 +95,6 @@ showHelp = do
     putStrLn "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership"
     putStrLn "  ct-verify-merkle-envelope ... Verify context digest, expected policy, and Merkle transaction proof"
     putStrLn "  ct-verify-bench-scaffold I W ... Benchmark scaffold confidential-transaction verification natively"
-    putStrLn "  ct-prove / ct-verify / ct-verify-bench are deprecated scaffold compatibility aliases"
     putStrLn ""
     putStrLn "Options:"
     putStrLn "  --json             Emit machine-readable JSON for command results"

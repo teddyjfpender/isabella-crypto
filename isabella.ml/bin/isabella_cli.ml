@@ -1524,9 +1524,6 @@ let cmd_ct_prove_with_usage command args =
      | _ -> output_error "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors")
   | _ -> output_error (ct_prove_usage command)
 
-let cmd_ct_prove args =
-  cmd_ct_prove_with_usage "ct-prove" args
-
 let cmd_ct_prove_scaffold args =
   cmd_ct_prove_with_usage "ct-prove-scaffold" args
 
@@ -1692,9 +1689,6 @@ let prepare_ct_verify_with_usage command args =
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
   | _ -> Error (ct_verify_usage command)
 
-let prepare_ct_verify args =
-  prepare_ct_verify_with_usage "ct-verify" args
-
 let prepare_ct_verify_scaffold args =
   prepare_ct_verify_with_usage "ct-verify-scaffold" args
 
@@ -1748,11 +1742,6 @@ let prepare_ct_verify_merkle_with_root root_override args =
 
 let prepare_ct_verify_merkle args =
   prepare_ct_verify_merkle_with_root None args
-
-let cmd_ct_verify args =
-  match prepare_ct_verify args with
-  | Ok verify -> output_result "transaction_fs_verify" (if verify () then "true" else "false")
-  | Error msg -> output_error msg
 
 let cmd_ct_verify_scaffold args =
   match prepare_ct_verify_scaffold args with
@@ -1837,9 +1826,6 @@ let cmd_ct_verify_bench_with_usage command prepare args =
         | Error msg -> output_error msg)
      | _ -> output_error "Expected positive ITERATIONS and non-negative WARMUP")
   | _ -> output_error (ct_verify_bench_usage command)
-
-let cmd_ct_verify_bench args =
-  cmd_ct_verify_bench_with_usage "ct-verify-bench" prepare_ct_verify args
 
 let cmd_ct_verify_bench_scaffold args =
   cmd_ct_verify_bench_with_usage "ct-verify-bench-scaffold" prepare_ct_verify_scaffold args
@@ -2135,7 +2121,6 @@ let show_help () =
   print_endline "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify-merkle-envelope ... Verify context digest, expected policy, and Merkle transaction proof";
   print_endline "  ct-verify-bench-scaffold I W ... Benchmark scaffold confidential-transaction verification natively";
-  print_endline "  ct-prove / ct-verify / ct-verify-bench are deprecated scaffold compatibility aliases";
   print_endline "";
   print_endline "Examples:";
   print_endline "  isabella_cli mod-centered 7 5";
@@ -2229,14 +2214,11 @@ let run_command cmd args =
   | "ct-member-prove" -> cmd_ct_member_prove args
   | "ct-member-verify" -> cmd_ct_member_verify args
   | "ct-ledger-step-verify" -> cmd_ct_ledger_step_verify args
-  | "ct-prove" -> cmd_ct_prove args
   | "ct-prove-scaffold" -> cmd_ct_prove_scaffold args
   | "ct-prove-merkle" -> cmd_ct_prove_merkle args
-  | "ct-verify" -> cmd_ct_verify args
   | "ct-verify-scaffold" -> cmd_ct_verify_scaffold args
   | "ct-verify-merkle" -> cmd_ct_verify_merkle args
   | "ct-verify-merkle-envelope" -> cmd_ct_verify_merkle_envelope args
-  | "ct-verify-bench" -> cmd_ct_verify_bench args
   | "ct-verify-bench-scaffold" -> cmd_ct_verify_bench_scaffold args
   | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
 

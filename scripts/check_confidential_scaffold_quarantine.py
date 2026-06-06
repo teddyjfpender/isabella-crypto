@@ -2,9 +2,10 @@
 """Validate confidential-transfer scaffold quarantine.
 
 The algebraic ledger transaction verifier remains available for compatibility
-and audit tests, but production-facing validation should not invoke it through
-ambiguous command names. This gate requires explicit scaffold-native aliases and
-rejects legacy CLI spellings in production-facing scripts and validators.
+and audit tests, but production-facing validation must only reach it through
+explicit scaffold-native aliases. This gate requires those aliases, rejects
+legacy CLI spellings in production-facing scripts and validators, and verifies
+that the native CLIs no longer dispatch ambiguous scaffold command names.
 """
 
 from __future__ import annotations
@@ -35,6 +36,11 @@ def read_text(path: Path) -> str:
 def require_snippet(path: Path, snippet: str) -> None:
     if snippet not in read_text(path):
         fail(f"{path.relative_to(ROOT)} is missing required scaffold quarantine snippet: {snippet}")
+
+
+def forbid_snippet(path: Path, snippet: str) -> None:
+    if snippet in read_text(path):
+        fail(f"{path.relative_to(ROOT)} still contains retired scaffold compatibility snippet: {snippet}")
 
 
 def production_files() -> list[Path]:
@@ -81,15 +87,20 @@ def main() -> None:
         require_snippet(path, "ct-prove-scaffold")
         require_snippet(path, "ct-verify-scaffold")
         require_snippet(path, "ct-verify-bench-scaffold")
+        forbid_snippet(path, '"ct-prove"')
+        forbid_snippet(path, '"ct-verify"')
+        forbid_snippet(path, '"ct-verify-bench"')
 
     for path in (ocaml_cli, haskell_main):
-        require_snippet(path, "deprecated scaffold compatibility aliases")
         require_snippet(path, "algebraic ledger hash")
+        forbid_snippet(path, "deprecated scaffold compatibility aliases")
 
     require_snippet(ts_cli, "export function ctProveScaffold")
     require_snippet(ts_cli, "'ct-prove-scaffold'")
     require_snippet(ts_cli, "export function ctVerifyScaffold")
     require_snippet(ts_cli, "'ct-verify-scaffold'")
+    forbid_snippet(ts_cli, "export const ctProve =")
+    forbid_snippet(ts_cli, "export const ctVerify =")
     require_snippet(makefile, "scripts/check_confidential_scaffold_quarantine.py")
     require_snippet(ci, "scripts/check_confidential_scaffold_quarantine.py")
 

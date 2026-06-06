@@ -1430,8 +1430,6 @@ export function ctProveScaffold(
   return output === 'null' ? null : parseCliResult<TransactionProof>(output);
 }
 
-export const ctProve = ctProveScaffold;
-
 export function ctProveMerkle(
   m: number,
   n2: number,
@@ -1817,8 +1815,6 @@ export function ctVerifyScaffold(
     proof
   );
 }
-
-export const ctVerify = ctVerifyScaffold;
 
 export function ctVerifyMerkle(
   m: number,

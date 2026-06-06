@@ -79,14 +79,11 @@ runCommand format cmd args = case cmd of
     "ct-member-prove" -> cmdCtMemberProve format args
     "ct-member-verify" -> cmdCtMemberVerify format args
     "ct-ledger-step-verify" -> cmdCtLedgerStepVerify format args
-    "ct-prove" -> cmdCtProve format args
     "ct-prove-scaffold" -> cmdCtProveScaffold format args
     "ct-prove-merkle" -> cmdCtProveMerkle format args
-    "ct-verify" -> cmdCtVerify format args
     "ct-verify-scaffold" -> cmdCtVerifyScaffold format args
     "ct-verify-merkle" -> cmdCtVerifyMerkle format args
     "ct-verify-merkle-envelope" -> cmdCtVerifyMerkleEnvelope format args
-    "ct-verify-bench" -> cmdCtVerifyBench format args
     "ct-verify-bench-scaffold" -> cmdCtVerifyBenchScaffold format args
     _ -> putStrLn $ "Unknown command: " ++ cmd ++ "\nUse --help for usage."
 
@@ -622,9 +619,6 @@ prepareCtVerifyWithUsage command [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ck
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
 prepareCtVerifyWithUsage command _ =
     Left (ctVerifyUsage command)
-
-prepareCtVerify :: [String] -> Either String (() -> Bool)
-prepareCtVerify = prepareCtVerifyWithUsage "ct-verify"
 
 prepareCtVerifyScaffold :: [String] -> Either String (() -> Bool)
 prepareCtVerifyScaffold = prepareCtVerifyWithUsage "ct-verify-scaffold"
@@ -1624,9 +1618,6 @@ cmdCtProveWithUsage command format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, 
 cmdCtProveWithUsage command format _ =
     outputUsage format (ctProveUsage command)
 
-cmdCtProve :: OutputFormat -> [String] -> IO ()
-cmdCtProve = cmdCtProveWithUsage "ct-prove"
-
 cmdCtProveScaffold :: OutputFormat -> [String] -> IO ()
 cmdCtProveScaffold = cmdCtProveWithUsage "ct-prove-scaffold"
 
@@ -1707,14 +1698,6 @@ cmdCtProveMerkle format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkSt
         _ -> outputError format "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors"
 cmdCtProveMerkle format _ =
     outputUsage format "Usage: ct-prove-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
-
-cmdCtVerify :: OutputFormat -> [String] -> IO ()
-cmdCtVerify format args =
-    case prepareCtVerify args of
-        Right verify -> outputBoolResult format "transaction_fs_verify = " (verify ())
-        Left err
-            | take 5 err == "Usage" -> outputUsage format err
-            | otherwise -> outputError format err
 
 cmdCtVerifyScaffold :: OutputFormat -> [String] -> IO ()
 cmdCtVerifyScaffold format args =
@@ -1841,9 +1824,6 @@ cmdCtVerifyBenchWithUsage command prepare format (iterationsStr:warmupStr:rest) 
         _ -> outputError format "Expected positive ITERATIONS and non-negative WARMUP"
 cmdCtVerifyBenchWithUsage command _ format _ =
     outputUsage format (ctVerifyBenchUsage command)
-
-cmdCtVerifyBench :: OutputFormat -> [String] -> IO ()
-cmdCtVerifyBench = cmdCtVerifyBenchWithUsage "ct-verify-bench" prepareCtVerify
 
 cmdCtVerifyBenchScaffold :: OutputFormat -> [String] -> IO ()
 cmdCtVerifyBenchScaffold = cmdCtVerifyBenchWithUsage "ct-verify-bench-scaffold" prepareCtVerifyScaffold
