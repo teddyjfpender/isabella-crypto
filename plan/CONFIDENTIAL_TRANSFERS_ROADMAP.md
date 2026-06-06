@@ -17,7 +17,8 @@ The current confidential-transfer stack is an SIS note-commitment MVP:
 - `Canon/ZK/Confidential_Transaction.thy`: nullifiers, authenticated membership,
   balance, range proofs, and semantic ledger-step preservation.
 - `Canon/ZK/Repeated_FS.thy`: shared 128-round, domain-separated binary
-  Fiat-Shamir challenge policy plus an explicit forked binary challenge
+  Fiat-Shamir challenge policy, a proof-side cryptographic challenge oracle
+  with runtime SHA3 export bindings, and an explicit forked binary challenge
   schedule model for rewinding-style soundness statements.
 - `Canon/ZK/Authenticated_Merkle.thy`: production-target Merkle/hash model with
   canonical encodings and collision-resistance membership soundness lemmas.
@@ -53,12 +54,14 @@ benchmarks are independently checked.
 
 ## Limitations Addressed In This Pass
 
-- `Repeated_FS` no longer uses 8 rounds of `(seed + i) mod 2`. It now exposes a
-  domain-separated transcript interface with 128 binary rounds. OCaml, Haskell,
-  and TypeScript/js_of_ocaml runtime paths now instantiate the executable
-  challenge policy with canonical signed-64-bit little-endian transcript
-  encoding and SHA3-256 counter-mode low-bit expansion. Transcript vectors live
-  in `tests/fixtures/confidential-transcript-vectors.json`.
+- `Repeated_FS.thy` no longer defines the deterministic `transcript_mix`
+  scaffold or the old 8 rounds of `(seed + i) mod 2`. The proof theory now
+  exposes `binary_fs_challenge` as an abstract cryptographic challenge oracle
+  with only the binary-output contract used by the proofs. Isabelle code export
+  is bound to the OCaml and Haskell SHA3-256 counter-mode runtime
+  implementations, and the TypeScript/js_of_ocaml path uses the same canonical
+  signed-64-bit little-endian transcript encoding. Transcript vectors live in
+  `tests/fixtures/confidential-transcript-vectors.json`.
 - Balance, range, and nullifier proofs now have separate transcript domains and
   public transcript-field encoders.
 - `tests/fixtures/confidential-domain-registry.json` records the active
@@ -173,9 +176,9 @@ benchmarks are independently checked.
 
 The formalization still needs these before production:
 
-1. Replace the HOL proof abstraction for `binary_fs_challenge` with a
-   security model that connects the SHA3-256 transcript instantiation to the
-   Fiat-Shamir assumptions used by the proof system.
+1. Develop the security model that connects the proof-side
+   `binary_fs_challenge` oracle and the SHA3-256 transcript instantiation to
+   the Fiat-Shamir assumptions used by the proof system.
 2. Connect the deterministic SHA3 Fiat-Shamir verifier to the scheduled-fork
    extraction model with a ROM/forking theorem, then replace the remaining
    extractor-correctness assumptions with full proof-object soundness for

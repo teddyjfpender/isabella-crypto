@@ -81,6 +81,11 @@ def require_pattern(path: str, pattern: str, label: str) -> None:
         fail(f"{path} is missing {label}")
 
 
+def forbid_pattern(path: str, pattern: str, label: str) -> None:
+    if re.search(pattern, read_text(path), flags=re.MULTILINE) is not None:
+        fail(f"{path} must not contain {label}")
+
+
 def check_registry_shape(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if require_int(registry.get("version"), "version") != 1:
         fail("version must be 1")
@@ -210,6 +215,33 @@ def check_source_constants(namespaces: dict[str, dict[str, Any]]) -> None:
     ]
     for path, template, value, label in numeric_checks:
         require_pattern(path, template.format(value), label)
+
+    repeated_fs_theory = "Canon/ZK/Repeated_FS.thy"
+    forbid_pattern(
+        repeated_fs_theory,
+        r"\btranscript_mix\b",
+        "the old deterministic transcript mixer",
+    )
+    require_pattern(
+        repeated_fs_theory,
+        r"axiomatization\s+binary_fs_challenge\s*::",
+        "abstract binary_fs_challenge oracle",
+    )
+    require_pattern(
+        repeated_fs_theory,
+        r"binary_fs_challenge_bit:",
+        "binary_fs_challenge bit-output contract",
+    )
+    require_pattern(
+        repeated_fs_theory,
+        r"Canon\.ZK\.Internal\.RepeatedFS\.binaryFsChallenge",
+        "Haskell binary_fs_challenge code-printing binding",
+    )
+    require_pattern(
+        repeated_fs_theory,
+        r"Repeated_fs\.binary_fs_challenge",
+        "OCaml binary_fs_challenge code-printing binding",
+    )
 
 
 def main() -> None:

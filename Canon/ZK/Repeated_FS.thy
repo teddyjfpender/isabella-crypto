@@ -6,10 +6,11 @@ text \<open>
   Domain-separated helpers for the fixed-round Fiat-Shamir slices used by the
   confidential-balance, range, and nullifier proofs.
 
-  The security-facing interpretation of the binary challenge function is a
-  cryptographic hash-to-bit expansion from the transcript domain and canonical
-  public transcript fields. The HOL equation below remains a deterministic
-  proof abstraction used only through the bit and length lemmas in this theory.
+  The binary challenge function is the proof-side interface to a cryptographic
+  hash-to-bit expansion from the transcript domain and canonical public
+  transcript fields. The theory intentionally exposes only the bit-output
+  contract needed by the proof system; it does not model SHA3 as a pure HOL
+  equation.
 
   The runtime backends instantiate this interface with SHA3-256 counter-mode
   expansion over:
@@ -32,15 +33,16 @@ definition fixed_fs_rounds :: nat where
 definition fs_challenge_cardinality :: int where
   "fs_challenge_cardinality = 2"
 
-definition transcript_mix :: "int list \<Rightarrow> int" where
-  "transcript_mix xs =
-    foldl
-      (\<lambda>acc x. (acc * 257 + (x mod 2097143) + 65537) mod 2097143)
-      104729 xs"
+axiomatization binary_fs_challenge :: "transcript_domain \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int"
+  where binary_fs_challenge_bit:
+    "binary_fs_challenge domain fields round = 0 \<or>
+     binary_fs_challenge domain fields round = 1"
 
-definition binary_fs_challenge :: "transcript_domain \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
-  "binary_fs_challenge domain fields round =
-    transcript_mix (domain # int round # fields) mod fs_challenge_cardinality"
+code_printing
+  constant binary_fs_challenge \<rightharpoonup>
+    (Haskell) "Canon.ZK.Internal.RepeatedFS.binaryFsChallenge"
+| constant binary_fs_challenge \<rightharpoonup>
+    (OCaml) "Repeated_fs.binary_fs_challenge"
 
 definition binary_fs_challenges :: "transcript_domain \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int list" where
   "binary_fs_challenges domain fields rounds =
@@ -52,19 +54,6 @@ definition legacy_fs_domain :: transcript_domain where
 definition bool_fs_challenges :: "nat \<Rightarrow> int \<Rightarrow> int list" where
   "bool_fs_challenges rounds seed =
     binary_fs_challenges legacy_fs_domain [seed] rounds"
-
-lemma binary_fs_challenge_bit:
-  "binary_fs_challenge domain fields round = 0 \<or> binary_fs_challenge domain fields round = 1"
-proof -
-  have lower: "0 \<le> binary_fs_challenge domain fields round"
-    unfolding binary_fs_challenge_def fs_challenge_cardinality_def
-    by simp
-  have upper: "binary_fs_challenge domain fields round < 2"
-    unfolding binary_fs_challenge_def fs_challenge_cardinality_def
-    by simp
-  show ?thesis
-    using lower upper by linarith
-qed
 
 lemma binary_fs_challenges_length [simp]:
   "length (binary_fs_challenges domain fields rounds) = rounds"
