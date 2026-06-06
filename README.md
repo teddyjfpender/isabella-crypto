@@ -808,6 +808,9 @@ Validation note:
   `fsProveMerkleWithFee` / `fsVerifyMerkleWithFee`, and OCaml/Haskell
   `ct-verify-merkle-envelope` accepts nonzero fees only when the
   policy/context fee matches the proof.
+- TypeScript `fsVerifyMerkleEnvelope` now requires a complete launch policy
+  before accepting an envelope: protocol version, network, asset, epoch,
+  depth-tagged root, and public fee must all be explicit.
 - Snapshot well-formedness (`ledgerValid`) is tracked separately from the
   semantic ledger-step verifier, exported on the stable TypeScript surface as
   Merkle-backed `ConfidentialTransaction.semanticStepValid` and

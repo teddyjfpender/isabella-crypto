@@ -2531,6 +2531,30 @@ export namespace ConfidentialTransaction {
     }
   }
 
+  export function transactionContextPolicyIsComplete(
+    policy: ConfidentialTransactionContextPolicy
+  ): boolean {
+    try {
+      if (
+        policy.protocolVersion === undefined ||
+        policy.ledgerEpoch === undefined ||
+        policy.root === undefined ||
+        policy.publicFee === undefined
+      ) {
+        return false;
+      }
+      assertNonNegativeSafeI64(policy.protocolVersion, 'policy.protocolVersion');
+      encodeAsciiString(policy.networkId, 'policy.networkId');
+      assertNonNegativeSafeI64(policy.assetId, 'policy.assetId');
+      assertNonNegativeSafeI64(policy.ledgerEpoch, 'policy.ledgerEpoch');
+      encodeAcceptedRoot(policy.root, 'policy.root');
+      assertNonNegativeSafeI64(policy.publicFee, 'policy.publicFee');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   export function nullifier(
     params: ScalarCommitParams,
     nk: IntMatrix,
@@ -3317,6 +3341,7 @@ export namespace ConfidentialTransaction {
     try {
       const contextDigest = transactionContextDigest(envelope.context);
       return (
+        transactionContextPolicyIsComplete(policy) &&
         envelope.contextDigest === contextDigest &&
         transactionContextMatchesPolicy(envelope.context, policy) &&
         fsVerifyMerkleWithFee(

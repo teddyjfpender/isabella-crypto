@@ -154,8 +154,11 @@ benchmarks are independently checked.
   for malformed accepted-root windows and spent-nullifier snapshots.
   TypeScript exposes `fsVerifyMerkleEnvelope`, and OCaml/Haskell expose a
   matching `ct-verify-merkle-envelope` command, so callers can verify the
-  canonical context digest, expected network/asset/root/depth policy, and explicit
-  Merkle transaction proof as one step. The native verifier commands parse the
+  canonical context digest, expected protocol version, network, asset, epoch,
+  depth-tagged root, fee policy, and explicit Merkle transaction proof as one
+  step. The TypeScript envelope verifier rejects incomplete launch policies
+  before falling back to the lower-level policy matcher; the native verifier
+  commands require the same expected fields on the command line and parse the
   proof's Merkle membership fields instead of deriving membership from the
   supplied ledger. The SDK-equivalence validators exercise the TS and native
   envelope gates with native `ct-transaction-context` digests and native Merkle

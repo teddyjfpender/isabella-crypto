@@ -110,7 +110,9 @@ The harnesses are repair-aware:
   preimage/digest bytes. The wallet request vector binds the canonical context
   digest, depth-tagged accepted-root window, and spent-nullifier snapshot before
   local proof generation. The TS envelope verifier checks the context digest and
-  expected network/asset/root/depth policy before delegating to the Merkle proof verifier.
+  rejects incomplete launch policies before delegating to the Merkle proof
+  verifier; accepted policies must include protocol version, network, asset,
+  epoch, depth-tagged root, and public fee.
   The OCaml and Haskell CLIs expose `ct-verify-merkle-envelope`; the validators
   feed native context digests and native Merkle transaction proofs through that
   command, check native proof/envelope/wallet-request digest parity against the

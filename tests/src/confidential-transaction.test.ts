@@ -370,6 +370,7 @@ describe('Confidential transaction context vectors', () => {
       nf2,
     };
     const policy = {
+      protocolVersion: context.protocolVersion,
       networkId: context.networkId,
       assetId: context.assetId,
       ledgerEpoch: context.ledgerEpoch,
@@ -384,6 +385,21 @@ describe('Confidential transaction context vectors', () => {
 
     expect(tx.fsVerifyMerkleEnvelope(params, gamma, k, ck, nk, spent, envelope, policy))
       .toBe(true);
+    for (const field of ['protocolVersion', 'ledgerEpoch', 'root', 'publicFee'] as const) {
+      const incompletePolicy = { ...policy } as Partial<typeof policy>;
+      delete incompletePolicy[field];
+      expect(tx.fsVerifyMerkleEnvelope(
+        params,
+        gamma,
+        k,
+        ck,
+        nk,
+        spent,
+        envelope,
+        incompletePolicy as typeof policy
+      ))
+        .toBe(false);
+    }
     expect(tx.fsVerifyMerkleEnvelope(
       params,
       gamma,
@@ -449,6 +465,7 @@ describe('Confidential transaction context vectors', () => {
       nf2: feeFixture.nf2,
     };
     const feePolicy = {
+      protocolVersion: feeContext.protocolVersion,
       networkId: feeContext.networkId,
       assetId: feeContext.assetId,
       ledgerEpoch: feeContext.ledgerEpoch,
