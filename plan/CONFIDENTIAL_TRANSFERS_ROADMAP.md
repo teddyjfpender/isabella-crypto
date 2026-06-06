@@ -355,15 +355,18 @@ accepted-root windows, wallet proof requests, and envelope verification of the
 TypeScript BigInt Merkle transfer proof. OCaml/Haskell also expose
 `ct-bignum-prove-merkle`, a deterministic preview prover that emits the same
 BigInt Merkle transfer proof as the TypeScript reference for the shared
-conformance case. The runtime-surface manifest
+conformance case. TypeScript now exposes CSPRNG-backed BigInt mask samplers and
+`ConfidentialTransactionBigInt.walletProveMerkleWithFee`, which builds a
+randomized BigInt Merkle transfer proof from wallet openings without requiring
+callers to supply per-round masks. The runtime-surface manifest
 still records `runtimeIntegerBoundary.status =
 "blocked_by_transaction_i64_encoding"`, and
 `scripts/check_confidential_runtime_surface.py --require-production` fails while
 the selected launch namespaces remain signed-64. Production still needs
-launch-callers moved to selected bignum namespaces, CSPRNG wallet proof
-generation, canonical bignum serialization for every remaining proof API and
-transaction/runtime integer field that can carry widened values, and
-widened-runtime benchmark evidence across all runtimes.
+launch-callers moved to selected bignum namespaces, native randomized bignum
+wallet-prover convenience paths, canonical bignum serialization for every
+remaining proof API and transaction/runtime integer field that can carry widened
+values, and widened-runtime benchmark evidence across all runtimes.
 External estimator evidence alone is not enough to
 mark the candidate launchable.
 

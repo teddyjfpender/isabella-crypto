@@ -357,6 +357,85 @@ describe('Confidential bignum transaction namespace vectors', () => {
       nf2,
       proof!
     )).toBe(true);
+
+    const walletProof = tx.walletProveMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      fee,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2
+    );
+    expect(walletProof).not.toBeNull();
+    expect(tx.fsVerifyMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      root,
+      spent,
+      fee,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      walletProof!
+    )).toBe(true);
+    expect(tx.walletProveMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      [nf1],
+      fee,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2
+    )).toBeNull();
+    expect(tx.walletProveMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      fee + 1n,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2
+    )).toBeNull();
     expect(tx.fsVerifyMerkleWithFee(
       params,
       gamma,

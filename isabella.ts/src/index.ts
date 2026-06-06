@@ -11,7 +11,7 @@
  * Isabelle-exported OCaml Canon modules only.
  */
 
-import { createHash, randomInt } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 // Load the js_of_ocaml runtime (sets globalThis.Isabella)
 // This import is handled by the runtime loader
@@ -1207,6 +1207,43 @@ function sampleCenteredInt(bound: number, label: string): number {
 function sampleCenteredVector(length: number, bound: number, label: string): IntVec {
   assertSafeArrayLength(length, `${label}.length`);
   return Array.from({ length }, (_, index) => sampleCenteredInt(bound, `${label}[${index}]`));
+}
+
+function sampleNonNegativeBigIntBelow(limit: bigint, label: string): bigint {
+  if (limit <= 0n) {
+    throw new RangeError(`${label} sampling limit must be positive`);
+  }
+  const bitLength = limit.toString(2).length;
+  const bytes = Math.max(1, Math.ceil(bitLength / 8));
+  const excessBits = bytes * 8 - bitLength;
+  for (let attempt = 0; attempt < 1024; attempt += 1) {
+    const entropy = randomBytes(bytes);
+    if (excessBits > 0) {
+      entropy[0] &= 0xff >>> excessBits;
+    }
+    const sample = BigInt(`0x${entropy.toString('hex')}`);
+    if (sample < limit) {
+      return sample;
+    }
+  }
+  throw new Error(`${label} rejection sampler exhausted`);
+}
+
+function sampleCenteredBigInt(bound: ConfidentialBigIntInput, label: string): bigint {
+  const normalized = normalizeConfidentialBigInt(bound, label);
+  if (normalized < 0n) {
+    throw new RangeError(`${label} must be non-negative`);
+  }
+  return sampleNonNegativeBigIntBelow(2n * normalized + 1n, label) - normalized;
+}
+
+function sampleCenteredBigIntVector(
+  length: number,
+  bound: ConfidentialBigIntInput,
+  label: string
+): BigIntVec {
+  assertSafeArrayLength(length, `${label}.length`);
+  return Array.from({ length }, (_, index) => sampleCenteredBigInt(bound, `${label}[${index}]`));
 }
 
 function encodeI64LE(value: number, label: string): Buffer {
@@ -2672,10 +2709,24 @@ export namespace ConfidentialSampling {
   }
 
   /**
+   * Sample uniformly from the centered BigInt interval [-bound, bound].
+   */
+  export function boundedBigInt(bound: ConfidentialBigIntInput): bigint {
+    return sampleCenteredBigInt(bound, 'bound');
+  }
+
+  /**
    * Sample an integer vector with every coordinate in [-bound, bound].
    */
   export function intVector(length: number, bound: number): IntVec {
     return sampleCenteredVector(length, bound, 'vector');
+  }
+
+  /**
+   * Sample a BigInt vector with every coordinate in [-bound, bound].
+   */
+  export function bigIntVector(length: number, bound: ConfidentialBigIntInput): BigIntVec {
+    return sampleCenteredBigIntVector(length, bound, 'vector');
   }
 
   /**
@@ -2685,6 +2736,20 @@ export namespace ConfidentialSampling {
     return {
       msg: sampleCenteredVector(msgLength, bound, 'opening.msg'),
       rand: sampleCenteredVector(randLength, bound, 'opening.rand'),
+    };
+  }
+
+  /**
+   * Sample a BigInt commitment-opening-shaped mask.
+   */
+  export function bigIntOpening(
+    msgLength: number,
+    randLength: number,
+    bound: ConfidentialBigIntInput
+  ): BigIntCommitOpening {
+    return {
+      msg: sampleCenteredBigIntVector(msgLength, bound, 'opening.msg'),
+      rand: sampleCenteredBigIntVector(randLength, bound, 'opening.rand'),
     };
   }
 
@@ -2699,6 +2764,19 @@ export namespace ConfidentialSampling {
   ): CommitOpening[] {
     assertSafeArrayLength(count, 'openings.length');
     return Array.from({ length: count }, () => opening(msgLength, randLength, bound));
+  }
+
+  /**
+   * Sample repeated BigInt commitment-opening-shaped masks.
+   */
+  export function bigIntOpenings(
+    count: number,
+    msgLength: number,
+    randLength: number,
+    bound: ConfidentialBigIntInput
+  ): BigIntCommitOpening[] {
+    assertSafeArrayLength(count, 'openings.length');
+    return Array.from({ length: count }, () => bigIntOpening(msgLength, randLength, bound));
   }
 }
 
@@ -3139,6 +3217,25 @@ export namespace ConfidentialBalanceBigInt {
     } catch {
       return false;
     }
+  }
+
+  export function sampleMask(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput
+  ): BigIntVec {
+    if (!validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    return ConfidentialSampling.bigIntVector(params.n2, gamma);
+  }
+
+  export function sampleMasks(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    rounds: number = CT_FS_ROUNDS
+  ): BigIntMatrix {
+    assertSafeArrayLength(rounds, 'rounds');
+    return Array.from({ length: rounds }, () => sampleMask(params, gamma));
   }
 
   export function validResponse(
@@ -3611,6 +3708,41 @@ export namespace ConfidentialRangeBigInt {
     }
   }
 
+  export function sampleAmountMask(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput
+  ): BigIntVec {
+    if (!ConfidentialBalanceBigInt.validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    return ConfidentialSampling.bigIntVector(params.n2, gamma);
+  }
+
+  export function sampleAmountMasks(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    rounds: number = CT_FS_ROUNDS
+  ): BigIntMatrix {
+    assertSafeArrayLength(rounds, 'rounds');
+    return Array.from({ length: rounds }, () => sampleAmountMask(params, gamma));
+  }
+
+  export function samplePairMasks(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    rounds: number = CT_FS_ROUNDS
+  ): BigIntMatrix[] {
+    assertSafeArrayLength(k, 'k');
+    assertSafeArrayLength(rounds, 'rounds');
+    if (!ConfidentialBalanceBigInt.validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    return Array.from({ length: rounds }, () =>
+      Array.from({ length: k }, () => ConfidentialSampling.bigIntVector(params.n2, gamma))
+    );
+  }
+
   export function amountResponseBound(
     params: BigIntScalarCommitParams,
     gamma: ConfidentialBigIntInput,
@@ -3996,6 +4128,25 @@ export namespace ConfidentialNullifierBigInt {
     } catch {
       return false;
     }
+  }
+
+  export function sampleMask(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput
+  ): BigIntCommitOpening {
+    if (!ConfidentialBalanceBigInt.validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    return ConfidentialSampling.bigIntOpening(params.n1, params.n2, gamma);
+  }
+
+  export function sampleMasks(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    rounds: number = CT_FS_ROUNDS
+  ): BigIntCommitOpening[] {
+    assertSafeArrayLength(rounds, 'rounds');
+    return Array.from({ length: rounds }, () => sampleMask(params, gamma));
   }
 
   export function responseBound(
@@ -5941,6 +6092,159 @@ export namespace ConfidentialTransactionBigInt {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  function sampleOpeningForMessage(
+    params: BigIntScalarCommitParams,
+    msg: bigint,
+    label: string
+  ): BigIntCommitOpening {
+    if (!ConfidentialBalanceBigInt.validScalarParams(params) || params.n1 !== 1) {
+      throw new Error(`invalid scalar commitment parameters for ${label}`);
+    }
+    return {
+      msg: [msg],
+      rand: ConfidentialSampling.bigIntVector(params.n2, params.beta),
+    };
+  }
+
+  function sampleBitOpeningsForAmount(
+    params: BigIntScalarCommitParams,
+    amount: bigint,
+    k: number,
+    label: string
+  ): BigIntCommitOpening[] {
+    assertSafeArrayLength(k, 'k');
+    if (amount < 0n) {
+      throw new Error(`${label} amount must be non-negative`);
+    }
+    if (amount >= (1n << BigInt(k))) {
+      throw new Error(`${label} amount exceeds ${k}-bit range`);
+    }
+    return Array.from({ length: k }, (_, bit) =>
+      sampleOpeningForMessage(params, (amount >> BigInt(bit)) & 1n, `${label}.bits[${bit}]`)
+    );
+  }
+
+  function sampleComplementOpenings(
+    params: BigIntScalarCommitParams,
+    bits: readonly BigIntCommitOpening[],
+    label: string
+  ): BigIntCommitOpening[] {
+    return bits.map((bitOpening, index) => {
+      const normalized = normalizeOpening(bitOpening, `${label}.bits[${index}]`);
+      if (
+        normalized.msg.length !== 1 ||
+        normalized.msg[0] < 0n ||
+        normalized.msg[0] > 1n
+      ) {
+        throw new Error(`${label}.bits[${index}] must open a bit`);
+      }
+      return sampleOpeningForMessage(params, 1n - normalized.msg[0], `${label}.comps[${index}]`);
+    });
+  }
+
+  export function walletProveMerkle(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    ledger: readonly BigIntVecInput[],
+    spent: readonly BigIntVecInput[],
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    nf1: BigIntVecInput,
+    nf2: BigIntVecInput,
+    opIn1: BigIntCommitOpening,
+    opIn2: BigIntCommitOpening,
+    opOut1: BigIntCommitOpening,
+    opOut2: BigIntCommitOpening
+  ): BigIntMerkleTransactionProof | null {
+    return walletProveMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      0n,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2
+    );
+  }
+
+  export function walletProveMerkleWithFee(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    ledger: readonly BigIntVecInput[],
+    spent: readonly BigIntVecInput[],
+    publicFee: ConfidentialBigIntInput,
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    nf1: BigIntVecInput,
+    nf2: BigIntVecInput,
+    opIn1: BigIntCommitOpening,
+    opIn2: BigIntCommitOpening,
+    opOut1: BigIntCommitOpening,
+    opOut2: BigIntCommitOpening
+  ): BigIntMerkleTransactionProof | null {
+    try {
+      const rounds = CT_FS_ROUNDS;
+      const out1Bits = sampleBitOpeningsForAmount(params, amountOfOpening(opOut1), k, 'opOut1');
+      const out1Comps = sampleComplementOpenings(params, out1Bits, 'opOut1');
+      const out2Bits = sampleBitOpeningsForAmount(params, amountOfOpening(opOut2), k, 'opOut2');
+      const out2Comps = sampleComplementOpenings(params, out2Bits, 'opOut2');
+      return fsProveMerkleWithFee(
+        params,
+        gamma,
+        k,
+        ck,
+        nk,
+        ledger,
+        spent,
+        publicFee,
+        cIn1,
+        cIn2,
+        cOut1,
+        cOut2,
+        nf1,
+        nf2,
+        opIn1,
+        opIn2,
+        opOut1,
+        opOut2,
+        out1Bits,
+        out1Comps,
+        out2Bits,
+        out2Comps,
+        ConfidentialNullifierBigInt.sampleMasks(params, gamma, rounds),
+        ConfidentialNullifierBigInt.sampleMasks(params, gamma, rounds),
+        ConfidentialBalanceBigInt.sampleMasks(params, gamma, rounds),
+        ConfidentialRangeBigInt.sampleAmountMasks(params, gamma, rounds),
+        ConfidentialRangeBigInt.samplePairMasks(params, gamma, k, rounds),
+        ConfidentialRangeBigInt.sampleAmountMasks(params, gamma, rounds),
+        ConfidentialRangeBigInt.samplePairMasks(params, gamma, k, rounds)
+      );
+    } catch {
+      return null;
     }
   }
 

@@ -151,9 +151,13 @@
       ],
       "ConfidentialSampling": [
         "boundedInt",
+        "boundedBigInt",
         "intVector",
+        "bigIntVector",
         "opening",
-        "openings"
+        "bigIntOpening",
+        "openings",
+        "bigIntOpenings"
       ],
       "ConfidentialBalance": [
         "sampleMask",
@@ -166,6 +170,8 @@
         "randCommit",
         "validWitness",
         "validMask",
+        "sampleMask",
+        "sampleMasks",
         "validResponse",
         "relation",
         "sigmaCommit",
@@ -183,6 +189,9 @@
         "pairCommitment",
         "amountWitnessBound",
         "pairWitnessBound",
+        "sampleAmountMask",
+        "sampleAmountMasks",
+        "samplePairMasks",
         "amountResponseBound",
         "pairResponseBound",
         "fsRounds",
@@ -193,6 +202,8 @@
       ],
       "ConfidentialNullifierBigInt": [
         "nullifier",
+        "sampleMask",
+        "sampleMasks",
         "responseBound",
         "fsRounds",
         "fsFields",
@@ -255,6 +266,8 @@
         "merkleLedgerRoot",
         "merkleMembershipProve",
         "merkleMembershipVerify",
+        "walletProveMerkle",
+        "walletProveMerkleWithFee",
         "fsProveMerkle",
         "fsProveMerkleWithFee",
         "fsVerifyMerkle",
