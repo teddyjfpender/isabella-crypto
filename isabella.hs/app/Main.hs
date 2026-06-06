@@ -100,6 +100,7 @@ showHelp = do
     putStrLn "  ct-bignum-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2"
     putStrLn "  ct-bignum-merkle-proof-digest ... Hash canonical bignum Merkle transaction proof bytes"
     putStrLn "  ct-bignum-merkle-envelope-digest ... Hash canonical bignum context digest and proof digest bytes"
+    putStrLn "  ct-bignum-verify-merkle-envelope ... Verify bignum context digest, policy, and Merkle transaction proof"
     putStrLn "  ct-bignum-wallet-proof-request-digest ... Hash canonical bignum wallet proof request bytes"
     putStrLn "  ct-bignum-accepted-root-window-digest ... Hash canonical bignum live accepted-root window bytes"
     putStrLn "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2"

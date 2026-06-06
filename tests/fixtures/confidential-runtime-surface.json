@@ -54,6 +54,7 @@
       "ct-bignum-transaction-context",
       "ct-bignum-merkle-proof-digest",
       "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-verify-merkle-envelope",
       "ct-bignum-wallet-proof-request-digest",
       "ct-bignum-accepted-root-window-digest"
     ],
@@ -81,6 +82,7 @@
       "ct-bignum-transaction-context",
       "ct-bignum-merkle-proof-digest",
       "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-verify-merkle-envelope",
       "ct-bignum-wallet-proof-request-digest",
       "ct-bignum-accepted-root-window-digest"
     ],
@@ -307,8 +309,8 @@
       "transactionBignumMerkleProofPreimage("
     ],
     "requiredForProduction": [
-      "Promote selected launch callers from the signed-64 transaction namespace to the bignum namespace once native full-proof parity and widened-runtime evidence are pinned.",
-      "Regenerate transaction, Merkle, proof-digest, envelope, accepted-root-window, wallet-request, full-proof, and backend parity vectors under the selected bignum namespace across all runtimes.",
+      "Promote selected launch callers from the signed-64 transaction namespace to the bignum namespace once native prover parity, verifier parity, and widened-runtime evidence are pinned.",
+      "Regenerate transaction, Merkle, proof-digest, envelope-verifier, accepted-root-window, wallet-request, full-proof, and backend parity vectors under the selected bignum namespace across all runtimes.",
       "Run realistic widened-modulus prover/verifier benchmarks across TypeScript, OCaml, and Haskell before clearing runtime_integer_model_incompatible."
     ]
   },
@@ -328,6 +330,7 @@
       "ct-bignum-transaction-context",
       "ct-bignum-merkle-proof-digest",
       "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-verify-merkle-envelope",
       "ct-bignum-wallet-proof-request-digest",
       "ct-bignum-accepted-root-window-digest",
       "ct-balance-bigint-rand-commit",
@@ -377,6 +380,7 @@
       "ct-bignum-transaction-context",
       "ct-bignum-merkle-proof-digest",
       "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-verify-merkle-envelope",
       "ct-bignum-wallet-proof-request-digest",
       "ct-bignum-accepted-root-window-digest",
       "ct-balance-bigint-rand-commit",
@@ -437,23 +441,27 @@
       "ISABELLA-CT-MERKLE-BIGNUM-v1",
       "ISABELLA-CT-TX-BIGNUM-v1",
       "ct-bignum-transaction-context",
-      "ct-bignum-merkle-proof-digest"
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-verify-merkle-envelope"
     ],
     "isabella.hs/app/CLI/Commands.hs": [
       "ISABELLA-CT-MERKLE-BIGNUM-v1",
       "ISABELLA-CT-TX-BIGNUM-v1",
       "ct-bignum-transaction-context",
-      "ct-bignum-merkle-proof-digest"
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-verify-merkle-envelope"
     ],
     "tests/src/validate-ocaml.ts": [
       "confidential-bignum-transaction-vectors.json",
       "ct-bignum-transaction-context",
-      "ct-bignum-merkle-proof-digest"
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-verify-merkle-envelope"
     ],
     "tests/src/validate-haskell.ts": [
       "confidential-bignum-transaction-vectors.json",
       "ct-bignum-transaction-context",
-      "ct-bignum-merkle-proof-digest"
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-verify-merkle-envelope"
     ],
     "tests/src/confidential-bignum-transaction.test.ts": [
       "ConfidentialMerkleBigInt",

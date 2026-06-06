@@ -95,6 +95,7 @@ runCommand format cmd args = case cmd of
     "ct-bignum-transaction-context" -> cmdCtBignumTransactionContext format args
     "ct-bignum-merkle-proof-digest" -> cmdCtBignumMerkleProofDigest format args
     "ct-bignum-merkle-envelope-digest" -> cmdCtBignumMerkleEnvelopeDigest format args
+    "ct-bignum-verify-merkle-envelope" -> cmdCtBignumVerifyMerkleEnvelope format args
     "ct-bignum-wallet-proof-request-digest" -> cmdCtBignumWalletProofRequestDigest format args
     "ct-bignum-accepted-root-window-digest" -> cmdCtBignumAcceptedRootWindowDigest format args
     "ct-transaction-context" -> cmdCtTransactionContext format args
@@ -680,6 +681,67 @@ bignumWalletProofRequestDigest protocolVersion networkId assetId ledgerEpoch rt 
                         (encodeTransactionDigest "contextDigest" contextDigest ++
                          encodeAcceptedRootVectorBytes "acceptedRoots" acceptedRootPairs ++
                          encodeBignumMatrixBytes "spentNullifiers" spentNullifiers))
+
+requireNonnegativePublicFee :: Integer -> Bool
+requireNonnegativePublicFee = (>= 0)
+
+bignumBalanceCommitment :: BigCbParams -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer]
+bignumBalanceCommitment params cIn1 cIn2 cOut1 cOut2 =
+    bigVecMod
+        (bigVecAdd
+            (bigVecAdd cIn1 cIn2)
+            (bigScalarMult (-1) (bigVecAdd cOut1 cOut2)))
+        (bigCbQ params)
+
+bignumPublicAmountCommitment :: BigCbParams -> [[Integer]] -> Integer -> [Integer]
+bignumPublicAmountCommitment params ck publicFee =
+    if requireNonnegativePublicFee publicFee
+      then bigCommit params ck (BigOpening [publicFee] (replicate (bigCbN2 params) 0))
+      else error "publicFee must be non-negative"
+
+bignumFeeBalanceCommitment ::
+  BigCbParams -> [[Integer]] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> Integer -> [Integer]
+bignumFeeBalanceCommitment params ck cIn1 cIn2 cOut1 cOut2 publicFee =
+    bigVecMod
+        (bigVecAdd
+            (bignumBalanceCommitment params cIn1 cIn2 cOut1 cOut2)
+            (bigScalarMult (-1) (bignumPublicAmountCommitment params ck publicFee)))
+        (bigCbQ params)
+
+bignumVerifyMerkleWithFee ::
+  BigCbParams -> Integer -> Int -> [[Integer]] -> [[Integer]] -> [[Integer]] ->
+  String -> Int -> [[Integer]] -> Integer ->
+  [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] ->
+  BigMerkleTransactionProof -> Bool
+bignumVerifyMerkleWithFee params gamma k ck nk ledger rootDigest rootDepth spent publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+    let proofDigestForced = length (bignumMerkleProofDigest proof) == 64
+        in1Member = bigTxIn1Member proof
+        in2Member = bigTxIn2Member proof
+        in1Depth = length (ConfidentialMerkle.merkle_siblings in1Member)
+        in2Depth = length (ConfidentialMerkle.merkle_siblings in2Member)
+        balanceTarget =
+          bignumFeeBalanceCommitment params ck cIn1 cIn2 cOut1 cOut2 publicFee
+     in proofDigestForced &&
+        requireNonnegativePublicFee publicFee &&
+        validBigCommitKey params ck &&
+        validBigCommitKey params nk &&
+        bignumMerkleRoot ledger == rootDigest &&
+        in1Depth == rootDepth &&
+        in2Depth == rootDepth &&
+        bignumMerkleMembershipVerify cIn1 in1Member &&
+        bignumMerkleMembershipVerify cIn2 in2Member &&
+        ConfidentialMerkle.merkle_root in1Member == rootDigest &&
+        ConfidentialMerkle.merkle_root in2Member == rootDigest &&
+        ConfidentialMerkle.merkle_index in1Member /= ConfidentialMerkle.merkle_index in2Member &&
+        nf1 `notElem` spent &&
+        nf2 `notElem` spent &&
+        nf1 /= nf2 &&
+        bigNfFsVerify params gamma ck nk cIn1 nf1 (bigTxIn1Nullifier proof) &&
+        bigNfFsVerify params gamma ck nk cIn2 nf2 (bigTxIn2Nullifier proof) &&
+        bigFsVerify params gamma ck balanceTarget (bigTxBalance proof) &&
+        bigCrFsVerify params gamma k ck cOut1 (bigTxOut1Range proof) &&
+        bigCrFsVerify params gamma k ck cOut2 (bigTxOut2Range proof)
 
 bignumHex :: [Int] -> String
 bignumHex = concatMap bignumHexByte
@@ -2997,6 +3059,91 @@ cmdCtBignumMerkleEnvelopeDigest format
             _ -> outputError format "Expected context digest, bignum context fields, and bignum Merkle proof fields"
 cmdCtBignumMerkleEnvelopeDigest format _ =
     outputUsage format ("Usage: ct-bignum-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ++ ctBignumMerkleProofArgsUsage)
+
+cmdCtBignumVerifyMerkleEnvelope :: OutputFormat -> [String] -> IO ()
+cmdCtBignumVerifyMerkleEnvelope format
+    ( mStr : n2Str : qStr : betaStr : gammaStr : kStr : ckStr : nkStr
+      : ledgerStr : spentStr : expectedVersionStr : expectedNetworkId
+      : expectedAssetIdStr : expectedLedgerEpochStr : expectedRoot
+      : expectedRootDepthStr : expectedPublicFeeStr : contextDigest : protocolVersionStr : networkId
+      : assetIdStr : ledgerEpochStr : rootDigest : rootDepthStr : publicFeeStr : cIn1Str
+      : cIn2Str : cOut1Str : cOut2Str : nf1Str : nf2Str : proofArgs
+    ) =
+        case
+            ( parseBigCbParams mStr n2Str qStr betaStr
+            , parseCanonicalInteger gammaStr
+            , parseCanonicalInt kStr
+            , parseCanonicalIntegerMat ckStr
+            , parseCanonicalIntegerMat nkStr
+            , parseCanonicalIntegerMat ledgerStr
+            , parseCanonicalIntegerMat spentStr
+            , parseCanonicalInt expectedVersionStr
+            , parseCanonicalInt expectedAssetIdStr
+            , parseCanonicalInt expectedLedgerEpochStr
+            , parseCanonicalInt expectedRootDepthStr
+            , parseCanonicalInteger expectedPublicFeeStr
+            , parseCanonicalInt protocolVersionStr
+            , parseCanonicalInt assetIdStr
+            , parseCanonicalInt ledgerEpochStr
+            , parseCanonicalInt rootDepthStr
+            , parseCanonicalInteger publicFeeStr
+            , parseCanonicalIntegerVec cIn1Str
+            , parseCanonicalIntegerVec cIn2Str
+            , parseCanonicalIntegerVec cOut1Str
+            , parseCanonicalIntegerVec cOut2Str
+            , parseCanonicalIntegerVec nf1Str
+            , parseCanonicalIntegerVec nf2Str
+            , parseCtBignumMerkleProofDigestArgs proofArgs
+            )
+        of
+            ( Just params
+              , Just gamma
+              , Just k
+              , Just ck
+              , Just nk
+              , Just ledger
+              , Just spent
+              , Just expectedVersion
+              , Just expectedAssetId
+              , Just expectedLedgerEpoch
+              , Just expectedRootDepth
+              , Just expectedPublicFee
+              , Just protocolVersion
+              , Just assetId
+              , Just ledgerEpoch
+              , Just rootDepth
+              , Just publicFee
+              , Just cIn1
+              , Just cIn2
+              , Just cOut1
+              , Just cOut2
+              , Just nf1
+              , Just nf2
+              , Right proof
+              ) -> do
+                let computedDigest =
+                        bignumTransactionContextDigest
+                            protocolVersion networkId assetId ledgerEpoch rootDigest rootDepth publicFee
+                            cIn1 cIn2 cOut1 cOut2 nf1 nf2
+                    policyOk =
+                        expectedPublicFee == publicFee
+                            && protocolVersion == expectedVersion
+                            && networkId == expectedNetworkId
+                            && assetId == expectedAssetId
+                            && ledgerEpoch == expectedLedgerEpoch
+                            && rootDigest == expectedRoot
+                            && rootDepth == expectedRootDepth
+                            && contextDigest == computedDigest
+                    result =
+                        policyOk &&
+                        bignumVerifyMerkleWithFee
+                            params gamma k ck nk ledger rootDigest rootDepth spent publicFee
+                            cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof
+                (evaluate result >>= outputBoolResult format "ct_bignum_verify_merkle_envelope = ")
+                    `catch` handleSampleError format
+            _ -> outputError format "Expected bignum envelope policy, context, and proof fields"
+cmdCtBignumVerifyMerkleEnvelope format _ =
+    outputUsage format ("Usage: ct-bignum-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_ROOT_DEPTH EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2 " ++ ctBignumMerkleProofArgsUsage)
 
 cmdCtBignumWalletProofRequestDigest :: OutputFormat -> [String] -> IO ()
 cmdCtBignumWalletProofRequestDigest

@@ -350,6 +350,205 @@ function acceptedRootDepths(roots: BignumAcceptedRoot[]): string[] {
   return roots.map((root) => root.depth.toString());
 }
 
+function decimalizeBigints(value: unknown): unknown {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map(decimalizeBigints);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, decimalizeBigints(entry)]));
+  }
+  return value;
+}
+
+function bignumOpening(amount: bigint, r0: bigint, r1: bigint): { msg: bigint[]; rand: bigint[] } {
+  return { msg: [amount], rand: [r0, r1] };
+}
+
+function bignumBitOpenings(amount: bigint, bits: number): Array<{ msg: bigint[]; rand: bigint[] }> {
+  return Array.from({ length: bits }, (_, bit) =>
+    bignumOpening((amount >> BigInt(bit)) & 1n, BigInt((bit % 3) - 1), BigInt(1 - (bit % 3)))
+  );
+}
+
+function bignumCompOpenings(bitOpenings: Array<{ msg: bigint[]; rand: bigint[] }>): Array<{ msg: bigint[]; rand: bigint[] }> {
+  return bitOpenings.map((opening, index) =>
+    bignumOpening(1n - opening.msg[0], BigInt(1 - (index % 2)), BigInt((index % 2) - 1))
+  );
+}
+
+function bignumOpeningMasks(rounds: number): Array<{ msg: bigint[]; rand: bigint[] }> {
+  return Array.from({ length: rounds }, (_, round) =>
+    bignumOpening(BigInt((round % 5) - 2), BigInt((round % 7) - 3), BigInt(3 - (round % 7)))
+  );
+}
+
+function bignumVectorMasks(rounds: number): bigint[][] {
+  return Array.from({ length: rounds }, (_, round) => [
+    BigInt((round % 7) - 3),
+    BigInt(3 - (round % 7)),
+  ]);
+}
+
+function bignumPairMasks(rounds: number, bits: number): bigint[][][] {
+  return Array.from({ length: rounds }, (_, round) =>
+    Array.from({ length: bits }, (_, bit) => [
+      BigInt(((round + bit) % 7) - 3),
+      BigInt(3 - ((round + bit) % 7)),
+    ])
+  );
+}
+
+function makeBignumTransferCase() {
+  const tx = sdk.ConfidentialTransactionBigInt;
+  const balance = sdk.ConfidentialBalanceBigInt;
+  const nullifier = sdk.ConfidentialNullifierBigInt;
+  const params = balance.makeParams(2, 2, '4835703278458516765933661', 16n);
+  const gamma = 32n;
+  const k = 4;
+  const rounds = balance.fsRounds();
+  const fee = 1n;
+  const ck = [
+    [3n, 5n, 7n],
+    [11n, 13n, 17n],
+  ];
+  const nk = [
+    [19n, 23n, 29n],
+    [31n, 37n, 41n],
+  ];
+  const opIn1 = bignumOpening(9n, 1n, -2n);
+  const opIn2 = bignumOpening(7n, -1n, 3n);
+  const opOut1 = bignumOpening(10n, 2n, -1n);
+  const opOut2 = bignumOpening(5n, -3n, 1n);
+  const cIn1 = nullifier.nullifier(params, ck, opIn1);
+  const cIn2 = nullifier.nullifier(params, ck, opIn2);
+  const cOut1 = nullifier.nullifier(params, ck, opOut1);
+  const cOut2 = nullifier.nullifier(params, ck, opOut2);
+  const nf1 = nullifier.nullifier(params, nk, opIn1);
+  const nf2 = nullifier.nullifier(params, nk, opIn2);
+  const out1Bits = bignumBitOpenings(opOut1.msg[0], k);
+  const out1Comps = bignumCompOpenings(out1Bits);
+  const out2Bits = bignumBitOpenings(opOut2.msg[0], k);
+  const out2Comps = bignumCompOpenings(out2Bits);
+  const ledger = [cIn1, cIn2, cOut1, cOut2];
+  const spent: bigint[][] = [];
+  const proof = tx.fsProveMerkleWithFee(
+    params,
+    gamma,
+    k,
+    ck,
+    nk,
+    ledger,
+    spent,
+    fee,
+    cIn1,
+    cIn2,
+    cOut1,
+    cOut2,
+    nf1,
+    nf2,
+    opIn1,
+    opIn2,
+    opOut1,
+    opOut2,
+    out1Bits,
+    out1Comps,
+    out2Bits,
+    out2Comps,
+    bignumOpeningMasks(rounds),
+    bignumOpeningMasks(rounds),
+    bignumVectorMasks(rounds),
+    bignumVectorMasks(rounds),
+    bignumPairMasks(rounds, k),
+    bignumVectorMasks(rounds),
+    bignumPairMasks(rounds, k)
+  );
+  assert.ok(proof, 'TypeScript BigInt Merkle proof generation succeeds');
+  const root = tx.merkleLedgerRoot(ledger);
+  const context = {
+    protocolVersion: 1,
+    networkId: 'isabella-devnet',
+    assetId: 7,
+    ledgerEpoch: 42,
+    root: { digest: root, depth: proof.in1Member.siblings.length },
+    publicFee: fee,
+    cIn1,
+    cIn2,
+    cOut1,
+    cOut2,
+    nf1,
+    nf2,
+  };
+  return decimalizeBigints({
+    params: {
+      m: params.m.toString(),
+      n2: params.n2.toString(),
+      q: params.q,
+      beta: params.beta,
+      gamma,
+      k: k.toString(),
+    },
+    ck,
+    nk,
+    ledger,
+    spent,
+    context,
+    contextDigest: tx.transactionContextDigest(context),
+    proof,
+  }) as {
+    params: { m: string; n2: string; q: string; beta: string; gamma: string; k: string };
+    ck: string[][];
+    nk: string[][];
+    ledger: string[][];
+    spent: string[][];
+    context: BignumTransactionContextJson;
+    contextDigest: string;
+    proof: BignumMerkleTransactionProofJson;
+  };
+}
+
+function bignumEnvelopeVerifyArgs(
+  testCase: ReturnType<typeof makeBignumTransferCase>,
+  options: {
+    spent?: string[][];
+    expectedFee?: string;
+    expectedRootDepth?: string;
+    contextDigest?: string;
+    proof?: BignumMerkleTransactionProofJson;
+  } = {}
+): string[] {
+  const context = testCase.context;
+  return [
+    'ct-bignum-verify-merkle-envelope',
+    testCase.params.m,
+    testCase.params.n2,
+    testCase.params.q,
+    testCase.params.beta,
+    testCase.params.gamma,
+    testCase.params.k,
+    integerMatText(testCase.ck),
+    integerMatText(testCase.nk),
+    integerMatText(testCase.ledger),
+    integerMatText(options.spent ?? testCase.spent),
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root.digest,
+    options.expectedRootDepth ?? context.root.depth.toString(),
+    options.expectedFee ?? context.publicFee,
+    options.contextDigest ?? testCase.contextDigest,
+    ...bignumContextArgs(context),
+    ...bignumProofArgs(options.proof ?? testCase.proof),
+  ];
+}
+
+function ocamlBoolResult(args: string[]): boolean {
+  return parseCliResult<{ result: boolean }>(runCli(args)).result;
+}
+
 const bignumLeafCase = bignumTransactionVectors.merkleCases.find((entry) => entry.commitment);
 assert.ok(bignumLeafCase?.commitment, 'bignum Merkle leaf vector exists');
 assert.equal(
@@ -434,6 +633,44 @@ for (const entry of bignumTransactionVectors.walletProofRequestCases) {
     `ct-bignum-wallet-proof-request-digest OCaml parity for ${entry.name}`
   );
 }
+
+const bignumTransferCase = makeBignumTransferCase();
+assert.equal(
+  ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase)),
+  true,
+  'ct-bignum-verify-merkle-envelope OCaml accepts TypeScript BigInt Merkle proof'
+);
+assert.equal(
+  ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase, {
+    spent: [bignumTransferCase.context.nf1],
+  })),
+  false,
+  'ct-bignum-verify-merkle-envelope OCaml rejects spent BigInt nullifier'
+);
+assert.equal(
+  ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase, {
+    expectedFee: (BigInt(bignumTransferCase.context.publicFee) + 1n).toString(),
+  })),
+  false,
+  'ct-bignum-verify-merkle-envelope OCaml rejects wrong bignum fee policy'
+);
+assert.equal(
+  ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase, {
+    expectedRootDepth: (bignumTransferCase.context.root.depth + 1).toString(),
+  })),
+  false,
+  'ct-bignum-verify-merkle-envelope OCaml rejects wrong bignum root depth policy'
+);
+assert.equal(
+  ocamlBoolResult(bignumEnvelopeVerifyArgs(bignumTransferCase, {
+    proof: {
+      ...bignumTransferCase.proof,
+      in2Member: bignumTransferCase.proof.in1Member,
+    },
+  })),
+  false,
+  'ct-bignum-verify-merkle-envelope OCaml rejects reused bignum membership proof'
+);
 
 expectOcamlCommandRejected(
   ['ct-bignum-transaction-context', ...bignumContextArgs({
