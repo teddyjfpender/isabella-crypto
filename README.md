@@ -768,7 +768,11 @@ Current status and roadmap:
   replacement for the external lattice-estimator and LaZer parameter gates.
   `bench/data/confidential-parameter-screen.json` records the local estimator
   import probe and remains blocked until structured external-estimator and
-  LaZer parameter-generation reports pass the readiness checker.
+  LaZer parameter-generation reports pass the readiness checker. The soft
+  honesty gate is `make check-confidential-parameter-readiness`; the strict
+  launch gate is `make check-confidential-production-readiness` and is wired to
+  manual CI runs that set `require_confidential_production` plus
+  `confidential-transfers-*` release tags.
 
 System diagram:
 - [Confidential token ASCII flow](docs/confidential-tokens-ascii.md)

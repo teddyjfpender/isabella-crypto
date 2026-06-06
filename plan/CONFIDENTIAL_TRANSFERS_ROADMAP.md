@@ -214,6 +214,13 @@ Production-facing confidential-transfer gate:
 make test-confidential-production
 ```
 
+Strict launch/release parameter gate. This intentionally fails while the
+current report is blocked:
+
+```bash
+make check-confidential-production-readiness
+```
+
 Benchmark checks:
 
 ```bash

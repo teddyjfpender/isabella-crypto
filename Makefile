@@ -5,6 +5,8 @@
         test-validation test-vectors check-formalization \
         build-cool build-balanced build-fast build-export \
         test-sdk-equivalence test-confidential-production \
+        check-confidential-parameter-readiness \
+        check-confidential-production-readiness \
         bench-typescript-confidential bench-confidential-verify \
         bench-confidential-realistic
 
@@ -102,6 +104,19 @@ test-sdk-equivalence:
 	@echo "Running cross-SDK equivalence harnesses..."
 	@cd tests && bun run validate-sdks
 
+check-confidential-parameter-readiness:
+	@echo "Screening confidential transfer parameters..."
+	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
+	@echo "Checking confidential parameter readiness honesty gate..."
+	@python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json
+
+check-confidential-production-readiness:
+	@echo "Screening confidential transfer parameters..."
+	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
+	@git diff --exit-code -- bench/data/confidential-parameter-screen.json
+	@echo "Checking strict confidential production-readiness gate..."
+	@python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json --require-production
+
 test-confidential-production: check-formalization build-cool ocaml haskell typescript
 	@echo "Generating confidential transcript vectors..."
 	@node scripts/generate_confidential_transcript_vectors.mjs
@@ -109,10 +124,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@node scripts/generate_confidential_merkle_vectors.mjs
 	@echo "Generating confidential transaction context vectors..."
 	@node scripts/generate_confidential_transaction_vectors.mjs
-	@echo "Screening confidential transfer parameters..."
-	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
-	@echo "Checking confidential parameter readiness gate..."
-	@python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json
+	@$(MAKE) check-confidential-parameter-readiness
 	@echo "Checking confidential scaffold quarantine..."
 	@python3 scripts/check_confidential_scaffold_quarantine.py
 	@echo "Running confidential transcript vector tests..."
@@ -207,6 +219,8 @@ help:
 	@echo "  test-validation     Run cross-validation tests vs noble-post-quantum"
 	@echo "  test-sdk-equivalence Run Haskell/OCaml/TypeScript shared-surface checks"
 	@echo "  test-confidential-production Run production-facing confidential-transfer gates"
+	@echo "  check-confidential-parameter-readiness Run soft confidential parameter honesty gate"
+	@echo "  check-confidential-production-readiness Run strict launch parameter gate"
 	@echo "  bench-typescript-confidential Benchmark TypeScript confidential proof APIs"
 	@echo "  bench-confidential-verify   Compare JS and native confidential verifier hot paths"
 	@echo "  bench-confidential-realistic Benchmark 1024-dimensional confidential balance proof"

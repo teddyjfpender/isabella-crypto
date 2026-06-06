@@ -3,12 +3,19 @@ name: CI
 on:
   push:
     branches: [main, master]
+    tags:
+      - 'confidential-transfers-*'
   pull_request:
     branches: [main, master]
   workflow_dispatch:
     inputs:
       run_lazer_optional:
         description: "Run optional LaZer equivalence job (requires self-hosted linux x64)"
+        required: false
+        default: false
+        type: boolean
+      require_confidential_production:
+        description: "Require a production-ready confidential-transfer parameter report"
         required: false
         default: false
         type: boolean
@@ -358,6 +365,25 @@ jobs:
           path: tests/coverage/
           retention-days: 7
 
+  # Strict launch gate: fails until at least one confidential-transfer parameter
+  # candidate has validated external estimator evidence, LaZer-style parameter
+  # evidence, and passing formal SIS-margin checks.
+  confidential-production-readiness:
+    name: Confidential Production Readiness Gate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.require_confidential_production == 'true' || startsWith(github.ref, 'refs/tags/confidential-transfers-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check strict confidential parameter readiness
+        run: |
+          python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
+          git diff --exit-code -- bench/data/confidential-parameter-screen.json
+          python3 scripts/check_confidential_parameter_readiness.py \
+            --report bench/data/confidential-parameter-screen.json \
+            --require-production
+
   # Optional: full LaZer-backed equivalence checks.
   # Run manually on a self-hosted runner that satisfies LaZer build requirements.
   test-lazer-optional:
@@ -459,7 +485,7 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [formalization-check, changes, isabelle, haskell, ocaml, typescript, test-validation]
+    needs: [formalization-check, changes, isabelle, haskell, ocaml, typescript, test-validation, confidential-production-readiness]
     if: always()
     steps:
       - name: Check status
@@ -488,6 +514,10 @@ jobs:
           fi
           if [[ "${{ needs.test-validation.result }}" == "failure" ]]; then
             echo "Cross-validation tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.confidential-production-readiness.result }}" == "failure" ]]; then
+            echo "Confidential production-readiness gate failed"
             exit 1
           fi
           echo "All checks passed!"
