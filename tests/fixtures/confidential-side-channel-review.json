@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "scope": {
+    "reviewDate": "2026-06-06",
+    "target": "SIS-note confidential-transfer MVP SDK and native CLI surfaces",
+    "boundary": "Verifier, serializer, digest, Merkle, envelope, and root-window paths operate on public transaction data. Prover and sampler paths handle wallet-local note openings, amounts, bit decompositions, and proof masks. The OCaml, Haskell, and TypeScript implementations are reviewed reference runtimes, not constant-time kernels for hostile shared-process or remote-oracle deployment."
+  },
+  "secretData": [
+    "note openings before commitment publication",
+    "input and output note amounts before disclosure policy is applied",
+    "range bit openings and complement openings",
+    "balance, range, and nullifier proof masks",
+    "nullifier secret opening material before the public nullifier is derived"
+  ],
+  "publicData": [
+    "commitments, nullifiers, proofs, Merkle paths, roots, and accepted-root windows",
+    "transaction contexts, envelope digests, wallet proof request digests, and proof digests",
+    "verifier policies, fee policies, network IDs, asset IDs, and ledger epochs"
+  ],
+  "reviewItems": [
+    {
+      "id": "typescript_csprng_sampling",
+      "status": "reviewed",
+      "dataClass": "secret randomness",
+      "finding": "TypeScript proof-mask helpers use Node.js crypto.randomInt with explicit bound and allocation checks.",
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "import { createHash, randomInt } from 'node:crypto';",
+            "function sampleCenteredInt",
+            "export namespace ConfidentialSampling",
+            "export function sampleNullifierMask"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-sampling.test.ts",
+          "snippets": [
+            "ConfidentialSampling.boundedInt",
+            "ConfidentialBalance.sampleMask",
+            "ConfidentialTransaction.sampleNullifierMask"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "native_csprng_sampling",
+      "status": "reviewed",
+      "dataClass": "secret randomness",
+      "finding": "OCaml and Haskell samplers read /dev/urandom and use rejection sampling for unbiased bounded integers; rejection timing is independent of wallet secrets but depends on fresh randomness.",
+      "evidence": [
+        {
+          "file": "isabella.ml/src/canon/confidential_sampling.ml",
+          "snippets": [
+            "let random_source = \"/dev/urandom\"",
+            "let bounded_int_from channel bound",
+            "if sample >= limit then draw ()"
+          ]
+        },
+        {
+          "file": "isabella.hs/src/Canon/Confidential_sampling.hs",
+          "snippets": [
+            "randomSource = \"/dev/urandom\"",
+            "sampleBoundedIntFrom",
+            "if sample >= limit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prover_secret_path_boundary",
+      "status": "accepted_residual",
+      "dataClass": "secret witness",
+      "finding": "Balance, range, and nullifier provers process secret openings and masks in high-level runtimes. They are acceptable only as wallet-local reference paths, not as constant-time services exposed to adversarial timing observers.",
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "export function fsProve(",
+            "fsProveMerkleWithFee",
+            "ConfidentialBalance.fsProve",
+            "ConfidentialRange.fsProve"
+          ]
+        },
+        {
+          "file": "isabella.ml/src/canon/confidential_transaction.ml",
+          "snippets": [
+            "let transaction_fs_prove_merkle",
+            "nullifier_fs_prove",
+            "Confidential_balance.balance_fs_prove",
+            "Confidential_range.range_fs_prove"
+          ]
+        },
+        {
+          "file": "isabella.hs/src/Canon/ZK/Confidential_Transaction.hs",
+          "snippets": [
+            "transactionFsProveMerkle",
+            "nullifierFsProve",
+            "ConfidentialBalance.balanceFsProve",
+            "ConfidentialRange.rangeFsProve"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verifier_public_input_boundary",
+      "status": "reviewed",
+      "dataClass": "public statement and proof",
+      "finding": "Verifier and ledger-step APIs consume public commitments, nullifiers, roots, paths, proofs, fee policies, and spent sets. Data-dependent rejection behavior is therefore not a witness side channel for accepted public transaction data.",
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "fsVerifyMerkleEnvelope",
+            "transactionContextPolicyIsComplete(policy)",
+            "fsVerifyMerkleWithFee("
+          ]
+        },
+        {
+          "file": "isabella.ml/src/canon/confidential_transaction.ml",
+          "snippets": [
+            "let transaction_fs_verify_merkle",
+            "let transaction_fs_verify_merkle_fee"
+          ]
+        },
+        {
+          "file": "isabella.hs/src/Canon/ZK/Confidential_Transaction.hs",
+          "snippets": [
+            "transactionFsVerifyMerkle",
+            "transactionFsVerifyMerkleFee"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "canonical_serialization_public_boundary",
+      "status": "reviewed",
+      "dataClass": "public serialization",
+      "finding": "Transaction context, envelope, accepted-root-window, wallet-request, and proof digest serializers are domain-separated public encodings with exact-shape and canonical integer checks.",
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "assertExactObjectKeysWithOptional",
+            "transactionAcceptedRootWindowPreimage",
+            "transactionWalletProofRequestPreimage",
+            "transactionEnvelopePreimage"
+          ]
+        },
+        {
+          "file": "tests/fixtures/confidential-transaction-vectors.json",
+          "snippets": [
+            "acceptedRootWindowCases",
+            "walletProofRequestCases",
+            "merkleProofCases"
+          ]
+        },
+        {
+          "file": "tests/src/validate-ocaml.ts",
+          "snippets": [
+            "native accepted-root-window and wallet-request digest/rejection parity",
+            "native non-canonical/out-of-range transaction encoding rejection"
+          ]
+        },
+        {
+          "file": "tests/src/validate-haskell.ts",
+          "snippets": [
+            "native accepted-root-window and wallet-request digest/rejection parity",
+            "native non-canonical/out-of-range transaction encoding rejection"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scaffold_benchmark_boundary",
+      "status": "reviewed",
+      "dataClass": "public scaffolding and benchmarks",
+      "finding": "Ambiguous scaffold prover/verifier commands are quarantined away from production-facing validation, and benchmark commands are explicitly scaffold-labelled.",
+      "evidence": [
+        {
+          "file": "tests/fixtures/confidential-runtime-surface.json",
+          "snippets": [
+            "ct-verify-bench-scaffold",
+            "ct-prove-scaffold",
+            "retiredCommands"
+          ]
+        },
+        {
+          "file": "scripts/check_confidential_scaffold_quarantine.py",
+          "snippets": [
+            "confidential-scaffold-quarantine",
+            "ct-verify-bench-scaffold"
+          ]
+        }
+      ]
+    }
+  ],
+  "residualRisks": [
+    {
+      "id": "high_level_runtimes_are_not_constant_time",
+      "status": "accepted_for_reference_mvp",
+      "mitigation": "Do not deploy the OCaml, Haskell, or TypeScript prover/sampler paths as shared-process or remote proof-generation oracles. A hostile co-residency launch requires a constant-time native prover kernel or an external side-channel signoff for the selected implementation.",
+      "launchCondition": "External review must sign off on the selected prover/sampler implementation before a production launch claims side-channel hardening."
+    },
+    {
+      "id": "external_side_channel_signoff",
+      "status": "required_before_launch",
+      "mitigation": "The local manifest documents data classes, reviewed surfaces, and residual assumptions; final launch still requires external cryptography/implementation review.",
+      "launchCondition": "Set externalReview.status to signed_off only after an external reviewer approves the selected implementation boundary."
+    }
+  ],
+  "externalReview": {
+    "status": "required_before_launch",
+    "evidence": [
+      {
+        "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+        "snippets": [
+          "external cryptography review",
+          "signed-off external crypto/implementation audits"
+        ]
+      }
+    ]
+  },
+  "gateWiring": {
+    "Makefile": [
+      "scripts/check_confidential_side_channel_review.py"
+    ],
+    ".github/workflows/ci.yml": [
+      "scripts/check_confidential_side_channel_review.py"
+    ],
+    "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md": [
+      "confidential side-channel review manifest"
+    ]
+  }
+}

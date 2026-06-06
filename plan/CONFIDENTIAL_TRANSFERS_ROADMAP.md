@@ -184,6 +184,15 @@ benchmarks are independently checked.
   production-facing uses of those legacy names, verifies the native CLIs do not
   dispatch them, and checks the local TypeScript CLI helper has no ambiguous
   scaffold aliases.
+- `tests/fixtures/confidential-side-channel-review.json` now records the local
+  side-channel review boundary for the confidential-transfer SDK/CLI surfaces.
+  It classifies secret prover/sampler data versus public verifier and
+  serialization data, records CSPRNG and canonical-serialization evidence, and
+  explicitly treats the OCaml/Haskell/TypeScript prover paths as wallet-local
+  reference runtimes rather than constant-time hostile co-residency kernels.
+  `scripts/check_confidential_side_channel_review.py` is wired into CI and
+  `make test-confidential-production`; strict production mode requires external
+  side-channel signoff before launch.
 
 ## Remaining Security Work
 
@@ -341,6 +350,7 @@ Completed:
 - `node scripts/check_confidential_bench_budgets.mjs`
 - `python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json`
 - `python3 scripts/check_confidential_domain_registry.py`
+- `python3 scripts/check_confidential_side_channel_review.py`
 
 Important validation caveats:
 
@@ -372,6 +382,10 @@ Important validation caveats:
   on production-facing commands, and verifies explicit
   Merkle proof rejection through native envelope commands; consensus/indexer
   service integration remains open.
+- `tests/fixtures/confidential-side-channel-review.json` is a local review
+  artifact and not an external audit. It documents the current implementation
+  boundary and residual constant-time assumption; `--require-production` on the
+  side-channel checker intentionally fails until external signoff is recorded.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
   acceptance/rejection against native context digests and Merkle proofs through

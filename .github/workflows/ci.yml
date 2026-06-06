@@ -331,6 +331,9 @@ jobs:
       - name: Check confidential runtime surface
         run: python3 scripts/check_confidential_runtime_surface.py
 
+      - name: Check confidential side-channel review
+        run: python3 scripts/check_confidential_side_channel_review.py
+
       - name: Check confidential failure semantics
         run: python3 scripts/check_confidential_failure_semantics.py
 
@@ -393,6 +396,7 @@ jobs:
           python3 scripts/check_confidential_parameter_readiness.py \
             --report bench/data/confidential-parameter-screen.json \
             --require-production
+          python3 scripts/check_confidential_side_channel_review.py --require-production
           python3 scripts/check_confidential_failure_semantics.py --require-production
 
   # Optional: full LaZer-backed equivalence checks.

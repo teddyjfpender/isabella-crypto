@@ -387,12 +387,30 @@
     },
     {
       "id": "side_channel_review",
-      "status": "open",
+      "status": "closed",
       "evidence": [
+        {
+          "file": "tests/fixtures/confidential-side-channel-review.json",
+          "snippets": [
+            "typescript_csprng_sampling",
+            "native_csprng_sampling",
+            "prover_secret_path_boundary",
+            "high_level_runtimes_are_not_constant_time"
+          ]
+        },
+        {
+          "file": "scripts/check_confidential_side_channel_review.py",
+          "snippets": [
+            "confidential-side-channel-review",
+            "--require-production",
+            "externalReview.status"
+          ]
+        },
         {
           "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
           "snippets": [
-            "side-channel review"
+            "confidential side-channel review manifest",
+            "constant-time prover-kernel signoff"
           ]
         }
       ]
