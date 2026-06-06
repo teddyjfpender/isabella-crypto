@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   balanceProofShape,
   ctMerkleProofDigestArgs,
+  ctVerifyMerkleArgs,
   ctVerifyMerkleEnvelopeArgs,
   listBalanceProof,
   listNullifierProof,
@@ -92,6 +93,18 @@ function tryParseResult<T>(args: string[]): T | null {
     }
     throw error;
   }
+}
+
+function expectHaskellCommandRejected(args: string[], label: string): void {
+  assert.equal(tryParseJson<JsonEnvelope<unknown>>(args), null, label);
+}
+
+function nonCanonicalIntegerText(value: string): string {
+  return value === '0' ? '-0' : `0${value}`;
+}
+
+function nonCanonicalFirstInteger(value: string): string {
+  return value.replace(/-?\d+/, '-0');
 }
 
 function findBuiltHaskellCli(root: string): string | null {
@@ -994,6 +1007,39 @@ assert.equal(
   transactionContextVector.digest,
   'ct-transaction-context vector'
 );
+const transactionContextArgs = [
+  'ct-transaction-context',
+  transactionContext.protocolVersion.toString(),
+  transactionContext.networkId,
+  transactionContext.assetId.toString(),
+  transactionContext.ledgerEpoch.toString(),
+  transactionContext.root,
+  transactionContext.publicFee.toString(),
+  JSON.stringify(transactionContext.cIn1),
+  JSON.stringify(transactionContext.cIn2),
+  JSON.stringify(transactionContext.cOut1),
+  JSON.stringify(transactionContext.cOut2),
+  JSON.stringify(transactionContext.nf1),
+  JSON.stringify(transactionContext.nf2),
+];
+for (const { name, args } of [
+  {
+    name: 'negative-zero public fee',
+    args: transactionContextArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+  },
+  {
+    name: 'plus-signed asset id',
+    args: transactionContextArgs.map((arg, index) => (index === 3 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'leading-zero input vector element',
+    args: transactionContextArgs.map((arg, index) =>
+      index === 7 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-transaction-context Haskell rejects ${name}`);
+}
 const haskellWalletProofRequest = transactionWalletProofRequestVector.request;
 const haskellWalletProofRequestContext = haskellWalletProofRequest.context;
 const haskellWalletProofRequestDigest = parseResult<string>(
@@ -1046,7 +1092,7 @@ function ctWalletProofRequestDigestArgs(request: any): string[] {
   ];
 }
 function expectHaskellWalletProofRequestRejected(request: any, label: string): void {
-  assert.equal(tryParseJson<{ result: string }>(ctWalletProofRequestDigestArgs(request)), null, label);
+  expectHaskellCommandRejected(ctWalletProofRequestDigestArgs(request), label);
 }
 const reversedAcceptedRoots = haskellWalletProofRequest.acceptedRoots.slice().reverse();
 const reversedSpentNullifiers = haskellWalletProofRequest.spentNullifiers.slice().reverse();
@@ -1119,6 +1165,27 @@ for (const { name, request } of walletProofRequestRejectionCases) {
     request,
     `ct-wallet-proof-request-digest Haskell rejects ${name}`
   );
+}
+const walletProofRequestArgs = ctWalletProofRequestDigestArgs(haskellWalletProofRequest);
+for (const { name, args } of [
+  {
+    name: 'negative-zero public fee',
+    args: walletProofRequestArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+  },
+  {
+    name: 'leading-zero protocol version',
+    args: walletProofRequestArgs.map((arg, index) =>
+      index === 1 ? nonCanonicalIntegerText(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical spent-nullifier integer',
+    args: walletProofRequestArgs.map((arg, index) =>
+      index === 14 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-wallet-proof-request-digest Haskell rejects ${name}`);
 }
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
@@ -1372,6 +1439,29 @@ assert.equal(
   transactionMerkleProofVector.digest,
   'ct-merkle-proof-digest vector'
 );
+const merkleProofDigestArgs = ['ct-merkle-proof-digest', ...ctMerkleProofDigestArgs(ctMerkleProof!)];
+for (const { name, args } of [
+  {
+    name: 'non-canonical membership index',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 1 ? nonCanonicalIntegerText(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical directions vector',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 4 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical proof matrix integer',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 9 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-merkle-proof-digest Haskell rejects ${name}`);
+}
 const haskellVectorEnvelopeContext = transactionEnvelopeVector.context;
 const haskellVectorEnvelopeDigest = parseResult<string>(
   runHaskell([
@@ -1406,6 +1496,41 @@ assert.equal(
   transactionEnvelopeVector.digest,
   'ct-merkle-envelope-digest vector'
 );
+const merkleEnvelopeDigestArgs = [
+  'ct-merkle-envelope-digest',
+  transactionEnvelopeVector.contextDigest,
+  haskellVectorEnvelopeContext.protocolVersion.toString(),
+  haskellVectorEnvelopeContext.networkId,
+  haskellVectorEnvelopeContext.assetId.toString(),
+  haskellVectorEnvelopeContext.ledgerEpoch.toString(),
+  haskellVectorEnvelopeContext.root,
+  haskellVectorEnvelopeContext.publicFee.toString(),
+  JSON.stringify(haskellVectorEnvelopeContext.cIn1),
+  JSON.stringify(haskellVectorEnvelopeContext.cIn2),
+  JSON.stringify(haskellVectorEnvelopeContext.cOut1),
+  JSON.stringify(haskellVectorEnvelopeContext.cOut2),
+  JSON.stringify(haskellVectorEnvelopeContext.nf1),
+  JSON.stringify(haskellVectorEnvelopeContext.nf2),
+  ...ctMerkleProofDigestArgs(ctMerkleProof!),
+];
+for (const { name, args } of [
+  {
+    name: 'plus-signed protocol version',
+    args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 2 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'negative-zero public fee',
+    args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
+  },
+  {
+    name: 'non-canonical context vector integer',
+    args: merkleEnvelopeDigestArgs.map((arg, index) =>
+      index === 8 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-merkle-envelope-digest Haskell rejects ${name}`);
+}
 assert.equal(
   parseResult<boolean>(
     runHaskell([
@@ -1432,6 +1557,54 @@ assert.equal(
   true,
   'ct-verify-merkle Haskell/TypeScript parity'
 );
+const merkleVerifyArgs = [
+  'ct-verify-merkle',
+  ...ctVerifyMerkleArgs(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctMerkleProof!
+  ),
+];
+for (const { name, args } of [
+  {
+    name: 'non-canonical parameter',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 1 ? nonCanonicalIntegerText(arg) : arg
+    ),
+  },
+  {
+    name: 'plus-signed gamma',
+    args: merkleVerifyArgs.map((arg, index) => (index === 5 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'non-canonical key matrix integer',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 7 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical public vector integer',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 11 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-verify-merkle Haskell rejects ${name}`);
+}
 const haskellEnvelopeContext = {
   protocolVersion: 1,
   networkId: 'isabella-haskell-conformance',
@@ -1519,6 +1692,43 @@ assert.equal(
   true,
   'ct-verify-merkle-envelope Haskell accepts native context digest and Merkle proof'
 );
+const merkleEnvelopeVerifyArgs = [
+  'ct-verify-merkle-envelope',
+  ...ctVerifyMerkleEnvelopeArgs(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    haskellEnvelopePolicy,
+    haskellEnvelopeContextDigest,
+    haskellEnvelopeContext,
+    ctMerkleProof!
+  ),
+];
+for (const { name, args } of [
+  {
+    name: 'non-canonical expected public fee',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 16 ? '-0' : arg)),
+  },
+  {
+    name: 'plus-signed context protocol version',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 18 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'non-canonical context vector integer',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) =>
+      index === 24 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-verify-merkle-envelope Haskell rejects ${name}`);
+}
 assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
     ctParamsExpected,
@@ -1758,5 +1968,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical transaction encoding rejection, Merkle envelope mutation, and randomized sampler bound checks.'
 );

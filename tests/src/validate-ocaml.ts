@@ -28,6 +28,7 @@ import {
   ctMerkleNode,
   ctMerkleEnvelopeDigest,
   ctMerkleProofDigest,
+  ctMerkleProofDigestArgs,
   ctMerkleRoot,
   ctNullifier,
   ctNullifierCanonicalChallenge,
@@ -38,7 +39,9 @@ import {
   ctWalletProofRequestDigest,
   ctVerifyScaffold,
   ctVerifyMerkle,
+  ctVerifyMerkleArgs,
   ctVerifyMerkleEnvelope,
+  ctVerifyMerkleEnvelopeArgs,
   crAmountCommitment,
   crProve,
   listNullifierProof,
@@ -84,6 +87,20 @@ const sdk = await loadSdk();
 const trace = process.env.ISABELLA_VALIDATE_TRACE === '1';
 
 type SampleOpening = { msg: number[]; rand: number[] };
+
+function expectOcamlCommandRejected(args: string[], label: string): void {
+  const output = runCli(args);
+  const parsed = parseCliResult<{ error?: string; result?: unknown }>(output);
+  assert.equal(typeof parsed.error, 'string', label);
+}
+
+function nonCanonicalIntegerText(value: string): string {
+  return value === '0' ? '-0' : `0${value}`;
+}
+
+function nonCanonicalFirstInteger(value: string): string {
+  return value.replace(/-?\d+/, '-0');
+}
 
 function allBounded(values: number[], bound: number): boolean {
   return values.every(value => Number.isSafeInteger(value) && Math.abs(value) <= bound);
@@ -901,6 +918,39 @@ assert.equal(
   transactionContextVector.digest,
   'ct-transaction-context vector'
 );
+const transactionContextArgs = [
+  'ct-transaction-context',
+  transactionContext.protocolVersion.toString(),
+  transactionContext.networkId,
+  transactionContext.assetId.toString(),
+  transactionContext.ledgerEpoch.toString(),
+  transactionContext.root,
+  transactionContext.publicFee.toString(),
+  JSON.stringify(transactionContext.cIn1),
+  JSON.stringify(transactionContext.cIn2),
+  JSON.stringify(transactionContext.cOut1),
+  JSON.stringify(transactionContext.cOut2),
+  JSON.stringify(transactionContext.nf1),
+  JSON.stringify(transactionContext.nf2),
+];
+for (const { name, args } of [
+  {
+    name: 'negative-zero public fee',
+    args: transactionContextArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+  },
+  {
+    name: 'plus-signed asset id',
+    args: transactionContextArgs.map((arg, index) => (index === 3 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'leading-zero input vector element',
+    args: transactionContextArgs.map((arg, index) =>
+      index === 7 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-transaction-context OCaml rejects ${name}`);
+}
 const ocamlWalletProofRequestDigest = ctWalletProofRequestDigest(
   transactionWalletProofRequestVector.request
 );
@@ -936,9 +986,10 @@ function ctWalletProofRequestDigestArgs(request: any): string[] {
   ];
 }
 function expectOcamlWalletProofRequestRejected(request: any, label: string): void {
-  const output = runCli(['ct-wallet-proof-request-digest', ...ctWalletProofRequestDigestArgs(request)]);
-  const parsed = parseCliResult<{ error?: string; result?: string }>(output);
-  assert.equal(typeof parsed.error, 'string', label);
+  expectOcamlCommandRejected(
+    ['ct-wallet-proof-request-digest', ...ctWalletProofRequestDigestArgs(request)],
+    label
+  );
 }
 const walletProofRequest = transactionWalletProofRequestVector.request;
 const reversedAcceptedRoots = walletProofRequest.acceptedRoots.slice().reverse();
@@ -1000,6 +1051,30 @@ const walletProofRequestRejectionCases = [
 ];
 for (const { name, request } of walletProofRequestRejectionCases) {
   expectOcamlWalletProofRequestRejected(request, `ct-wallet-proof-request-digest OCaml rejects ${name}`);
+}
+const walletProofRequestArgs = [
+  'ct-wallet-proof-request-digest',
+  ...ctWalletProofRequestDigestArgs(walletProofRequest),
+];
+for (const { name, args } of [
+  {
+    name: 'negative-zero public fee',
+    args: walletProofRequestArgs.map((arg, index) => (index === 6 ? '-0' : arg)),
+  },
+  {
+    name: 'leading-zero protocol version',
+    args: walletProofRequestArgs.map((arg, index) =>
+      index === 1 ? nonCanonicalIntegerText(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical spent-nullifier integer',
+    args: walletProofRequestArgs.map((arg, index) =>
+      index === 14 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-wallet-proof-request-digest OCaml rejects ${name}`);
 }
 logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
@@ -1229,6 +1304,54 @@ assert.equal(
   true,
   'ct-verify-merkle OCaml/TypeScript parity'
 );
+const merkleVerifyArgs = [
+  'ct-verify-merkle',
+  ...ctVerifyMerkleArgs(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctMerkleProof!
+  ),
+];
+for (const { name, args } of [
+  {
+    name: 'non-canonical parameter',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 1 ? nonCanonicalIntegerText(arg) : arg
+    ),
+  },
+  {
+    name: 'plus-signed gamma',
+    args: merkleVerifyArgs.map((arg, index) => (index === 5 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'non-canonical key matrix integer',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 7 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical public vector integer',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 11 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-verify-merkle OCaml rejects ${name}`);
+}
 const ocamlMerkleProofDigest = ctMerkleProofDigest(ctMerkleProof!);
 assert.equal(
   ocamlMerkleProofDigest,
@@ -1240,6 +1363,29 @@ assert.equal(
   transactionMerkleProofVector.digest,
   'ct-merkle-proof-digest vector'
 );
+const merkleProofDigestArgs = ['ct-merkle-proof-digest', ...ctMerkleProofDigestArgs(ctMerkleProof!)];
+for (const { name, args } of [
+  {
+    name: 'non-canonical membership index',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 1 ? nonCanonicalIntegerText(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical directions vector',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 4 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'non-canonical proof matrix integer',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 9 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-merkle-proof-digest OCaml rejects ${name}`);
+}
 const ocamlVectorEnvelopeDigest = ctMerkleEnvelopeDigest(
   transactionEnvelopeVector.contextDigest,
   transactionEnvelopeVector.context,
@@ -1259,6 +1405,41 @@ assert.equal(
   transactionEnvelopeVector.digest,
   'ct-merkle-envelope-digest vector'
 );
+const merkleEnvelopeDigestArgs = [
+  'ct-merkle-envelope-digest',
+  transactionEnvelopeVector.contextDigest,
+  transactionEnvelopeVector.context.protocolVersion.toString(),
+  transactionEnvelopeVector.context.networkId,
+  transactionEnvelopeVector.context.assetId.toString(),
+  transactionEnvelopeVector.context.ledgerEpoch.toString(),
+  transactionEnvelopeVector.context.root,
+  transactionEnvelopeVector.context.publicFee.toString(),
+  JSON.stringify(transactionEnvelopeVector.context.cIn1),
+  JSON.stringify(transactionEnvelopeVector.context.cIn2),
+  JSON.stringify(transactionEnvelopeVector.context.cOut1),
+  JSON.stringify(transactionEnvelopeVector.context.cOut2),
+  JSON.stringify(transactionEnvelopeVector.context.nf1),
+  JSON.stringify(transactionEnvelopeVector.context.nf2),
+  ...ctMerkleProofDigestArgs(ctMerkleProof!),
+];
+for (const { name, args } of [
+  {
+    name: 'plus-signed protocol version',
+    args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 2 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'negative-zero public fee',
+    args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
+  },
+  {
+    name: 'non-canonical context vector integer',
+    args: merkleEnvelopeDigestArgs.map((arg, index) =>
+      index === 8 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-merkle-envelope-digest OCaml rejects ${name}`);
+}
 const ocamlEnvelopeContext = {
   protocolVersion: 1,
   networkId: 'isabella-ocaml-conformance',
@@ -1325,6 +1506,43 @@ assert.equal(
   true,
   'ct-verify-merkle-envelope OCaml accepts native context digest and Merkle proof'
 );
+const merkleEnvelopeVerifyArgs = [
+  'ct-verify-merkle-envelope',
+  ...ctVerifyMerkleEnvelopeArgs(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ocamlEnvelopePolicy,
+    ocamlEnvelopeContextDigest,
+    ocamlEnvelopeContext,
+    ctMerkleProof!
+  ),
+];
+for (const { name, args } of [
+  {
+    name: 'non-canonical expected public fee',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 16 ? '-0' : arg)),
+  },
+  {
+    name: 'plus-signed context protocol version',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 18 ? `+${arg}` : arg)),
+  },
+  {
+    name: 'non-canonical context vector integer',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) =>
+      index === 24 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-verify-merkle-envelope OCaml rejects ${name}`);
+}
 assert.equal(
   sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
     ctParamsExpected,
@@ -1608,5 +1826,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical transaction encoding rejection, Merkle envelope mutation, and randomized sampler bound checks.'
 );

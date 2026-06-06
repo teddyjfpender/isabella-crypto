@@ -66,18 +66,6 @@ let parse_string_list s =
   if String.trim inner = "" then Some []
   else Some (List.map trim_quotes (split_top_level inner))
 
-let parse_bool_vec01 s =
-  match parse_vec s with
-  | Some values ->
-    let rec loop acc = function
-      | [] -> Some (List.rev acc)
-      | 0 :: rest -> loop (false :: acc) rest
-      | 1 :: rest -> loop (true :: acc) rest
-      | _ -> None
-    in
-    loop [] values
-  | None -> None
-
 let string_of_vec v =
   "[" ^ String.concat ", " (List.map string_of_int v) ^ "]"
 
@@ -146,6 +134,38 @@ let[@warning "-32"] json_of_mat m =
 
 let json_of_cube c =
   "[" ^ String.concat "," (List.map json_of_mat c) ^ "]"
+
+let parse_canonical_int s =
+  match parse_int s with
+  | Some value when string_of_int value = s -> Some value
+  | _ -> None
+
+let parse_canonical_vec s =
+  match parse_vec s with
+  | Some value when json_of_vec value = s -> Some value
+  | _ -> None
+
+let parse_canonical_mat s =
+  match parse_mat s with
+  | Some value when json_of_mat value = s -> Some value
+  | _ -> None
+
+let parse_canonical_cube s =
+  match parse_cube s with
+  | Some value when json_of_cube value = s -> Some value
+  | _ -> None
+
+let parse_canonical_bool_vec01 s =
+  match parse_vec s with
+  | Some values when json_of_vec values = s ->
+    let rec loop acc = function
+      | [] -> Some (List.rev acc)
+      | 0 :: rest -> loop (false :: acc) rest
+      | 1 :: rest -> loop (true :: acc) rest
+      | _ -> None
+    in
+    loop [] values
+  | _ -> None
 
 let json_of_cb_params params =
   Printf.sprintf
@@ -236,7 +256,7 @@ let json_of_ct_merkle_transaction_proof proof =
     (json_of_cr_proof proof.Confidential_transaction.tx_merkle_out2_range)
 
 let parse_ct_merkle_membership_proof index_str root siblings_str directions_str =
-  match parse_int index_str, parse_string_list siblings_str, parse_bool_vec01 directions_str with
+  match parse_canonical_int index_str, parse_string_list siblings_str, parse_canonical_bool_vec01 directions_str with
   | Some index, Some siblings, Some directions ->
     Some (Confidential_transaction.make_merkle_membership_proof index root siblings directions)
   | _ -> None
@@ -261,28 +281,28 @@ let parse_ct_merkle_proof_digest_args args =
     (match
        parse_ct_merkle_membership_proof in1_index_str in1_root in1_siblings_str in1_directions_str,
        parse_ct_merkle_membership_proof in2_index_str in2_root in2_siblings_str in2_directions_str,
-       parse_mat in1_a_commits_str,
-       parse_mat in1_a_nullifiers_str,
-       parse_mat in1_z_msgs_str,
-       parse_mat in1_z_rands_str,
-       parse_mat in2_a_commits_str,
-       parse_mat in2_a_nullifiers_str,
-       parse_mat in2_z_msgs_str,
-       parse_mat in2_z_rands_str,
-       parse_mat balance_as_str,
-       parse_mat balance_zs_str,
-       parse_mat out1_bits_str,
-       parse_mat out1_comps_str,
-       parse_mat out1_amount_a_str,
-       parse_mat out1_amount_z_str,
-       parse_cube out1_pair_as_str,
-       parse_cube out1_pair_zs_str,
-       parse_mat out2_bits_str,
-       parse_mat out2_comps_str,
-       parse_mat out2_amount_a_str,
-       parse_mat out2_amount_z_str,
-       parse_cube out2_pair_as_str,
-       parse_cube out2_pair_zs_str
+       parse_canonical_mat in1_a_commits_str,
+       parse_canonical_mat in1_a_nullifiers_str,
+       parse_canonical_mat in1_z_msgs_str,
+       parse_canonical_mat in1_z_rands_str,
+       parse_canonical_mat in2_a_commits_str,
+       parse_canonical_mat in2_a_nullifiers_str,
+       parse_canonical_mat in2_z_msgs_str,
+       parse_canonical_mat in2_z_rands_str,
+       parse_canonical_mat balance_as_str,
+       parse_canonical_mat balance_zs_str,
+       parse_canonical_mat out1_bits_str,
+       parse_canonical_mat out1_comps_str,
+       parse_canonical_mat out1_amount_a_str,
+       parse_canonical_mat out1_amount_z_str,
+       parse_canonical_cube out1_pair_as_str,
+       parse_canonical_cube out1_pair_zs_str,
+       parse_canonical_mat out2_bits_str,
+       parse_canonical_mat out2_comps_str,
+       parse_canonical_mat out2_amount_a_str,
+       parse_canonical_mat out2_amount_z_str,
+       parse_canonical_cube out2_pair_as_str,
+       parse_canonical_cube out2_pair_zs_str
      with
      | Some in1_member, Some in2_member,
        Some in1_a_commits, Some in1_a_nullifiers, Some in1_z_msgs, Some in1_z_rands,
@@ -838,6 +858,17 @@ let make_cb_params m_str n2_str q_str beta_str =
     Some (Confidential_balance.make_scalar_commit_params m n2 q beta)
   | _ -> None
 
+let make_canonical_cb_params m_str n2_str q_str beta_str =
+  match
+    parse_canonical_int m_str,
+    parse_canonical_int n2_str,
+    parse_canonical_int q_str,
+    parse_canonical_int beta_str
+  with
+  | Some m, Some n2, Some q, Some beta ->
+    Some (Confidential_balance.make_scalar_commit_params m n2 q beta)
+  | _ -> None
+
 let make_scalar_opening amount rand =
   Commit_sis.make_opening [amount] rand
 
@@ -1229,16 +1260,16 @@ let cmd_ct_transaction_context args =
   | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root;
      public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str] ->
     (match
-       parse_int protocol_version_str,
-       parse_int asset_id_str,
-       parse_int ledger_epoch_str,
-       parse_int public_fee_str,
-       parse_vec c_in1_str,
-       parse_vec c_in2_str,
-       parse_vec c_out1_str,
-       parse_vec c_out2_str,
-       parse_vec nf1_str,
-       parse_vec nf2_str
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int public_fee_str,
+       parse_canonical_vec c_in1_str,
+       parse_canonical_vec c_in2_str,
+       parse_canonical_vec c_out1_str,
+       parse_canonical_vec c_out2_str,
+       parse_canonical_vec nf1_str,
+       parse_canonical_vec nf2_str
      with
      | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
        Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2 ->
@@ -1268,16 +1299,16 @@ let cmd_ct_merkle_envelope_digest args =
     root :: public_fee_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
     nf1_str :: nf2_str :: proof_args ->
     (match
-       parse_int protocol_version_str,
-       parse_int asset_id_str,
-       parse_int ledger_epoch_str,
-       parse_int public_fee_str,
-       parse_vec c_in1_str,
-       parse_vec c_in2_str,
-       parse_vec c_out1_str,
-       parse_vec c_out2_str,
-       parse_vec nf1_str,
-       parse_vec nf2_str,
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int public_fee_str,
+       parse_canonical_vec c_in1_str,
+       parse_canonical_vec c_in2_str,
+       parse_canonical_vec c_out1_str,
+       parse_canonical_vec c_out2_str,
+       parse_canonical_vec nf1_str,
+       parse_canonical_vec nf2_str,
        parse_ct_merkle_proof_digest_args proof_args
      with
      | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
@@ -1300,18 +1331,18 @@ let cmd_ct_wallet_proof_request_digest args =
      public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str;
      accepted_roots_str; spent_nullifiers_str] ->
     (match
-       parse_int protocol_version_str,
-       parse_int asset_id_str,
-       parse_int ledger_epoch_str,
-       parse_int public_fee_str,
-       parse_vec c_in1_str,
-       parse_vec c_in2_str,
-       parse_vec c_out1_str,
-       parse_vec c_out2_str,
-       parse_vec nf1_str,
-       parse_vec nf2_str,
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int public_fee_str,
+       parse_canonical_vec c_in1_str,
+       parse_canonical_vec c_in2_str,
+       parse_canonical_vec c_out1_str,
+       parse_canonical_vec c_out2_str,
+       parse_canonical_vec nf1_str,
+       parse_canonical_vec nf2_str,
        parse_string_list accepted_roots_str,
-       parse_mat spent_nullifiers_str
+       parse_canonical_mat spent_nullifiers_str
      with
      | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
        Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
@@ -1731,19 +1762,19 @@ let prepare_ct_verify_merkle_with_root root_override args =
     ledger_str :: spent_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
     nf1_str :: nf2_str :: proof_args ->
     (match
-       make_cb_params m_str n2_str q_str beta_str,
-       parse_int gamma_str,
-       parse_int k_str,
-       parse_mat ck_str,
-       parse_mat nk_str,
-       parse_mat ledger_str,
-       parse_mat spent_str,
-       parse_vec c_in1_str,
-       parse_vec c_in2_str,
-       parse_vec c_out1_str,
-       parse_vec c_out2_str,
-       parse_vec nf1_str,
-       parse_vec nf2_str,
+       make_canonical_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_int gamma_str,
+       parse_canonical_int k_str,
+       parse_canonical_mat ck_str,
+       parse_canonical_mat nk_str,
+       parse_canonical_mat ledger_str,
+       parse_canonical_mat spent_str,
+       parse_canonical_vec c_in1_str,
+       parse_canonical_vec c_in2_str,
+       parse_canonical_vec c_out1_str,
+       parse_canonical_vec c_out2_str,
+       parse_canonical_vec nf1_str,
+       parse_canonical_vec nf2_str,
        parse_ct_merkle_proof_digest_args proof_args with
      | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent,
        Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
@@ -1795,20 +1826,20 @@ let cmd_ct_verify_merkle_envelope args =
     asset_id_str :: ledger_epoch_str :: root :: public_fee_str :: c_in1_str ::
     c_in2_str :: c_out1_str :: c_out2_str :: nf1_str :: nf2_str :: proof_args ->
     (match
-       parse_int expected_version_str,
-       parse_int expected_asset_id_str,
-       parse_int expected_ledger_epoch_str,
-       parse_int expected_public_fee_str,
-       parse_int protocol_version_str,
-       parse_int asset_id_str,
-       parse_int ledger_epoch_str,
-       parse_int public_fee_str,
-       parse_vec c_in1_str,
-       parse_vec c_in2_str,
-       parse_vec c_out1_str,
-       parse_vec c_out2_str,
-       parse_vec nf1_str,
-       parse_vec nf2_str with
+       parse_canonical_int expected_version_str,
+       parse_canonical_int expected_asset_id_str,
+       parse_canonical_int expected_ledger_epoch_str,
+       parse_canonical_int expected_public_fee_str,
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int public_fee_str,
+       parse_canonical_vec c_in1_str,
+       parse_canonical_vec c_in2_str,
+       parse_canonical_vec c_out1_str,
+       parse_canonical_vec c_out2_str,
+       parse_canonical_vec nf1_str,
+       parse_canonical_vec nf2_str with
      | Some expected_version, Some expected_asset_id, Some expected_ledger_epoch,
        Some expected_public_fee, Some protocol_version, Some asset_id,
        Some ledger_epoch, Some public_fee, Some c_in1, Some c_in2,

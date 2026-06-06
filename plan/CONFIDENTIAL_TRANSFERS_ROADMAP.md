@@ -96,6 +96,11 @@ benchmarks are independently checked.
   bytes under separate `merkleProof` and `envelope` transaction tags. TypeScript,
   OCaml, and Haskell expose proof/envelope digest APIs, and the native
   SDK-equivalence validators check those digests against the pinned vectors.
+  The native transaction context, Merkle proof digest, raw Merkle verifier,
+  Merkle envelope digest, wallet-request digest, and Merkle envelope verifier
+  commands now reject non-canonical numeric/list spellings such as leading
+  zeros, plus signs, and negative zero instead of normalizing them before
+  hashing or policy checks.
   The same fixture now pins wallet proof request preimage/digest bytes under a
   separate `walletProofRequest` tag. That request binds the canonical public
   transaction context digest, a sorted duplicate-free accepted-root window
@@ -242,9 +247,10 @@ Important validation caveats:
   context digests, wrong network/asset policy, nonzero fees, and swapped proof
   components. OCaml/Haskell SDK-equivalence validation now checks native
   proof/envelope/wallet-request digest parity against the pinned vectors,
-  rejects malformed native wallet requests, and verifies explicit Merkle proof
-  rejection through native envelope commands; consensus/indexer serialization
-  remains open.
+  rejects malformed native wallet requests, rejects non-canonical native
+  transaction encodings on production-facing commands, and verifies explicit
+  Merkle proof rejection through native envelope commands; consensus/indexer
+  serialization remains open.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
   acceptance/rejection against native context digests and Merkle proofs through

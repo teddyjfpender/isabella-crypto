@@ -104,6 +104,23 @@ parseCube s = readMaybe s
 parse4D :: String -> Maybe [[[[Int]]]]
 parse4D s = readMaybe s
 
+parseCanonicalRead :: (Eq a, Read a, Show a) => String -> Maybe a
+parseCanonicalRead s = do
+    value <- readMaybe s
+    if show value == s then Just value else Nothing
+
+parseCanonicalInt :: String -> Maybe Int
+parseCanonicalInt = parseCanonicalRead
+
+parseCanonicalVec :: String -> Maybe [Int]
+parseCanonicalVec = parseCanonicalRead
+
+parseCanonicalMat :: String -> Maybe [[Int]]
+parseCanonicalMat = parseCanonicalRead
+
+parseCanonicalCube :: String -> Maybe [[[Int]]]
+parseCanonicalCube = parseCanonicalRead
+
 parseBool :: String -> Maybe Bool
 parseBool "0" = Just False
 parseBool "1" = Just True
@@ -116,6 +133,14 @@ parseBool _ = Nothing
 parseBoolVec01 :: String -> Maybe [Bool]
 parseBoolVec01 s =
     parseVec s >>= traverse toBool
+  where
+    toBool 0 = Just False
+    toBool 1 = Just True
+    toBool _ = Nothing
+
+parseCanonicalBoolVec01 :: String -> Maybe [Bool]
+parseCanonicalBoolVec01 s =
+    parseCanonicalVec s >>= traverse toBool
   where
     toBool 0 = Just False
     toBool 1 = Just True
@@ -378,7 +403,7 @@ jsonCtMerkleTransactionProof proof =
 
 parseCtMerkleMembershipProof :: String -> String -> String -> String -> Maybe ConfidentialTransaction.MerkleMembershipProof
 parseCtMerkleMembershipProof indexStr rootDigest siblingsStr directionsStr =
-    case (parseInt indexStr, parseStringList siblingsStr, parseBoolVec01 directionsStr) of
+    case (parseCanonicalInt indexStr, parseStringList siblingsStr, parseCanonicalBoolVec01 directionsStr) of
         (Just index, Just siblings, Just directions) ->
             Just (ConfidentialTransaction.makeMerkleMembershipProof index rootDigest siblings directions)
         _ -> Nothing
@@ -405,28 +430,28 @@ parseCtMerkleProofDigestArgs
         case
             ( parseCtMerkleMembershipProof in1IndexStr in1Root in1SiblingsStr in1DirectionsStr
             , parseCtMerkleMembershipProof in2IndexStr in2Root in2SiblingsStr in2DirectionsStr
-            , parseMat in1ACommitsStr
-            , parseMat in1ANullifiersStr
-            , parseMat in1ZMsgsStr
-            , parseMat in1ZRandsStr
-            , parseMat in2ACommitsStr
-            , parseMat in2ANullifiersStr
-            , parseMat in2ZMsgsStr
-            , parseMat in2ZRandsStr
-            , parseMat balanceAStr
-            , parseMat balanceZsStr
-            , parseMat out1BitsStr
-            , parseMat out1CompsStr
-            , parseMat out1AmountAStr
-            , parseMat out1AmountZStr
-            , parseCube out1PairAsStr
-            , parseCube out1PairZsStr
-            , parseMat out2BitsStr
-            , parseMat out2CompsStr
-            , parseMat out2AmountAStr
-            , parseMat out2AmountZStr
-            , parseCube out2PairAsStr
-            , parseCube out2PairZsStr
+            , parseCanonicalMat in1ACommitsStr
+            , parseCanonicalMat in1ANullifiersStr
+            , parseCanonicalMat in1ZMsgsStr
+            , parseCanonicalMat in1ZRandsStr
+            , parseCanonicalMat in2ACommitsStr
+            , parseCanonicalMat in2ANullifiersStr
+            , parseCanonicalMat in2ZMsgsStr
+            , parseCanonicalMat in2ZRandsStr
+            , parseCanonicalMat balanceAStr
+            , parseCanonicalMat balanceZsStr
+            , parseCanonicalMat out1BitsStr
+            , parseCanonicalMat out1CompsStr
+            , parseCanonicalMat out1AmountAStr
+            , parseCanonicalMat out1AmountZStr
+            , parseCanonicalCube out1PairAsStr
+            , parseCanonicalCube out1PairZsStr
+            , parseCanonicalMat out2BitsStr
+            , parseCanonicalMat out2CompsStr
+            , parseCanonicalMat out2AmountAStr
+            , parseCanonicalMat out2AmountZStr
+            , parseCanonicalCube out2PairAsStr
+            , parseCanonicalCube out2PairZsStr
             )
         of
             ( Just in1Member
@@ -470,6 +495,13 @@ parseCtMerkleProofDigestArgs _ =
 parseCbParams :: String -> String -> String -> String -> Maybe Commit.CommitParams
 parseCbParams mStr n2Str qStr betaStr =
     case (parseInt mStr, parseInt n2Str, parseInt qStr, parseInt betaStr) of
+        (Just m, Just n2, Just q, Just beta) ->
+            Just (ConfidentialBalance.makeScalarCommitParams m n2 q beta)
+        _ -> Nothing
+
+parseCanonicalCbParams :: String -> String -> String -> String -> Maybe Commit.CommitParams
+parseCanonicalCbParams mStr n2Str qStr betaStr =
+    case (parseCanonicalInt mStr, parseCanonicalInt n2Str, parseCanonicalInt qStr, parseCanonicalInt betaStr) of
         (Just m, Just n2, Just q, Just beta) ->
             Just (ConfidentialBalance.makeScalarCommitParams m n2 q beta)
         _ -> Nothing
@@ -631,19 +663,19 @@ prepareCtVerifyMerkleWithRoot rootOverride
       : nf1Str : nf2Str : proofArgs
     ) =
     case
-        ( parseCbParams mStr n2Str qStr betaStr
-        , parseInt gammaStr
-        , parseInt kStr
-        , parseMat ckStr
-        , parseMat nkStr
-        , parseMat ledgerStr
-        , parseMat spentStr
-        , parseVec cIn1Str
-        , parseVec cIn2Str
-        , parseVec cOut1Str
-        , parseVec cOut2Str
-        , parseVec nf1Str
-        , parseVec nf2Str
+        ( parseCanonicalCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInt gammaStr
+        , parseCanonicalInt kStr
+        , parseCanonicalMat ckStr
+        , parseCanonicalMat nkStr
+        , parseCanonicalMat ledgerStr
+        , parseCanonicalMat spentStr
+        , parseCanonicalVec cIn1Str
+        , parseCanonicalVec cIn2Str
+        , parseCanonicalVec cOut1Str
+        , parseCanonicalVec cOut2Str
+        , parseCanonicalVec nf1Str
+        , parseCanonicalVec nf2Str
         , parseCtMerkleProofDigestArgs proofArgs
         ) of
         ( Just params
@@ -1212,16 +1244,16 @@ cmdCtTransactionContext format
     , nf2Str
     ] =
     case
-        ( parseInt protocolVersionStr
-        , parseInt assetIdStr
-        , parseInt ledgerEpochStr
-        , parseInt publicFeeStr
-        , parseVec cIn1Str
-        , parseVec cIn2Str
-        , parseVec cOut1Str
-        , parseVec cOut2Str
-        , parseVec nf1Str
-        , parseVec nf2Str
+        ( parseCanonicalInt protocolVersionStr
+        , parseCanonicalInt assetIdStr
+        , parseCanonicalInt ledgerEpochStr
+        , parseCanonicalInt publicFeeStr
+        , parseCanonicalVec cIn1Str
+        , parseCanonicalVec cIn2Str
+        , parseCanonicalVec cOut1Str
+        , parseCanonicalVec cOut2Str
+        , parseCanonicalVec nf1Str
+        , parseCanonicalVec nf2Str
         )
     of
         ( Just protocolVersion
@@ -1270,16 +1302,16 @@ cmdCtMerkleEnvelopeDigest format
       : nf1Str : nf2Str : proofArgs
     ) =
         case
-            ( parseInt protocolVersionStr
-            , parseInt assetIdStr
-            , parseInt ledgerEpochStr
-            , parseInt publicFeeStr
-            , parseVec cIn1Str
-            , parseVec cIn2Str
-            , parseVec cOut1Str
-            , parseVec cOut2Str
-            , parseVec nf1Str
-            , parseVec nf2Str
+            ( parseCanonicalInt protocolVersionStr
+            , parseCanonicalInt assetIdStr
+            , parseCanonicalInt ledgerEpochStr
+            , parseCanonicalInt publicFeeStr
+            , parseCanonicalVec cIn1Str
+            , parseCanonicalVec cIn2Str
+            , parseCanonicalVec cOut1Str
+            , parseCanonicalVec cOut2Str
+            , parseCanonicalVec nf1Str
+            , parseCanonicalVec nf2Str
             , parseCtMerkleProofDigestArgs proofArgs
             )
         of
@@ -1334,18 +1366,18 @@ cmdCtWalletProofRequestDigest
     , spentNullifiersStr
     ] =
     case
-        ( parseInt protocolVersionStr
-        , parseInt assetIdStr
-        , parseInt ledgerEpochStr
-        , parseInt publicFeeStr
-        , parseVec cIn1Str
-        , parseVec cIn2Str
-        , parseVec cOut1Str
-        , parseVec cOut2Str
-        , parseVec nf1Str
-        , parseVec nf2Str
+        ( parseCanonicalInt protocolVersionStr
+        , parseCanonicalInt assetIdStr
+        , parseCanonicalInt ledgerEpochStr
+        , parseCanonicalInt publicFeeStr
+        , parseCanonicalVec cIn1Str
+        , parseCanonicalVec cIn2Str
+        , parseCanonicalVec cOut1Str
+        , parseCanonicalVec cOut2Str
+        , parseCanonicalVec nf1Str
+        , parseCanonicalVec nf2Str
         , parseStringList acceptedRootsStr
-        , parseMat spentNullifiersStr
+        , parseCanonicalMat spentNullifiersStr
         )
     of
         ( Just protocolVersion
@@ -1794,20 +1826,20 @@ cmdCtVerifyMerkleEnvelope format
       : cIn2Str : cOut1Str : cOut2Str : nf1Str : nf2Str : proofArgs
     ) =
         case
-            ( parseInt expectedVersionStr
-            , parseInt expectedAssetIdStr
-            , parseInt expectedLedgerEpochStr
-            , parseInt expectedPublicFeeStr
-            , parseInt protocolVersionStr
-            , parseInt assetIdStr
-            , parseInt ledgerEpochStr
-            , parseInt publicFeeStr
-            , parseVec cIn1Str
-            , parseVec cIn2Str
-            , parseVec cOut1Str
-            , parseVec cOut2Str
-            , parseVec nf1Str
-            , parseVec nf2Str
+            ( parseCanonicalInt expectedVersionStr
+            , parseCanonicalInt expectedAssetIdStr
+            , parseCanonicalInt expectedLedgerEpochStr
+            , parseCanonicalInt expectedPublicFeeStr
+            , parseCanonicalInt protocolVersionStr
+            , parseCanonicalInt assetIdStr
+            , parseCanonicalInt ledgerEpochStr
+            , parseCanonicalInt publicFeeStr
+            , parseCanonicalVec cIn1Str
+            , parseCanonicalVec cIn2Str
+            , parseCanonicalVec cOut1Str
+            , parseCanonicalVec cOut2Str
+            , parseCanonicalVec nf1Str
+            , parseCanonicalVec nf2Str
             )
         of
             ( Just expectedVersion
