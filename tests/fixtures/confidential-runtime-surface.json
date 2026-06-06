@@ -15,6 +15,7 @@
       "ct-merkle-proof-digest",
       "ct-merkle-envelope-digest",
       "ct-wallet-proof-request-digest",
+      "ct-accepted-root-window-digest",
       "ct-sample-opening",
       "ct-sample-openings",
       "ct-nullifier",
@@ -64,6 +65,7 @@
       "ctProveMerkle",
       "ctMerkleProofDigest",
       "ctMerkleEnvelopeDigest",
+      "ctAcceptedRootWindowDigest",
       "ctVerifyScaffold",
       "ctVerifyMerkle",
       "ctVerifyMerkleEnvelope"
@@ -91,6 +93,10 @@
         "transactionMerkleProofDigest",
         "transactionEnvelopeDigest",
         "transactionWalletProofRequestDigest",
+        "transactionAcceptedRootWindowDigest",
+        "transactionAcceptedRootWindowRoots",
+        "transactionContextMatchesAcceptedRootWindow",
+        "transactionWalletProofRequestFromWindow",
         "transactionContextMatchesPolicy",
         "transactionContextPolicyIsComplete",
         "sampleNullifierMask",
@@ -143,6 +149,7 @@
       "ct-prove-merkle",
       "ct-merkle-proof-digest",
       "ct-merkle-envelope-digest",
+      "ct-accepted-root-window-digest",
       "ct-verify-merkle",
       "ct-verify-merkle-envelope",
       "ct-verify-scaffold"
@@ -167,6 +174,7 @@
       "ct-prove-merkle",
       "ct-merkle-proof-digest",
       "ct-merkle-envelope-digest",
+      "ct-accepted-root-window-digest",
       "ct-verify-merkle",
       "ct-verify-merkle-envelope",
       "ct-verify-scaffold"

@@ -30,6 +30,7 @@ import {
   ctMerkleProofDigest,
   ctMerkleProofDigestArgs,
   ctMerkleRoot,
+  ctAcceptedRootWindowDigest,
   ctNullifier,
   ctNullifierCanonicalChallenge,
   ctNullifierProve,
@@ -919,6 +920,7 @@ const transactionVectors = JSON.parse(
 const [transactionContextVector] = transactionVectors.cases;
 const [transactionMerkleProofVector] = transactionVectors.merkleProofCases;
 const [transactionEnvelopeVector] = transactionVectors.envelopeCases;
+const [transactionAcceptedRootWindowVector] = transactionVectors.acceptedRootWindowCases;
 const [transactionWalletProofRequestVector] = transactionVectors.walletProofRequestCases;
 const transactionContext = transactionContextVector.context;
 assert.equal(
@@ -1005,6 +1007,99 @@ assert.equal(
   transactionWalletProofRequestVector.digest,
   'ct-wallet-proof-request-digest vector'
 );
+const acceptedRootWindow = transactionAcceptedRootWindowVector.window;
+const ocamlAcceptedRootWindowDigest = ctAcceptedRootWindowDigest(acceptedRootWindow);
+assert.equal(
+  ocamlAcceptedRootWindowDigest,
+  sdk.ConfidentialTransaction.transactionAcceptedRootWindowDigest(acceptedRootWindow),
+  'ct-accepted-root-window-digest OCaml/TypeScript parity'
+);
+assert.equal(
+  ocamlAcceptedRootWindowDigest,
+  transactionAcceptedRootWindowVector.digest,
+  'ct-accepted-root-window-digest vector'
+);
+function ctAcceptedRootWindowDigestArgs(window: any): string[] {
+  return [
+    window.protocolVersion.toString(),
+    window.networkId,
+    window.assetId.toString(),
+    window.ledgerEpoch.toString(),
+    JSON.stringify(window.roots.map((entry: any) => entry.root.digest)),
+    JSON.stringify(window.roots.map((entry: any) => entry.root.depth)),
+    JSON.stringify(window.roots.map((entry: any) => entry.validFromEpoch)),
+    JSON.stringify(window.roots.map((entry: any) => entry.expiresAtEpoch)),
+  ];
+}
+function expectOcamlAcceptedRootWindowRejected(window: any, label: string): void {
+  expectOcamlCommandRejected(
+    ['ct-accepted-root-window-digest', ...ctAcceptedRootWindowDigestArgs(window)],
+    label
+  );
+}
+const reversedRootWindow = acceptedRootWindow.roots.slice().reverse();
+const acceptedRootWindowRejectionCases = [
+  {
+    name: 'empty root window',
+    window: { ...acceptedRootWindow, roots: [] },
+  },
+  {
+    name: 'duplicate root window entry',
+    window: { ...acceptedRootWindow, roots: [acceptedRootWindow.roots[0], acceptedRootWindow.roots[0]] },
+  },
+  ...(reversedRootWindow.map((entry: any) => `${entry.root.digest}:${entry.root.depth}`).join('|') ===
+    acceptedRootWindow.roots.map((entry: any) => `${entry.root.digest}:${entry.root.depth}`).join('|')
+    ? []
+    : [{
+        name: 'unsorted root window',
+        window: { ...acceptedRootWindow, roots: reversedRootWindow },
+      }]),
+  {
+    name: 'future root window entry',
+    window: {
+      ...acceptedRootWindow,
+      roots: acceptedRootWindow.roots.map((entry: any, index: number) =>
+        index === 0 ? { ...entry, validFromEpoch: acceptedRootWindow.ledgerEpoch + 1 } : entry
+      ),
+    },
+  },
+  {
+    name: 'expired root window entry',
+    window: {
+      ...acceptedRootWindow,
+      roots: acceptedRootWindow.roots.map((entry: any, index: number) =>
+        index === 0 ? { ...entry, expiresAtEpoch: acceptedRootWindow.ledgerEpoch } : entry
+      ),
+    },
+  },
+];
+for (const { name, window } of acceptedRootWindowRejectionCases) {
+  expectOcamlAcceptedRootWindowRejected(window, `ct-accepted-root-window-digest OCaml rejects ${name}`);
+}
+const acceptedRootWindowArgs = [
+  'ct-accepted-root-window-digest',
+  ...ctAcceptedRootWindowDigestArgs(acceptedRootWindow),
+];
+for (const { name, args } of [
+  {
+    name: 'negative-zero ledger epoch',
+    args: acceptedRootWindowArgs.map((arg, index) => (index === 4 ? '-0' : arg)),
+  },
+  {
+    name: 'leading-zero root depth',
+    args: acceptedRootWindowArgs.map((arg, index) =>
+      index === 6 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe expiry epoch',
+    args: acceptedRootWindowArgs.map((arg, index) =>
+      index === 8 ? unsafeFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectOcamlCommandRejected(args, `ct-accepted-root-window-digest OCaml rejects ${name}`);
+}
 function ctWalletProofRequestDigestArgs(request: any): string[] {
   const context = request.context;
   const acceptedRootDigests = request.acceptedRoots.map((root: any) => root.digest);
@@ -2099,5 +2194,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native accepted-root-window and wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
 );

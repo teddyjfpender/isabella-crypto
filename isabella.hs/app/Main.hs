@@ -79,6 +79,7 @@ showHelp = do
     putStrLn "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes"
     putStrLn "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes"
     putStrLn "  ct-wallet-proof-request-digest ... Hash canonical wallet proof request bytes"
+    putStrLn "  ct-accepted-root-window-digest ... Hash canonical live accepted-root window bytes"
     putStrLn "  ct-sample-opening MSG_LEN RAND_LEN BOUND  Sample a bounded CSPRNG opening"
     putStrLn "  ct-sample-openings COUNT MSG_LEN RAND_LEN BOUND  Sample bounded CSPRNG openings"
     putStrLn "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier"

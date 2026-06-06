@@ -320,13 +320,44 @@
   "productionLimitations": [
     {
       "id": "consensus_indexer_root_expiry_api",
-      "status": "open",
+      "status": "closed",
       "evidence": [
         {
-          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "file": "isabella.ts/src/index.ts",
           "snippets": [
-            "consensus/indexer accepted-root API contracts have not adopted the depth-tagged runtime serialization",
-            "consensus/indexer APIs"
+            "ConfidentialAcceptedRootWindow",
+            "transactionAcceptedRootWindowPreimage",
+            "transactionWalletProofRequestFromWindow"
+          ]
+        },
+        {
+          "file": "tests/fixtures/confidential-transaction-vectors.json",
+          "snippets": [
+            "acceptedRootWindowCases",
+            "validFromEpoch",
+            "expiresAtEpoch"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "matches the TypeScript accepted-root window serialization API",
+            "rejects malformed or expired accepted-root windows",
+            "transactionWalletProofRequestFromWindow"
+          ]
+        },
+        {
+          "file": "tests/src/validate-ocaml.ts",
+          "snippets": [
+            "ct-accepted-root-window-digest",
+            "expired root window entry"
+          ]
+        },
+        {
+          "file": "tests/src/validate-haskell.ts",
+          "snippets": [
+            "ct-accepted-root-window-digest",
+            "expired root window entry"
           ]
         }
       ]

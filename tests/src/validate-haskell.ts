@@ -1033,6 +1033,7 @@ const transactionVectors = JSON.parse(
 const [transactionContextVector] = transactionVectors.cases;
 const [transactionMerkleProofVector] = transactionVectors.merkleProofCases;
 const [transactionEnvelopeVector] = transactionVectors.envelopeCases;
+const [transactionAcceptedRootWindowVector] = transactionVectors.acceptedRootWindowCases;
 const [transactionWalletProofRequestVector] = transactionVectors.walletProofRequestCases;
 const transactionContext = transactionContextVector.context;
 assert.equal(
@@ -1141,6 +1142,99 @@ assert.equal(
   transactionWalletProofRequestVector.digest,
   'ct-wallet-proof-request-digest vector'
 );
+const haskellAcceptedRootWindow = transactionAcceptedRootWindowVector.window;
+function ctAcceptedRootWindowDigestArgs(window: any): string[] {
+  return [
+    'ct-accepted-root-window-digest',
+    window.protocolVersion.toString(),
+    window.networkId,
+    window.assetId.toString(),
+    window.ledgerEpoch.toString(),
+    JSON.stringify(window.roots.map((entry: any) => entry.root.digest)),
+    JSON.stringify(window.roots.map((entry: any) => entry.root.depth)),
+    JSON.stringify(window.roots.map((entry: any) => entry.validFromEpoch)),
+    JSON.stringify(window.roots.map((entry: any) => entry.expiresAtEpoch)),
+  ];
+}
+const haskellAcceptedRootWindowDigest = parseResult<string>(
+  runHaskell(ctAcceptedRootWindowDigestArgs(haskellAcceptedRootWindow))
+);
+assert.equal(
+  haskellAcceptedRootWindowDigest,
+  sdk.ConfidentialTransaction.transactionAcceptedRootWindowDigest(haskellAcceptedRootWindow),
+  'ct-accepted-root-window-digest Haskell/TypeScript parity'
+);
+assert.equal(
+  haskellAcceptedRootWindowDigest,
+  transactionAcceptedRootWindowVector.digest,
+  'ct-accepted-root-window-digest vector'
+);
+function expectHaskellAcceptedRootWindowRejected(window: any, label: string): void {
+  expectHaskellCommandRejected(ctAcceptedRootWindowDigestArgs(window), label);
+}
+const reversedRootWindow = haskellAcceptedRootWindow.roots.slice().reverse();
+const acceptedRootWindowRejectionCases = [
+  {
+    name: 'empty root window',
+    window: { ...haskellAcceptedRootWindow, roots: [] },
+  },
+  {
+    name: 'duplicate root window entry',
+    window: {
+      ...haskellAcceptedRootWindow,
+      roots: [haskellAcceptedRootWindow.roots[0], haskellAcceptedRootWindow.roots[0]],
+    },
+  },
+  ...(reversedRootWindow.map((entry: any) => `${entry.root.digest}:${entry.root.depth}`).join('|') ===
+    haskellAcceptedRootWindow.roots.map((entry: any) => `${entry.root.digest}:${entry.root.depth}`).join('|')
+    ? []
+    : [{
+        name: 'unsorted root window',
+        window: { ...haskellAcceptedRootWindow, roots: reversedRootWindow },
+      }]),
+  {
+    name: 'future root window entry',
+    window: {
+      ...haskellAcceptedRootWindow,
+      roots: haskellAcceptedRootWindow.roots.map((entry: any, index: number) =>
+        index === 0 ? { ...entry, validFromEpoch: haskellAcceptedRootWindow.ledgerEpoch + 1 } : entry
+      ),
+    },
+  },
+  {
+    name: 'expired root window entry',
+    window: {
+      ...haskellAcceptedRootWindow,
+      roots: haskellAcceptedRootWindow.roots.map((entry: any, index: number) =>
+        index === 0 ? { ...entry, expiresAtEpoch: haskellAcceptedRootWindow.ledgerEpoch } : entry
+      ),
+    },
+  },
+];
+for (const { name, window } of acceptedRootWindowRejectionCases) {
+  expectHaskellAcceptedRootWindowRejected(window, `ct-accepted-root-window-digest Haskell rejects ${name}`);
+}
+const acceptedRootWindowArgs = ctAcceptedRootWindowDigestArgs(haskellAcceptedRootWindow);
+for (const { name, args } of [
+  {
+    name: 'negative-zero ledger epoch',
+    args: acceptedRootWindowArgs.map((arg, index) => (index === 4 ? '-0' : arg)),
+  },
+  {
+    name: 'leading-zero root depth',
+    args: acceptedRootWindowArgs.map((arg, index) =>
+      index === 6 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe expiry epoch',
+    args: acceptedRootWindowArgs.map((arg, index) =>
+      index === 8 ? unsafeFirstInteger(arg) : arg
+    ),
+  },
+]) {
+  expectHaskellCommandRejected(args, `ct-accepted-root-window-digest Haskell rejects ${name}`);
+}
 function ctWalletProofRequestDigestArgs(request: any): string[] {
   const context = request.context;
   return [
@@ -2252,5 +2346,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native accepted-root-window and wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
 );

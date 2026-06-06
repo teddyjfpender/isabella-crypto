@@ -23,8 +23,11 @@ module Canon.ZK.Confidential_Transaction
   , transactionMerkleProofTag
   , transactionEnvelopeTag
   , transactionWalletProofRequestTag
+  , transactionAcceptedRootWindowTag
   , transactionContextPreimageHex
   , transactionContextDigest
+  , transactionAcceptedRootWindowPreimageHex
+  , transactionAcceptedRootWindowDigest
   , transactionMerkleProofPreimageHex
   , transactionMerkleProofDigest
   , transactionEnvelopePreimageHex
@@ -196,6 +199,9 @@ transactionEnvelopeTag = 2
 transactionWalletProofRequestTag :: Int
 transactionWalletProofRequestTag = 3
 
+transactionAcceptedRootWindowTag :: Int
+transactionAcceptedRootWindowTag = 4
+
 transactionWord64LeBytes :: Word64 -> [Word8]
 transactionWord64LeBytes value =
   [ fromIntegral ((value `shiftR` (8 * i)) .&. 0xff)
@@ -298,6 +304,23 @@ encodeTransactionAcceptedRootVector label roots =
     | (index, root) <- zip [0 :: Int ..] roots
     ]
 
+encodeTransactionAcceptedRootWindowEntry :: String -> (String, Int, Int, Int) -> [Word8]
+encodeTransactionAcceptedRootWindowEntry label (digest, depth, validFromEpoch, expiresAtEpoch)
+  | expiresAtEpoch <= validFromEpoch =
+      error (label ++ ".expiresAtEpoch must be greater than validFromEpoch")
+  | otherwise =
+      encodeTransactionAcceptedRoot (label ++ ".root") (digest, depth) ++
+      encodeTransactionInt (label ++ ".validFromEpoch") validFromEpoch ++
+      encodeTransactionInt (label ++ ".expiresAtEpoch") expiresAtEpoch
+
+encodeTransactionAcceptedRootWindowEntryVector :: String -> [(String, Int, Int, Int)] -> [Word8]
+encodeTransactionAcceptedRootWindowEntryVector label entries =
+  transactionInt64LeBytes (length entries) ++
+  concat
+    [ encodeTransactionAcceptedRootWindowEntry (label ++ "[" ++ show index ++ "]") entry
+    | (index, entry) <- zip [0 :: Int ..] entries
+    ]
+
 requireSortedUnique :: Ord a => String -> [a] -> ()
 requireSortedUnique label values
   | any (uncurry (>=)) (zip values (drop 1 values)) =
@@ -317,6 +340,21 @@ requireCanonicalAcceptedRootSet label roots
   | otherwise =
       let encoded = encodeTransactionAcceptedRootVector label roots
        in length encoded `seq` requireSortedUnique label roots
+
+requireCanonicalAcceptedRootWindow :: Int -> String -> [(String, Int, Int, Int)] -> ()
+requireCanonicalAcceptedRootWindow ledgerEpoch label entries
+  | null entries = error (label ++ " must not be empty")
+  | otherwise =
+      let encoded = encodeTransactionAcceptedRootWindowEntryVector label entries
+          roots = [(digest, depth) | (digest, depth, _, _) <- entries]
+          live = all entryLive entries
+       in length encoded `seq`
+          if not live
+            then error (label ++ " contains a root that is not live at ledgerEpoch")
+            else requireSortedUnique label roots
+ where
+  entryLive (_, _, validFromEpoch, expiresAtEpoch) =
+    validFromEpoch <= ledgerEpoch && ledgerEpoch < expiresAtEpoch
 
 requireCanonicalIntMatrixSet :: String -> [[Int]] -> ()
 requireCanonicalIntMatrixSet = requireSortedUnique
@@ -393,6 +431,62 @@ transactionTaggedPreimage tag body =
   transactionInt64LeBytes tag ++
   encodeTransactionAscii "protocolId" transactionProtocolId ++
   body
+
+transactionAcceptedRootWindowPreimage ::
+  Int ->
+  String ->
+  Int ->
+  Int ->
+  [String] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Word8]
+transactionAcceptedRootWindowPreimage
+  protocolVersion
+  networkId
+  assetId
+  ledgerEpoch
+  roots
+  rootDepths
+  validFromEpochs
+  expiresAtEpochs =
+  let entries = zip4Local roots rootDepths validFromEpochs expiresAtEpochs
+      lengthsOk =
+        length roots == length rootDepths &&
+        length roots == length validFromEpochs &&
+        length roots == length expiresAtEpochs
+   in if not lengthsOk
+        then error "acceptedRootWindow.roots vectors must have the same length"
+        else
+          requireCanonicalAcceptedRootWindow ledgerEpoch "acceptedRootWindow.roots" entries `seq`
+          transactionTaggedPreimage transactionAcceptedRootWindowTag
+            ( encodeTransactionInt "acceptedRootWindow.protocolVersion" protocolVersion ++
+              encodeTransactionAscii "acceptedRootWindow.networkId" networkId ++
+              encodeTransactionInt "acceptedRootWindow.assetId" assetId ++
+              encodeTransactionInt "acceptedRootWindow.ledgerEpoch" ledgerEpoch ++
+              encodeTransactionAcceptedRootWindowEntryVector "acceptedRootWindow.roots" entries
+            )
+ where
+  zip4Local (a:as) (b:bs) (c:cs) (d:ds) =
+    (a, b, c, d) : zip4Local as bs cs ds
+  zip4Local [] [] [] [] = []
+  zip4Local _ _ _ _ = []
+
+transactionAcceptedRootWindowPreimageHex ::
+  Int -> String -> Int -> Int -> [String] -> [Int] -> [Int] -> [Int] -> String
+transactionAcceptedRootWindowPreimageHex protocolVersion networkId assetId ledgerEpoch roots rootDepths validFromEpochs expiresAtEpochs =
+  transactionDigestHex
+    (transactionAcceptedRootWindowPreimage
+      protocolVersion networkId assetId ledgerEpoch roots rootDepths validFromEpochs expiresAtEpochs)
+
+transactionAcceptedRootWindowDigest ::
+  Int -> String -> Int -> Int -> [String] -> [Int] -> [Int] -> [Int] -> String
+transactionAcceptedRootWindowDigest protocolVersion networkId assetId ledgerEpoch roots rootDepths validFromEpochs expiresAtEpochs =
+  transactionDigestHex
+    (RepeatedFS.sha3_256
+      (transactionAcceptedRootWindowPreimage
+        protocolVersion networkId assetId ledgerEpoch roots rootDepths validFromEpochs expiresAtEpochs))
 
 transactionMerkleMembershipPreimage :: MerkleMembershipProof -> [Word8]
 transactionMerkleMembershipPreimage proof

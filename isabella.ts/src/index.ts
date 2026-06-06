@@ -162,6 +162,22 @@ export interface MerkleAcceptedRoot {
   depth: number;
 }
 
+/** Consensus/indexer accepted-root entry with an exclusive expiry epoch */
+export interface ConfidentialAcceptedRootWindowEntry {
+  root: MerkleAcceptedRoot;
+  validFromEpoch: number;
+  expiresAtEpoch: number;
+}
+
+/** Depth-tagged root window that is live for one ledger epoch */
+export interface ConfidentialAcceptedRootWindow {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  roots: ConfidentialAcceptedRootWindowEntry[];
+}
+
 /** Cryptographic Merkle membership proof over note commitment leaves */
 export interface MerkleMembershipProof {
   index: number;
@@ -1016,6 +1032,7 @@ const CT_TRANSACTION_TAGS = {
   merkleProof: 1,
   envelope: 2,
   walletProofRequest: 3,
+  acceptedRootWindow: 4,
 } as const;
 
 function assertSafeI64(value: number, label: string): void {
@@ -1173,6 +1190,34 @@ function encodeAcceptedRootVector(roots: MerkleAcceptedRoot[], label: string): B
   ]);
 }
 
+function encodeAcceptedRootWindowEntry(
+  entry: ConfidentialAcceptedRootWindowEntry,
+  label: string
+): Buffer {
+  assertExactObjectKeys(entry, ['root', 'validFromEpoch', 'expiresAtEpoch'], label);
+  assertNonNegativeSafeI64(entry.validFromEpoch, `${label}.validFromEpoch`);
+  assertNonNegativeSafeI64(entry.expiresAtEpoch, `${label}.expiresAtEpoch`);
+  if (entry.expiresAtEpoch <= entry.validFromEpoch) {
+    throw new Error(`${label}.expiresAtEpoch must be greater than validFromEpoch`);
+  }
+  return Buffer.concat([
+    encodeAcceptedRoot(entry.root, `${label}.root`),
+    encodeI64LE(entry.validFromEpoch, `${label}.validFromEpoch`),
+    encodeI64LE(entry.expiresAtEpoch, `${label}.expiresAtEpoch`),
+  ]);
+}
+
+function encodeAcceptedRootWindowEntryVector(
+  entries: ConfidentialAcceptedRootWindowEntry[],
+  label: string
+): Buffer {
+  assertNonNegativeSafeI64(entries.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(entries.length, `${label}.length`),
+    ...entries.map((entry, index) => encodeAcceptedRootWindowEntry(entry, `${label}[${index}]`)),
+  ]);
+}
+
 function compareIntVectors(left: IntVec, right: IntVec): number {
   const width = Math.min(left.length, right.length);
   for (let index = 0; index < width; index += 1) {
@@ -1198,6 +1243,13 @@ function compareAcceptedRoots(left: MerkleAcceptedRoot, right: MerkleAcceptedRoo
 
 function sameAcceptedRoot(left: MerkleAcceptedRoot, right: MerkleAcceptedRoot): boolean {
   return left.digest === right.digest && left.depth === right.depth;
+}
+
+function compareAcceptedRootWindowEntries(
+  left: ConfidentialAcceptedRootWindowEntry,
+  right: ConfidentialAcceptedRootWindowEntry
+): number {
+  return compareAcceptedRoots(left.root, right.root);
 }
 
 function assertCanonicalDigestSet(digests: MerkleDigest[], label: string): void {
@@ -1227,6 +1279,32 @@ function assertCanonicalAcceptedRootSet(roots: MerkleAcceptedRoot[], label: stri
       throw new Error(`${label} must be sorted by digest/depth with no duplicates`);
     }
     previous = root;
+  }
+}
+
+function assertCanonicalAcceptedRootWindow(window: ConfidentialAcceptedRootWindow): void {
+  assertExactObjectKeys(
+    window,
+    ['protocolVersion', 'networkId', 'assetId', 'ledgerEpoch', 'roots'],
+    'acceptedRootWindow'
+  );
+  assertNonNegativeSafeI64(window.protocolVersion, 'acceptedRootWindow.protocolVersion');
+  assertNonNegativeSafeI64(window.assetId, 'acceptedRootWindow.assetId');
+  assertNonNegativeSafeI64(window.ledgerEpoch, 'acceptedRootWindow.ledgerEpoch');
+  if (window.roots.length === 0) {
+    throw new Error('acceptedRootWindow.roots must not be empty');
+  }
+  let previous: ConfidentialAcceptedRootWindowEntry | null = null;
+  for (let index = 0; index < window.roots.length; index += 1) {
+    const entry = window.roots[index];
+    encodeAcceptedRootWindowEntry(entry, `acceptedRootWindow.roots[${index}]`);
+    if (entry.validFromEpoch > window.ledgerEpoch || window.ledgerEpoch >= entry.expiresAtEpoch) {
+      throw new Error(`acceptedRootWindow.roots[${index}] is not live at ledgerEpoch`);
+    }
+    if (previous !== null && compareAcceptedRootWindowEntries(previous, entry) >= 0) {
+      throw new Error('acceptedRootWindow.roots must be sorted by digest/depth with no duplicates');
+    }
+    previous = entry;
   }
 }
 
@@ -1349,6 +1427,22 @@ function transactionTaggedPreimage(tag: number, body: Buffer): Buffer {
     encodeAsciiString(CT_TRANSACTION_PROTOCOL_ID, 'protocolId'),
     body,
   ]);
+}
+
+function transactionAcceptedRootWindowPreimage(
+  window: ConfidentialAcceptedRootWindow
+): Buffer {
+  assertCanonicalAcceptedRootWindow(window);
+  return transactionTaggedPreimage(
+    CT_TRANSACTION_TAGS.acceptedRootWindow,
+    Buffer.concat([
+      encodeI64LE(window.protocolVersion, 'acceptedRootWindow.protocolVersion'),
+      encodeAsciiString(window.networkId, 'acceptedRootWindow.networkId'),
+      encodeI64LE(window.assetId, 'acceptedRootWindow.assetId'),
+      encodeI64LE(window.ledgerEpoch, 'acceptedRootWindow.ledgerEpoch'),
+      encodeAcceptedRootWindowEntryVector(window.roots, 'acceptedRootWindow.roots'),
+    ])
+  );
 }
 
 function listedNullifierProof(proof: NullifierProofLike): ListedNullifierProof {
@@ -2634,6 +2728,61 @@ export namespace ConfidentialTransaction {
     request: ConfidentialWalletProofRequest
   ): MerkleDigest {
     return sha3Hex(transactionWalletProofRequestPreimage(request));
+  }
+
+  export function transactionAcceptedRootWindowPreimageHex(
+    window: ConfidentialAcceptedRootWindow
+  ): string {
+    return transactionAcceptedRootWindowPreimage(window).toString('hex');
+  }
+
+  export function transactionAcceptedRootWindowDigest(
+    window: ConfidentialAcceptedRootWindow
+  ): MerkleDigest {
+    return sha3Hex(transactionAcceptedRootWindowPreimage(window));
+  }
+
+  export function transactionAcceptedRootWindowRoots(
+    window: ConfidentialAcceptedRootWindow
+  ): MerkleAcceptedRoot[] {
+    transactionAcceptedRootWindowPreimage(window);
+    return window.roots.map((entry) => entry.root);
+  }
+
+  export function transactionContextMatchesAcceptedRootWindow(
+    context: ConfidentialTransactionContext,
+    window: ConfidentialAcceptedRootWindow
+  ): boolean {
+    try {
+      transactionContextPreimage(context);
+      transactionAcceptedRootWindowPreimage(window);
+      return (
+        context.protocolVersion === window.protocolVersion &&
+        context.networkId === window.networkId &&
+        context.assetId === window.assetId &&
+        context.ledgerEpoch === window.ledgerEpoch &&
+        window.roots.some((entry) => sameAcceptedRoot(entry.root, context.root))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function transactionWalletProofRequestFromWindow(
+    context: ConfidentialTransactionContext,
+    acceptedRootWindow: ConfidentialAcceptedRootWindow,
+    spentNullifiers: IntMatrix
+  ): ConfidentialWalletProofRequest {
+    if (!transactionContextMatchesAcceptedRootWindow(context, acceptedRootWindow)) {
+      throw new Error('context is not accepted by the root window');
+    }
+    const request = {
+      context,
+      acceptedRoots: transactionAcceptedRootWindowRoots(acceptedRootWindow),
+      spentNullifiers,
+    };
+    transactionWalletProofRequestPreimage(request);
+    return request;
   }
 
   export function transactionContextMatchesPolicy(

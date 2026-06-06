@@ -206,12 +206,13 @@ The formalization still needs these before production:
    remaining algebraic scaffold compatibility APIs, replace the
    hand-maintained native transaction digest/envelope command wrappers with
    generated or vector-locked surfaces, broaden native transaction-level
-   negative/fuzz conformance for Merkle proofs, and extend the runtime
-   depth-tagged accepted-root model into consensus/indexer API contracts.
+   negative/fuzz conformance for Merkle proofs, and wire the accepted-root
+   window contract into real consensus/indexer services.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
-7. Extend the pinned depth-tagged wallet proof request serialization into
-   consensus/indexer API contracts with non-canonical encoding rejection.
+7. Generate more of the pinned transaction API wrappers or keep expanding
+   vector-locked conformance so the accepted-root-window, wallet-request, and
+   envelope contracts cannot drift across backends.
 8. Extend fee-aware proof support from the envelope verifier into the remaining
    consensus/indexer and wallet APIs, including change-output policy and
    negative tests for every failure class.
@@ -365,12 +366,12 @@ Important validation caveats:
   context digests, wrong network/asset policy, fee-policy mismatches, and
   swapped proof components, and accepts a valid nonzero public-fee proof.
   OCaml/Haskell SDK-equivalence validation now checks native
-  proof/envelope/wallet-request digest parity against the pinned vectors,
-  rejects malformed native wallet requests, rejects non-canonical and
-  out-of-range native transaction encodings on production-facing commands,
-  and verifies explicit
+  proof/envelope/accepted-root-window/wallet-request digest parity against the
+  pinned vectors, rejects malformed native accepted-root windows and wallet
+  requests, rejects non-canonical and out-of-range native transaction encodings
+  on production-facing commands, and verifies explicit
   Merkle proof rejection through native envelope commands; consensus/indexer
-  serialization remains open.
+  service integration remains open.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
   acceptance/rejection against native context digests and Merkle proofs through

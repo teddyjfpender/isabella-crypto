@@ -1139,12 +1139,28 @@ export interface WalletProofRequest {
   spentNullifiers: number[][];
 }
 
+export interface AcceptedRootWindow {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  roots: Array<{
+    root: { digest: string; depth: number };
+    validFromEpoch: number;
+    expiresAtEpoch: number;
+  }>;
+}
+
 function acceptedRootDigests(roots: Array<{ digest: string; depth: number }>): string[] {
   return roots.map((root) => root.digest);
 }
 
 function acceptedRootDepths(roots: Array<{ digest: string; depth: number }>): number[] {
   return roots.map((root) => root.depth);
+}
+
+function acceptedRootWindowRoots(window: AcceptedRootWindow): Array<{ digest: string; depth: number }> {
+  return window.roots.map((entry) => entry.root);
 }
 
 export function ctNullifier(
@@ -1375,6 +1391,22 @@ export function ctWalletProofRequestDigest(request: WalletProofRequest): string 
     JSON.stringify(acceptedRootDigests(request.acceptedRoots)),
     JSON.stringify(acceptedRootDepths(request.acceptedRoots)),
     JSON.stringify(request.spentNullifiers),
+  ]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctAcceptedRootWindowDigest(window: AcceptedRootWindow): string {
+  const roots = acceptedRootWindowRoots(window);
+  const output = runCli([
+    'ct-accepted-root-window-digest',
+    window.protocolVersion.toString(),
+    window.networkId,
+    window.assetId.toString(),
+    window.ledgerEpoch.toString(),
+    JSON.stringify(acceptedRootDigests(roots)),
+    JSON.stringify(acceptedRootDepths(roots)),
+    JSON.stringify(window.roots.map((entry) => entry.validFromEpoch)),
+    JSON.stringify(window.roots.map((entry) => entry.expiresAtEpoch)),
   ]);
   return parseCliResult<{ result: string }>(output).result;
 }

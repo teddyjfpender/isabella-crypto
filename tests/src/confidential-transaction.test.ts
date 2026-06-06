@@ -56,6 +56,22 @@ type WalletProofRequestVector = DigestVector & {
   contextDigest: string;
 };
 
+type AcceptedRootWindow = {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  roots: Array<{
+    root: { digest: string; depth: number };
+    validFromEpoch: number;
+    expiresAtEpoch: number;
+  }>;
+};
+
+type AcceptedRootWindowVector = DigestVector & {
+  window: AcceptedRootWindow;
+};
+
 type TransactionVectors = {
   version: number;
   algorithm: string;
@@ -65,10 +81,17 @@ type TransactionVectors = {
   stringEncoding: string;
   digestEncoding: string;
   vectorEncoding: string;
-  tags: { context: number; merkleProof: number; envelope: number; walletProofRequest: number };
+  tags: {
+    context: number;
+    merkleProof: number;
+    envelope: number;
+    walletProofRequest: number;
+    acceptedRootWindow: number;
+  };
   cases: TransactionVector[];
   merkleProofCases: DigestVector[];
   envelopeCases: EnvelopeVector[];
+  acceptedRootWindowCases: AcceptedRootWindowVector[];
   walletProofRequestCases: WalletProofRequestVector[];
 };
 
@@ -102,6 +125,7 @@ describe('Confidential transaction context vectors', () => {
       merkleProof: 1,
       envelope: 2,
       walletProofRequest: 3,
+      acceptedRootWindow: 4,
     });
   });
 
@@ -116,6 +140,9 @@ describe('Confidential transaction context vectors', () => {
       expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
     }
     for (const entry of vectors.envelopeCases) {
+      expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
+    }
+    for (const entry of vectors.acceptedRootWindowCases) {
       expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
     }
     for (const entry of vectors.walletProofRequestCases) {
@@ -296,6 +323,112 @@ describe('Confidential transaction context vectors', () => {
       ...request,
       context: { ...request.context, ledgerEpoch: request.context.ledgerEpoch + 1 },
     })).not.toBe(requestVector.digest);
+  });
+
+  it('matches the TypeScript accepted-root window serialization API', async () => {
+    const sdk = await import(pathToFileURL(typeScriptEntry).href);
+    const tx = sdk.ConfidentialTransaction;
+    const [windowVector] = vectors.acceptedRootWindowCases;
+    const [requestVector] = vectors.walletProofRequestCases;
+    const window = windowVector.window;
+    const request = requestVector.request;
+
+    expect(tx.transactionAcceptedRootWindowPreimageHex(window)).toBe(windowVector.preimageHex);
+    expect(tx.transactionAcceptedRootWindowDigest(window)).toBe(windowVector.digest);
+    expect(tx.transactionAcceptedRootWindowRoots(window)).toEqual(request.acceptedRoots);
+    expect(tx.transactionContextMatchesAcceptedRootWindow(request.context, window)).toBe(true);
+    expect(tx.transactionWalletProofRequestFromWindow(
+      request.context,
+      window,
+      request.spentNullifiers
+    )).toEqual(request);
+    expect(tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      ledgerEpoch: window.ledgerEpoch + 1,
+      roots: window.roots.map((entry) => ({
+        ...entry,
+        expiresAtEpoch: entry.expiresAtEpoch + 1,
+      })),
+    })).not.toBe(windowVector.digest);
+    expect(tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: window.roots.map((entry, index) =>
+        index === 0
+          ? { ...entry, expiresAtEpoch: entry.expiresAtEpoch + 1 }
+          : entry
+      ),
+    })).not.toBe(windowVector.digest);
+    expect(tx.transactionContextMatchesAcceptedRootWindow(
+      { ...request.context, assetId: request.context.assetId + 1 },
+      window
+    )).toBe(false);
+  });
+
+  it('rejects malformed or expired accepted-root windows', async () => {
+    const sdk = await import(pathToFileURL(typeScriptEntry).href);
+    const tx = sdk.ConfidentialTransaction;
+    const [windowVector] = vectors.acceptedRootWindowCases;
+    const [requestVector] = vectors.walletProofRequestCases;
+    const window = windowVector.window;
+    const request = requestVector.request;
+    const unsortedRoots = window.roots.slice().reverse();
+
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: [],
+    })).toThrow();
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: [window.roots[0], window.roots[0]],
+    })).toThrow();
+    if (
+      unsortedRoots.map((entry) => rootKey(entry.root)).join('|') !==
+      window.roots.map((entry) => rootKey(entry.root)).join('|')
+    ) {
+      expect(() => tx.transactionAcceptedRootWindowDigest({
+        ...window,
+        roots: unsortedRoots,
+      })).toThrow();
+    }
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: window.roots.map((entry, index) =>
+        index === 0 ? { ...entry, validFromEpoch: window.ledgerEpoch + 1 } : entry
+      ),
+    })).toThrow();
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: window.roots.map((entry, index) =>
+        index === 0 ? { ...entry, expiresAtEpoch: window.ledgerEpoch } : entry
+      ),
+    })).toThrow();
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: window.roots.map((entry, index) =>
+        index === 0 ? { ...entry, expiresAtEpoch: entry.validFromEpoch } : entry
+      ),
+    })).toThrow();
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: window.roots.map((entry, index) =>
+        index === 0 ? { ...entry, root: { ...entry.root, depth: -1 } } : entry
+      ),
+    })).toThrow();
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      extension: 1,
+    } as AcceptedRootWindow)).toThrow();
+    expect(() => tx.transactionAcceptedRootWindowDigest({
+      ...window,
+      roots: window.roots.map((entry, index) =>
+        index === 0 ? { ...entry, extension: 1 } : entry
+      ),
+    } as AcceptedRootWindow)).toThrow();
+    expect(() => tx.transactionWalletProofRequestFromWindow(
+      { ...request.context, root: { ...request.context.root, depth: request.context.root.depth + 1 } },
+      window,
+      request.spentNullifiers
+    )).toThrow();
   });
 
   it('rejects malformed or non-canonical wallet proof requests', async () => {

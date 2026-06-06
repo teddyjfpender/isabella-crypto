@@ -1376,6 +1376,32 @@ let cmd_ct_wallet_proof_request_digest args =
   | _ ->
     output_error "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS ACCEPTED_ROOT_DEPTHS SPENT_NULLIFIERS"
 
+let cmd_ct_accepted_root_window_digest args =
+  match args with
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str;
+     roots_str; root_depths_str; valid_from_epochs_str; expires_at_epochs_str] ->
+    (match
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_string_list roots_str,
+       parse_canonical_vec root_depths_str,
+       parse_canonical_vec valid_from_epochs_str,
+       parse_canonical_vec expires_at_epochs_str
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch,
+       Some roots, Some root_depths, Some valid_from_epochs, Some expires_at_epochs ->
+       (try
+          output_string_result
+            "ct_accepted_root_window_digest"
+            (Confidential_transaction.transaction_accepted_root_window_digest
+               protocol_version network_id asset_id ledger_epoch
+               roots root_depths valid_from_epochs expires_at_epochs)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected accepted-root window fields")
+  | _ ->
+    output_error "Usage: ct-accepted-root-window-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOTS ROOT_DEPTHS VALID_FROM_EPOCHS EXPIRES_AT_EPOCHS"
+
 (** {1 Confidential Transaction Commands} *)
 
 let cmd_ct_nullifier args =
@@ -2218,6 +2244,7 @@ let show_help () =
   print_endline "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes";
   print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
   print_endline "  ct-wallet-proof-request-digest ... Hash canonical wallet proof request bytes";
+  print_endline "  ct-accepted-root-window-digest ... Hash canonical live accepted-root window bytes";
   print_endline "";
   print_endline "Confidential Transaction Commands:";
   print_endline "  ct-sample-opening MSG_LEN RAND_LEN BOUND  Sample a bounded CSPRNG opening";
@@ -2320,6 +2347,7 @@ let run_command cmd args =
   | "ct-merkle-proof-digest" -> cmd_ct_merkle_proof_digest args
   | "ct-merkle-envelope-digest" -> cmd_ct_merkle_envelope_digest args
   | "ct-wallet-proof-request-digest" -> cmd_ct_wallet_proof_request_digest args
+  | "ct-accepted-root-window-digest" -> cmd_ct_accepted_root_window_digest args
   | "ct-sample-opening" -> cmd_ct_sample_opening args
   | "ct-sample-openings" -> cmd_ct_sample_openings args
   | "ct-nullifier" -> cmd_ct_nullifier args

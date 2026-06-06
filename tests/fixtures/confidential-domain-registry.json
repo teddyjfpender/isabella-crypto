@@ -29,7 +29,8 @@
         "context": 0,
         "merkleProof": 1,
         "envelope": 2,
-        "walletProofRequest": 3
+        "walletProofRequest": 3,
+        "acceptedRootWindow": 4
       }
     }
   }

@@ -11,7 +11,8 @@
     "context": 0,
     "merkleProof": 1,
     "envelope": 2,
-    "walletProofRequest": 3
+    "walletProofRequest": 3,
+    "acceptedRootWindow": 4
   },
   "cases": [
     {
@@ -110,6 +111,37 @@
       "proofDigest": "98a02a3e37ace016fb2527b1a6eef89c4130a916f3b4173cbf742dc9c7f8dab1",
       "preimageHex": "49534142454c4c412d43542d54582d76310200000000000000140000000000000049534142454c4c412d43542d5349532d4e4f54452000000000000000caf801b3b567829e6354535a7ae7a54661770d4457098f81158b5a7d05e3505b200000000000000098a02a3e37ace016fb2527b1a6eef89c4130a916f3b4173cbf742dc9c7f8dab1",
       "digest": "7a33f7eb6858128a1505b29fe031bc8ea5f9971b1e748e469407b7a69809c47b"
+    }
+  ],
+  "acceptedRootWindowCases": [
+    {
+      "name": "sis-note-accepted-root-window-basic",
+      "window": {
+        "protocolVersion": 1,
+        "networkId": "isabella-local-devnet",
+        "assetId": 7,
+        "ledgerEpoch": 42,
+        "roots": [
+          {
+            "root": {
+              "digest": "6fe20e02764f55b36a3e32df77696a96fabbbd14b93f34be27b349b5a5478df9",
+              "depth": 1
+            },
+            "validFromEpoch": 40,
+            "expiresAtEpoch": 50
+          },
+          {
+            "root": {
+              "digest": "f169305c42d0b822cb03bb755529043942339c94caca4bf45f9ad5db87b2c89a",
+              "depth": 1
+            },
+            "validFromEpoch": 38,
+            "expiresAtEpoch": 58
+          }
+        ]
+      },
+      "preimageHex": "49534142454c4c412d43542d54582d76310400000000000000140000000000000049534142454c4c412d43542d5349532d4e4f54450100000000000000150000000000000069736162656c6c612d6c6f63616c2d6465766e657407000000000000002a00000000000000020000000000000020000000000000006fe20e02764f55b36a3e32df77696a96fabbbd14b93f34be27b349b5a5478df90100000000000000280000000000000032000000000000002000000000000000f169305c42d0b822cb03bb755529043942339c94caca4bf45f9ad5db87b2c89a010000000000000026000000000000003a00000000000000",
+      "digest": "3f43a37bda377bc6908292213b3bd9e92c5fa09efb1bc2589a033b501975c443"
     }
   ],
   "walletProofRequestCases": [

@@ -69,6 +69,7 @@ runCommand format cmd args = case cmd of
     "ct-merkle-proof-digest" -> cmdCtMerkleProofDigest format args
     "ct-merkle-envelope-digest" -> cmdCtMerkleEnvelopeDigest format args
     "ct-wallet-proof-request-digest" -> cmdCtWalletProofRequestDigest format args
+    "ct-accepted-root-window-digest" -> cmdCtAcceptedRootWindowDigest format args
     "ct-sample-opening" -> cmdCtSampleOpening format args
     "ct-sample-openings" -> cmdCtSampleOpenings format args
     "ct-nullifier" -> cmdCtNullifier format args
@@ -1459,6 +1460,52 @@ cmdCtWalletProofRequestDigest
         _ -> outputError format "Expected wallet proof request context, accepted roots, and spent nullifiers"
 cmdCtWalletProofRequestDigest format _ =
     outputUsage format "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS ACCEPTED_ROOT_DEPTHS SPENT_NULLIFIERS"
+
+cmdCtAcceptedRootWindowDigest :: OutputFormat -> [String] -> IO ()
+cmdCtAcceptedRootWindowDigest
+    format
+    [ protocolVersionStr
+    , networkId
+    , assetIdStr
+    , ledgerEpochStr
+    , rootsStr
+    , rootDepthsStr
+    , validFromEpochsStr
+    , expiresAtEpochsStr
+    ] =
+    case
+        ( parseCanonicalInt protocolVersionStr
+        , parseCanonicalInt assetIdStr
+        , parseCanonicalInt ledgerEpochStr
+        , parseStringList rootsStr
+        , parseCanonicalVec rootDepthsStr
+        , parseCanonicalVec validFromEpochsStr
+        , parseCanonicalVec expiresAtEpochsStr
+        )
+    of
+        ( Just protocolVersion
+          , Just assetId
+          , Just ledgerEpoch
+          , Just roots
+          , Just rootDepths
+          , Just validFromEpochs
+          , Just expiresAtEpochs
+          ) ->
+            let digest =
+                    ConfidentialTransaction.transactionAcceptedRootWindowDigest
+                        protocolVersion
+                        networkId
+                        assetId
+                        ledgerEpoch
+                        roots
+                        rootDepths
+                        validFromEpochs
+                        expiresAtEpochs
+             in (evaluate digest >>= outputStringResult format "ct_accepted_root_window_digest = ")
+                    `catch` handleSampleError format
+        _ -> outputError format "Expected accepted-root window fields"
+cmdCtAcceptedRootWindowDigest format _ =
+    outputUsage format "Usage: ct-accepted-root-window-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOTS ROOT_DEPTHS VALID_FROM_EPOCHS EXPIRES_AT_EPOCHS"
 
 cmdCtSampleOpening :: OutputFormat -> [String] -> IO ()
 cmdCtSampleOpening format [msgLenStr, randLenStr, boundStr] =

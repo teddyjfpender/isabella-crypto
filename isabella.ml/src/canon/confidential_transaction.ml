@@ -104,6 +104,7 @@ let transaction_context_tag = 0
 let transaction_merkle_proof_tag = 1
 let transaction_envelope_tag = 2
 let transaction_wallet_proof_request_tag = 3
+let transaction_accepted_root_window_tag = 4
 
 let require_nonnegative label value =
   if value < 0 then invalid_arg (label ^ " must be non-negative")
@@ -165,6 +166,23 @@ let encode_transaction_accepted_root_vec label roots =
             encode_transaction_accepted_root (Printf.sprintf "%s[%d]" label index) root)
          roots)
 
+let encode_transaction_accepted_root_window_entry label (root, root_depth, valid_from_epoch, expires_at_epoch) =
+  require_nonnegative (label ^ ".validFromEpoch") valid_from_epoch;
+  require_nonnegative (label ^ ".expiresAtEpoch") expires_at_epoch;
+  if expires_at_epoch <= valid_from_epoch then
+    invalid_arg (label ^ ".expiresAtEpoch must be greater than validFromEpoch");
+  encode_transaction_accepted_root (label ^ ".root") (root, root_depth)
+  @ encode_transaction_int (label ^ ".validFromEpoch") valid_from_epoch
+  @ encode_transaction_int (label ^ ".expiresAtEpoch") expires_at_epoch
+
+let encode_transaction_accepted_root_window_entry_vec label entries =
+  Repeated_fs.int64_le_bytes (Int64.of_int (List.length entries))
+  @ List.concat
+      (List.mapi
+         (fun index entry ->
+            encode_transaction_accepted_root_window_entry (Printf.sprintf "%s[%d]" label index) entry)
+         entries)
+
 let rec compare_int_lists left right =
   match left, right with
   | [], [] -> 0
@@ -206,8 +224,37 @@ let require_canonical_accepted_root_set label roots =
     roots;
   require_sorted_unique compare_accepted_roots label roots
 
+let require_canonical_accepted_root_window ledger_epoch label entries =
+  if entries = [] then invalid_arg (label ^ " must not be empty");
+  let rec loop previous_root index = function
+    | [] -> ()
+    | ((root, root_depth, valid_from_epoch, expires_at_epoch) as entry) :: rest ->
+      ignore (encode_transaction_accepted_root_window_entry (Printf.sprintf "%s[%d]" label index) entry);
+      if valid_from_epoch > ledger_epoch || ledger_epoch >= expires_at_epoch then
+        invalid_arg (Printf.sprintf "%s[%d] is not live at ledgerEpoch" label index);
+      (match previous_root with
+       | Some previous when compare_accepted_roots previous (root, root_depth) >= 0 ->
+         invalid_arg (label ^ " must be sorted by digest/depth with no duplicates")
+       | _ -> loop (Some (root, root_depth)) (index + 1) rest)
+  in
+  loop None 0 entries
+
 let require_canonical_int_matrix_set label rows =
   require_sorted_unique compare_int_lists label rows
+
+let combine4 label a b c d =
+  if List.length a <> List.length b ||
+     List.length a <> List.length c ||
+     List.length a <> List.length d
+  then invalid_arg (label ^ " vectors must have the same length");
+  let rec loop a b c d =
+    match a, b, c, d with
+    | [], [], [], [] -> []
+    | aw :: at, bw :: bt, cw :: ct, dw :: dt ->
+      (aw, bw, cw, dw) :: loop at bt ct dt
+    | _ -> invalid_arg (label ^ " vectors must have the same length")
+  in
+  loop a b c d
 
 let transaction_context_preimage
     protocol_version
@@ -244,6 +291,40 @@ let transaction_tagged_preimage tag body =
   @ Repeated_fs.int64_le_bytes (Int64.of_int tag)
   @ encode_ascii "protocolId" transaction_protocol_id
   @ body
+
+let transaction_accepted_root_window_preimage
+    protocol_version
+    network_id
+    asset_id
+    ledger_epoch
+    roots
+    root_depths
+    valid_from_epochs
+    expires_at_epochs =
+  let entries = combine4 "acceptedRootWindow.roots" roots root_depths valid_from_epochs expires_at_epochs in
+  require_nonnegative "acceptedRootWindow.protocolVersion" protocol_version;
+  require_nonnegative "acceptedRootWindow.assetId" asset_id;
+  require_nonnegative "acceptedRootWindow.ledgerEpoch" ledger_epoch;
+  require_canonical_accepted_root_window ledger_epoch "acceptedRootWindow.roots" entries;
+  transaction_tagged_preimage
+    transaction_accepted_root_window_tag
+    (encode_transaction_int "acceptedRootWindow.protocolVersion" protocol_version
+     @ encode_ascii "acceptedRootWindow.networkId" network_id
+     @ encode_transaction_int "acceptedRootWindow.assetId" asset_id
+     @ encode_transaction_int "acceptedRootWindow.ledgerEpoch" ledger_epoch
+     @ encode_transaction_accepted_root_window_entry_vec "acceptedRootWindow.roots" entries)
+
+let transaction_accepted_root_window_preimage_hex
+    protocol_version network_id asset_id ledger_epoch roots root_depths valid_from_epochs expires_at_epochs =
+  transaction_accepted_root_window_preimage
+    protocol_version network_id asset_id ledger_epoch roots root_depths valid_from_epochs expires_at_epochs
+  |> Confidential_merkle.digest_hex
+
+let transaction_accepted_root_window_digest
+    protocol_version network_id asset_id ledger_epoch roots root_depths valid_from_epochs expires_at_epochs =
+  transaction_accepted_root_window_preimage
+    protocol_version network_id asset_id ledger_epoch roots root_depths valid_from_epochs expires_at_epochs
+  |> Confidential_merkle.digest
 
 let transaction_merkle_membership_preimage proof =
   if List.length proof.Confidential_merkle.merkle_siblings <>

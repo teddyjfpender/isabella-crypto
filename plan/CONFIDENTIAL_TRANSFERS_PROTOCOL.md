@@ -77,11 +77,34 @@ root and nullifier-set update are considered irreversible for wallet UX.
 
 ## Membership Roots And Reorgs
 
-Verifiers accept membership proofs only against roots in the root window:
+Verifiers accept membership proofs only against roots in the accepted-root
+window for the transaction epoch:
 
 - `latest_finalized_root`
 - optional recent unfinalized roots for latency-sensitive flows
 - root expiration height or epoch
+
+The consensus/indexer accepted-root window is a canonical object:
+
+```text
+protocol_version
+network_id
+asset_id
+ledger_epoch
+roots[] = (digest, depth, valid_from_epoch, expires_at_epoch)
+```
+
+`roots` is sorted by `(digest, depth)` with no duplicates. Every root included
+in the window must be live for the window epoch:
+
+```text
+valid_from_epoch <= ledger_epoch < expires_at_epoch
+```
+
+The runtime serialization hashes this object under the
+`acceptedRootWindow` transaction tag. Wallet proof requests derive their
+`accepted_roots` set from this window, and a request is invalid unless the
+selected transaction root is present in the live window.
 
 If a root leaves the window before a transaction lands, the transaction must be
 rebuilt with fresh paths. Wallets must not silently reuse old paths across
@@ -151,9 +174,10 @@ balance, range, membership, or nullifier statement being verified.
 4. Derive nullifiers for inputs.
 5. Build the public statement and bind protocol/network/asset/root/fee contexts.
    The MVP wallet proof request serialization commits to the canonical public
-   context digest, a sorted duplicate-free accepted-root window of `(digest,
-   depth)` pairs containing the selected root, and a sorted duplicate-free spent-nullifier snapshot that does
-   not already contain either requested nullifier.
+   context digest, the sorted duplicate-free `(digest, depth)` roots derived
+   from the live accepted-root window, and a sorted duplicate-free
+   spent-nullifier snapshot that does not already contain either requested
+   nullifier.
 6. Sample masks with a CSPRNG.
 7. Generate balance, nullifier, membership, and output range proofs.
 8. Verify the full transaction locally before broadcast.

@@ -18,6 +18,7 @@ const tags = {
   merkleProof: 1,
   envelope: 2,
   walletProofRequest: 3,
+  acceptedRootWindow: 4,
 };
 
 function i64le(value) {
@@ -80,6 +81,23 @@ function encodeAcceptedRoot(root) {
 
 function encodeAcceptedRootVector(roots) {
   return Buffer.concat([i64le(roots.length), ...roots.map(encodeAcceptedRoot)]);
+}
+
+function encodeAcceptedRootWindowEntry(entry) {
+  nonNegativeI64le(entry.validFromEpoch, 'validFromEpoch');
+  nonNegativeI64le(entry.expiresAtEpoch, 'expiresAtEpoch');
+  if (entry.expiresAtEpoch <= entry.validFromEpoch) {
+    throw new Error('expiresAtEpoch must be greater than validFromEpoch');
+  }
+  return Buffer.concat([
+    encodeAcceptedRoot(entry.root),
+    i64le(entry.validFromEpoch),
+    i64le(entry.expiresAtEpoch),
+  ]);
+}
+
+function encodeAcceptedRootWindowEntryVector(entries) {
+  return Buffer.concat([i64le(entries.length), ...entries.map(encodeAcceptedRootWindowEntry)]);
 }
 
 function contextPreimage(context) {
@@ -168,6 +186,26 @@ function assertCanonicalAcceptedRootSet(roots, label) {
   }
 }
 
+function assertCanonicalAcceptedRootWindow(window) {
+  nonNegativeI64le(window.protocolVersion, 'protocolVersion');
+  nonNegativeI64le(window.assetId, 'assetId');
+  nonNegativeI64le(window.ledgerEpoch, 'ledgerEpoch');
+  if (window.roots.length === 0) {
+    throw new Error('acceptedRootWindow.roots must not be empty');
+  }
+  let previous = null;
+  for (const entry of window.roots) {
+    encodeAcceptedRootWindowEntry(entry);
+    if (entry.validFromEpoch > window.ledgerEpoch || window.ledgerEpoch >= entry.expiresAtEpoch) {
+      throw new Error('acceptedRootWindow entry is not live at ledgerEpoch');
+    }
+    if (previous !== null && compareAcceptedRoots(previous.root, entry.root) >= 0) {
+      throw new Error('acceptedRootWindow.roots must be sorted by digest/depth with no duplicates');
+    }
+    previous = entry;
+  }
+}
+
 function assertCanonicalIntMatrixSet(rows, label) {
   let previous = null;
   for (let index = 0; index < rows.length; index += 1) {
@@ -212,6 +250,20 @@ function walletProofRequestPreimage(request) {
       encodeDigest(contextDigest),
       encodeAcceptedRootVector(request.acceptedRoots),
       encodeIntMatrix(request.spentNullifiers),
+    ])
+  );
+}
+
+function acceptedRootWindowPreimage(window) {
+  assertCanonicalAcceptedRootWindow(window);
+  return taggedPreimage(
+    tags.acceptedRootWindow,
+    Buffer.concat([
+      nonNegativeI64le(window.protocolVersion, 'protocolVersion'),
+      encodeAscii(window.networkId, 'networkId'),
+      nonNegativeI64le(window.assetId, 'assetId'),
+      nonNegativeI64le(window.ledgerEpoch, 'ledgerEpoch'),
+      encodeAcceptedRootWindowEntryVector(window.roots),
     ])
   );
 }
@@ -358,16 +410,42 @@ const extraAcceptedRoot = {
   digest: digestHex(Buffer.from('isabella-accepted-root-window-extra', 'ascii')),
   depth: proofFixture.root.depth,
 };
+const acceptedRootWindow = {
+  protocolVersion: envelopeContext.protocolVersion,
+  networkId: envelopeContext.networkId,
+  assetId: envelopeContext.assetId,
+  ledgerEpoch: envelopeContext.ledgerEpoch,
+  roots: [
+    {
+      root: proofFixture.root,
+      validFromEpoch: envelopeContext.ledgerEpoch - 4,
+      expiresAtEpoch: envelopeContext.ledgerEpoch + 16,
+    },
+    {
+      root: extraAcceptedRoot,
+      validFromEpoch: envelopeContext.ledgerEpoch - 2,
+      expiresAtEpoch: envelopeContext.ledgerEpoch + 8,
+    },
+  ].sort((left, right) => compareAcceptedRoots(left.root, right.root)),
+};
 const walletProofRequest = {
   context: envelopeContext,
-  acceptedRoots: [proofFixture.root, extraAcceptedRoot].sort(compareAcceptedRoots),
+  acceptedRoots: acceptedRootWindow.roots.map((entry) => entry.root),
   spentNullifiers: [
     [-9, 0, 9],
     [10, 11, 12],
   ],
 };
+const acceptedRootWindowPreimageHex = acceptedRootWindowPreimage(acceptedRootWindow).toString('hex');
+const acceptedRootWindowDigest = digestHex(Buffer.from(acceptedRootWindowPreimageHex, 'hex'));
 const walletProofRequestPreimageHex = walletProofRequestPreimage(walletProofRequest).toString('hex');
 const walletProofRequestDigest = digestHex(Buffer.from(walletProofRequestPreimageHex, 'hex'));
+if (tx.transactionAcceptedRootWindowPreimageHex(acceptedRootWindow) !== acceptedRootWindowPreimageHex) {
+  throw new Error('accepted-root window preimage implementation mismatch');
+}
+if (tx.transactionAcceptedRootWindowDigest(acceptedRootWindow) !== acceptedRootWindowDigest) {
+  throw new Error('accepted-root window digest implementation mismatch');
+}
 if (tx.transactionWalletProofRequestPreimageHex(walletProofRequest) !== walletProofRequestPreimageHex) {
   throw new Error('wallet proof request preimage implementation mismatch');
 }
@@ -410,6 +488,14 @@ const vectors = {
       digest: envelopeDigest,
     },
   ],
+  acceptedRootWindowCases: [
+    {
+      name: 'sis-note-accepted-root-window-basic',
+      window: acceptedRootWindow,
+      preimageHex: acceptedRootWindowPreimageHex,
+      digest: acceptedRootWindowDigest,
+    },
+  ],
   walletProofRequestCases: [
     {
       name: 'sis-note-wallet-proof-request-basic',
@@ -439,6 +525,11 @@ console.log(JSON.stringify({
     preimageBytes: entry.preimageHex.length / 2,
   })),
   envelopeCases: vectors.envelopeCases.map((entry) => ({
+    name: entry.name,
+    digest: entry.digest,
+    preimageBytes: entry.preimageHex.length / 2,
+  })),
+  acceptedRootWindowCases: vectors.acceptedRootWindowCases.map((entry) => ({
     name: entry.name,
     digest: entry.digest,
     preimageBytes: entry.preimageHex.length / 2,
