@@ -656,8 +656,8 @@ prepareCtVerifyWithUsage command _ =
 prepareCtVerifyScaffold :: [String] -> Either String (() -> Bool)
 prepareCtVerifyScaffold = prepareCtVerifyWithUsage "ct-verify-scaffold"
 
-prepareCtVerifyMerkleWithRoot :: Maybe String -> [String] -> Either String (() -> Bool)
-prepareCtVerifyMerkleWithRoot rootOverride
+prepareCtVerifyMerkleWithRoot :: Maybe String -> Maybe Int -> [String] -> Either String (() -> Bool)
+prepareCtVerifyMerkleWithRoot rootOverride publicFeeOverride
     ( mStr : n2Str : qStr : betaStr : gammaStr : kStr : ckStr : nkStr
       : ledgerStr : spentStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
       : nf1Str : nf2Str : proofArgs
@@ -696,14 +696,19 @@ prepareCtVerifyMerkleWithRoot rootOverride
             let root = maybe (ConfidentialTransaction.merkleLedgerRoot ledger) id rootOverride
              in Right
                     (\() ->
-                        ConfidentialTransaction.transactionFsVerifyMerkle
-                            params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
+                        case publicFeeOverride of
+                            Nothing ->
+                                ConfidentialTransaction.transactionFsVerifyMerkle
+                                    params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof
+                            Just publicFee ->
+                                ConfidentialTransaction.transactionFsVerifyMerkleFee
+                                    params gamma k ck nk root spent publicFee cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
-prepareCtVerifyMerkleWithRoot _ _ =
+prepareCtVerifyMerkleWithRoot _ _ _ =
     Left ("Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 " ++ ctMerkleProofArgsUsage)
 
 prepareCtVerifyMerkle :: [String] -> Either String (() -> Bool)
-prepareCtVerifyMerkle = prepareCtVerifyMerkleWithRoot Nothing
+prepareCtVerifyMerkle = prepareCtVerifyMerkleWithRoot Nothing Nothing
 
 -- Command implementations
 
@@ -1872,8 +1877,7 @@ cmdCtVerifyMerkleEnvelope format
                             nf1
                             nf2
                     policyOk =
-                        expectedPublicFee == 0
-                            && publicFee == 0
+                        expectedPublicFee == publicFee
                             && protocolVersion == expectedVersion
                             && networkId == expectedNetworkId
                             && assetId == expectedAssetId
@@ -1901,7 +1905,7 @@ cmdCtVerifyMerkleEnvelope format
                             ++ proofArgs
                 if not policyOk
                     then outputBoolResult format "transaction_fs_verify_merkle_envelope = " False
-                    else case prepareCtVerifyMerkleWithRoot (Just rootDigest) merkleArgs of
+                    else case prepareCtVerifyMerkleWithRoot (Just rootDigest) (Just publicFee) merkleArgs of
                         Right verify ->
                             outputBoolResult format "transaction_fs_verify_merkle_envelope = " (verify ())
                         Left err

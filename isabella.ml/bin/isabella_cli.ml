@@ -1756,7 +1756,7 @@ let prepare_ct_verify_with_usage command args =
 let prepare_ct_verify_scaffold args =
   prepare_ct_verify_with_usage "ct-verify-scaffold" args
 
-let prepare_ct_verify_merkle_with_root root_override args =
+let prepare_ct_verify_merkle_with_root ?public_fee root_override args =
   match args with
   | m_str :: n2_str :: q_str :: beta_str :: gamma_str :: k_str :: ck_str :: nk_str ::
     ledger_str :: spent_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
@@ -1786,21 +1786,40 @@ let prepare_ct_verify_merkle_with_root root_override args =
        in
        Ok
          (fun () ->
-           Confidential_transaction.transaction_fs_verify_merkle
-             params
-             gamma
-             k
-             ck
-             nk
-             root
-             spent
-             c_in1
-             c_in2
-             c_out1
-             c_out2
-             nf1
-             nf2
-             proof)
+           match public_fee with
+           | None ->
+             Confidential_transaction.transaction_fs_verify_merkle
+               params
+               gamma
+               k
+               ck
+               nk
+               root
+               spent
+               c_in1
+               c_in2
+               c_out1
+               c_out2
+               nf1
+               nf2
+               proof
+           | Some fee ->
+             Confidential_transaction.transaction_fs_verify_merkle_fee
+               params
+               gamma
+               k
+               ck
+               nk
+               root
+               spent
+               fee
+               c_in1
+               c_in2
+               c_out1
+               c_out2
+               nf1
+               nf2
+               proof)
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
   | _ -> Error ("Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 " ^ ct_merkle_proof_args_usage)
 
@@ -1851,8 +1870,7 @@ let cmd_ct_verify_merkle_envelope args =
               c_in1 c_in2 c_out1 c_out2 nf1 nf2
           in
           let policy_ok =
-            expected_public_fee = 0 &&
-            public_fee = 0 &&
+            expected_public_fee = public_fee &&
             protocol_version = expected_version &&
             network_id = expected_network_id &&
             asset_id = expected_asset_id &&
@@ -1868,7 +1886,7 @@ let cmd_ct_verify_merkle_envelope args =
                ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str;
                nf1_str; nf2_str] @ proof_args
             in
-            match prepare_ct_verify_merkle_with_root (Some root) merkle_args with
+            match prepare_ct_verify_merkle_with_root ~public_fee (Some root) merkle_args with
             | Ok verify ->
               output_result "transaction_fs_verify_merkle_envelope"
                 (if verify () then "true" else "false")

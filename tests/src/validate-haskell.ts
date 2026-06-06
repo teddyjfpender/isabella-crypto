@@ -1344,6 +1344,47 @@ const ctMerkleProof = sdk.ConfidentialTransaction.fsProveMerkle(
   ctYOut2Pairs
 );
 assert.ok(ctMerkleProof);
+const ctFee = 1;
+const ctFeeOpOut2 = { msg: [0], rand: [0, 0] };
+const ctFeeOut2Bits = [
+  { msg: [0], rand: [0, 0] },
+];
+const ctFeeOut2Comps = [
+  { msg: [1], rand: [0, 0] },
+];
+const ctFeeCOut2 = ctCommitOfOpening(ctFeeOpOut2);
+const ctFeeMerkleProof = sdk.ConfidentialTransaction.fsProveMerkleWithFee(
+  ctParamsExpected,
+  ctParamsCase.gamma,
+  ctOut1Bits.length,
+  ctCk,
+  ctNk,
+  ctLedger,
+  ctSpent,
+  ctFee,
+  ctCIn1,
+  ctCIn2,
+  ctCOut1,
+  ctFeeCOut2,
+  ctNf1,
+  ctNf2,
+  ctOpIn1,
+  ctOpIn2,
+  ctOpOut1,
+  ctFeeOpOut2,
+  ctOut1Bits,
+  ctOut1Comps,
+  ctFeeOut2Bits,
+  ctFeeOut2Comps,
+  ctYIn1Rounds,
+  ctYIn2Rounds,
+  ctYBalance,
+  ctYOut1,
+  ctYOut1Pairs,
+  ctYOut2,
+  ctYOut2Pairs
+);
+assert.ok(ctFeeMerkleProof);
 const ctOut1BitValues = ctOut1Bits.map((opening: { msg: number[] }) => opening.msg[0]);
 const ctOut1BitRands = ctOut1Bits.map((opening: { rand: number[] }) => opening.rand);
 const ctOut1CompValues = ctOut1Comps.map((opening: { msg: number[] }) => opening.msg[0]);
@@ -1791,7 +1832,11 @@ assert.equal(
   false,
   'ct-verify-merkle-envelope Haskell rejects wrong verifier policy'
 );
-const haskellFeeEnvelopeContext = { ...haskellEnvelopeContext, publicFee: 1 };
+const haskellFeeEnvelopeContext = {
+  ...haskellEnvelopeContext,
+  publicFee: ctFee,
+  cOut2: ctFeeCOut2,
+};
 const haskellFeeEnvelopeContextDigest = parseResult<string>(
   runHaskell([
     'ct-transaction-context',
@@ -1825,22 +1870,32 @@ assert.equal(
     {
       context: haskellFeeEnvelopeContext,
       contextDigest: haskellFeeEnvelopeContextDigest,
-      proof: ctMerkleProof!,
+      proof: ctFeeMerkleProof!,
     },
-    { ...haskellEnvelopePolicy, publicFee: 1 }
+    { ...haskellEnvelopePolicy, publicFee: ctFee }
   ),
-  false,
-  'ct-merkle-envelope rejects nonzero public fees until the balance relation is fee-aware'
+  true,
+  'ct-merkle-envelope accepts fee-aware public-fee proof'
 );
 assert.equal(
   runHaskellEnvelope(
-    { ...haskellEnvelopePolicy, publicFee: 1 },
+    { ...haskellEnvelopePolicy, publicFee: ctFee },
     haskellFeeEnvelopeContextDigest,
     haskellFeeEnvelopeContext,
-    ctMerkleProof
+    ctFeeMerkleProof
+  ),
+  true,
+  'ct-verify-merkle-envelope Haskell accepts fee-aware public-fee proof'
+);
+assert.equal(
+  runHaskellEnvelope(
+    haskellEnvelopePolicy,
+    haskellFeeEnvelopeContextDigest,
+    haskellFeeEnvelopeContext,
+    ctFeeMerkleProof
   ),
   false,
-  'ct-verify-merkle-envelope Haskell rejects nonzero public fees'
+  'ct-verify-merkle-envelope Haskell rejects mismatched fee policy'
 );
 const haskellWrongRootContext = {
   ...haskellEnvelopeContext,

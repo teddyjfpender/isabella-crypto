@@ -706,6 +706,50 @@ definition transaction_relation_wellformed ::
     amount_of_opening op_in1 + amount_of_opening op_in2 =
       amount_of_opening op_out1 + amount_of_opening op_out2"
 
+definition transaction_relation_fee ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   int \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   commit_opening \<Rightarrow> commit_opening \<Rightarrow> commit_opening \<Rightarrow> commit_opening \<Rightarrow>
+   commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> bool" where
+  "transaction_relation_fee p ck nk ledger spent public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps \<longleftrightarrow>
+    public_fee \<ge> 0 \<and>
+    nullifier_relation p ck nk c_in1 nf1 op_in1 \<and>
+    nullifier_relation p ck nk c_in2 nf2 op_in2 \<and>
+    c_in1 \<in> set ledger \<and>
+    c_in2 \<in> set ledger \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    range_relation p ck c_out1 op_out1 out1_bits out1_comps \<and>
+    range_relation p ck c_out2 op_out2 out2_bits out2_comps \<and>
+    amount_of_opening op_in1 + amount_of_opening op_in2 =
+      amount_of_opening op_out1 + amount_of_opening op_out2 + public_fee"
+
+definition transaction_relation_wellformed_fee ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   int \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   commit_opening \<Rightarrow> commit_opening \<Rightarrow> commit_opening \<Rightarrow> commit_opening \<Rightarrow>
+   commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> commit_opening list \<Rightarrow> bool" where
+  "transaction_relation_wellformed_fee p ck nk ledger spent public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps \<longleftrightarrow>
+    public_fee \<ge> 0 \<and>
+    nullifier_relation_wellformed p ck nk c_in1 nf1 op_in1 \<and>
+    nullifier_relation_wellformed p ck nk c_in2 nf2 op_in2 \<and>
+    c_in1 \<in> set ledger \<and>
+    c_in2 \<in> set ledger \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    range_relation p ck c_out1 op_out1 out1_bits out1_comps \<and>
+    range_relation p ck c_out2 op_out2 out2_bits out2_comps \<and>
+    amount_of_opening op_in1 + amount_of_opening op_in2 =
+      amount_of_opening op_out1 + amount_of_opening op_out2 + public_fee"
+
 lemma transaction_relation_imp_wellformed:
   assumes "transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
       op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
@@ -714,6 +758,27 @@ lemma transaction_relation_imp_wellformed:
   using assms nullifier_relation_imp_wellformed
   unfolding transaction_relation_def transaction_relation_wellformed_def
   by blast
+
+lemma transaction_relation_fee_imp_wellformed:
+  assumes "transaction_relation_fee p ck nk ledger spent public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
+  shows "transaction_relation_wellformed_fee p ck nk ledger spent public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
+  using assms nullifier_relation_imp_wellformed
+  unfolding transaction_relation_fee_def transaction_relation_wellformed_fee_def
+  by blast
+
+lemma transaction_relation_fee_zero_iff:
+  "transaction_relation_fee p ck nk ledger spent 0
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps
+   \<longleftrightarrow>
+   transaction_relation p ck nk ledger spent c_in1 c_in2 c_out1 c_out2 nf1 nf2
+      op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps"
+  unfolding transaction_relation_fee_def transaction_relation_def
+  by simp
 
 definition transaction_fs_verify ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow>
@@ -761,6 +826,32 @@ definition transaction_fs_verify_merkle ::
     range_fs_verify p gamma k ck c_out1 (tx_merkle_out1_range proof) \<and>
     range_fs_verify p gamma k ck c_out2 (tx_merkle_out2_range proof)"
 
+definition transaction_fs_verify_merkle_fee ::
+  "merkle_hash \<Rightarrow> commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow>
+   digest \<Rightarrow> commitment list \<Rightarrow> int \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   merkle_transaction_proof \<Rightarrow> bool" where
+  "transaction_fs_verify_merkle_fee h p gamma k ck nk ledger_rt spent public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof \<longleftrightarrow>
+    public_fee \<ge> 0 \<and>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
+    merkle_membership_verify h c_in1 (tx_merkle_in1_member proof) \<and>
+    merkle_membership_verify h c_in2 (tx_merkle_in2_member proof) \<and>
+    merkle_member_root (tx_merkle_in1_member proof) = ledger_rt \<and>
+    merkle_member_root (tx_merkle_in2_member proof) = ledger_rt \<and>
+    merkle_member_index (tx_merkle_in1_member proof) \<noteq> merkle_member_index (tx_merkle_in2_member proof) \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    nullifier_fs_verify p gamma ck nk c_in1 nf1 (tx_merkle_in1_nullifier proof) \<and>
+    nullifier_fs_verify p gamma ck nk c_in2 nf2 (tx_merkle_in2_nullifier proof) \<and>
+    balance_fs_verify p gamma ck
+      (fee_balance_commitment p ck c_in1 c_in2 c_out1 c_out2 public_fee)
+      (tx_merkle_balance proof) \<and>
+    range_fs_verify p gamma k ck c_out1 (tx_merkle_out1_range proof) \<and>
+    range_fs_verify p gamma k ck c_out2 (tx_merkle_out2_range proof)"
+
 lemma transaction_fs_verify_merkle_roots:
   assumes "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
@@ -790,6 +881,28 @@ theorem transaction_fs_verify_merkle_in2_same_path_sound:
   using merkle_membership_verify_same_path_sound[OF cr alternate]
         verified
   unfolding transaction_fs_verify_merkle_def
+  by blast
+
+theorem transaction_fs_verify_merkle_fee_in1_same_path_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_fee h p gamma k ck nk ledger_rt spent public_fee
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in1' (tx_merkle_in1_member proof)"
+  shows "c_in1' = c_in1"
+  using merkle_membership_verify_same_path_sound[OF cr alternate]
+        verified
+  unfolding transaction_fs_verify_merkle_fee_def
+  by blast
+
+theorem transaction_fs_verify_merkle_fee_in2_same_path_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_fee h p gamma k ck nk ledger_rt spent public_fee
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in2' (tx_merkle_in2_member proof)"
+  shows "c_in2' = c_in2"
+  using merkle_membership_verify_same_path_sound[OF cr alternate]
+        verified
+  unfolding transaction_fs_verify_merkle_fee_def
   by blast
 
 definition transaction_fs_prove ::
@@ -2134,7 +2247,9 @@ export_code
     tx_merkle_in1_member tx_merkle_in2_member
     tx_merkle_in1_nullifier tx_merkle_in2_nullifier
     tx_merkle_balance tx_merkle_out1_range tx_merkle_out2_range
-  transaction_relation transaction_fs_prove transaction_fs_verify transaction_fs_verify_merkle
+  transaction_relation transaction_relation_fee
+  transaction_fs_prove transaction_fs_verify transaction_fs_verify_merkle
+  transaction_fs_verify_merkle_fee
   ledger_apply_notes ledger_apply_spent
   in Haskell module_name "Canon.ZK.Confidential_Transaction"
 
@@ -2164,7 +2279,9 @@ export_code
     tx_merkle_in1_member tx_merkle_in2_member
     tx_merkle_in1_nullifier tx_merkle_in2_nullifier
     tx_merkle_balance tx_merkle_out1_range tx_merkle_out2_range
-  transaction_relation transaction_fs_prove transaction_fs_verify transaction_fs_verify_merkle
+  transaction_relation transaction_relation_fee
+  transaction_fs_prove transaction_fs_verify transaction_fs_verify_merkle
+  transaction_fs_verify_merkle_fee
   ledger_apply_notes ledger_apply_spent
   in OCaml module_name Confidential_transaction
 

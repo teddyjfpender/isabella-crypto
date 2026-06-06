@@ -57,6 +57,19 @@ let balance_commitment c_in1 c_in2 c_out1 c_out2 q =
     (Listvec.vec_sub (Listvec.vec_add c_in1 c_in2) (Listvec.vec_add c_out1 c_out2))
     q
 
+let public_amount_commitment p ck fee =
+  Commit_sis.commit
+    ck
+    (Commit_sis.make_opening [fee] (List.init p.Commit_sis.cp_n2 (fun _ -> 0)))
+    p.Commit_sis.cp_q
+
+let fee_balance_commitment p ck c_in1 c_in2 c_out1 c_out2 fee =
+  Zq.vec_mod
+    (Listvec.vec_sub
+       (balance_commitment c_in1 c_in2 c_out1 c_out2 p.Commit_sis.cp_q)
+       (public_amount_commitment p ck fee))
+    p.Commit_sis.cp_q
+
 let valid_balance_witness p r =
   Listvec.valid_vec p.Commit_sis.cp_n2 r &&
   Norms.all_bounded r (4 * p.Commit_sis.cp_beta)

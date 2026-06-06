@@ -790,6 +790,11 @@ Validation note:
 - The audit and SDK-equivalence harnesses detect these proof surfaces explicitly
   and route them through the current CLI/runtime boundary without flattening
   them silently.
+- Public-fee transfer envelopes now verify against a fee-adjusted balance
+  statement, `balance_commitment - commit([fee], 0)`. TypeScript exposes
+  `fsProveMerkleWithFee` / `fsVerifyMerkleWithFee`, and OCaml/Haskell
+  `ct-verify-merkle-envelope` accepts nonzero fees only when the
+  policy/context fee matches the proof.
 - Snapshot well-formedness (`ledgerValid`) is tracked separately from the
   semantic ledger-step verifier, exported on the stable TypeScript surface as
   Merkle-backed `ConfidentialTransaction.semanticStepValid` and

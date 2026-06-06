@@ -670,6 +670,25 @@ let transaction_relation_wellformed p ck nk ledger spent c_in1 c_in2 c_out1 c_ou
     Confidential_balance.amount_of_opening op_out1 +
     Confidential_balance.amount_of_opening op_out2
 
+let transaction_relation_fee p ck nk ledger spent public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2
+    op_in1 op_in2 op_out1 op_out2 out1_bits out1_comps out2_bits out2_comps =
+  public_fee >= 0 &&
+  nullifier_relation p ck nk c_in1 nf1 op_in1 &&
+  nullifier_relation p ck nk c_in2 nf2 op_in2 &&
+  List.mem c_in1 ledger &&
+  List.mem c_in2 ledger &&
+  not (List.mem nf1 spent) &&
+  not (List.mem nf2 spent) &&
+  nf1 <> nf2 &&
+  Confidential_range.range_relation p ck c_out1 op_out1 out1_bits out1_comps &&
+  Confidential_range.range_relation p ck c_out2 op_out2 out2_bits out2_comps &&
+  Confidential_balance.amount_of_opening op_in1 +
+  Confidential_balance.amount_of_opening op_in2 =
+    Confidential_balance.amount_of_opening op_out1 +
+    Confidential_balance.amount_of_opening op_out2 +
+    public_fee
+
 let transaction_fs_verify p gamma k ck nk root spent c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
   Commit_sis.valid_commit_key p ck &&
   Commit_sis.valid_commit_key p nk &&
@@ -710,6 +729,31 @@ let transaction_fs_verify_merkle p gamma k ck nk root spent c_in1 c_in2 c_out1 c
     gamma
     ck
     (Confidential_balance.balance_commitment c_in1 c_in2 c_out1 c_out2 p.Commit_sis.cp_q)
+    proof.tx_merkle_balance &&
+  Confidential_range.range_fs_verify p gamma k ck c_out1 proof.tx_merkle_out1_range &&
+  Confidential_range.range_fs_verify p gamma k ck c_out2 proof.tx_merkle_out2_range
+
+let transaction_fs_verify_merkle_fee p gamma k ck nk root spent public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
+  public_fee >= 0 &&
+  Commit_sis.valid_commit_key p ck &&
+  Commit_sis.valid_commit_key p nk &&
+  merkle_membership_verify c_in1 proof.tx_merkle_in1_member &&
+  merkle_membership_verify c_in2 proof.tx_merkle_in2_member &&
+  merkle_member_root proof.tx_merkle_in1_member = root &&
+  merkle_member_root proof.tx_merkle_in2_member = root &&
+  merkle_member_index proof.tx_merkle_in1_member <> merkle_member_index proof.tx_merkle_in2_member &&
+  not (List.mem nf1 spent) &&
+  not (List.mem nf2 spent) &&
+  nf1 <> nf2 &&
+  nullifier_fs_verify p gamma ck nk c_in1 nf1 proof.tx_merkle_in1_nullifier &&
+  nullifier_fs_verify p gamma ck nk c_in2 nf2 proof.tx_merkle_in2_nullifier &&
+  Confidential_balance.balance_fs_verify
+    p
+    gamma
+    ck
+    (Confidential_balance.fee_balance_commitment
+       p ck c_in1 c_in2 c_out1 c_out2 public_fee)
     proof.tx_merkle_balance &&
   Confidential_range.range_fs_verify p gamma k ck c_out1 proof.tx_merkle_out1_range &&
   Confidential_range.range_fs_verify p gamma k ck c_out2 proof.tx_merkle_out2_range

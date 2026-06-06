@@ -387,6 +387,54 @@ describe('Confidential transaction context vectors', () => {
       },
       { ...policy, publicFee: 1 }
     )).toBe(false);
+
+    const feeFixture = await buildMerkleTransactionFixture({ publicFee: 1 });
+    const feeContext: TransactionContext = {
+      protocolVersion: 1,
+      networkId: 'isabella-local-devnet',
+      assetId: 7,
+      ledgerEpoch: 42,
+      root: feeFixture.root,
+      publicFee: 1,
+      cIn1: feeFixture.cIn1,
+      cIn2: feeFixture.cIn2,
+      cOut1: feeFixture.cOut1,
+      cOut2: feeFixture.cOut2,
+      nf1: feeFixture.nf1,
+      nf2: feeFixture.nf2,
+    };
+    const feePolicy = {
+      networkId: feeContext.networkId,
+      assetId: feeContext.assetId,
+      ledgerEpoch: feeContext.ledgerEpoch,
+      root: feeContext.root,
+      publicFee: 1,
+    };
+    const feeEnvelope = {
+      context: feeContext,
+      contextDigest: tx.transactionContextDigest(feeContext),
+      proof: feeFixture.proof,
+    };
+    expect(tx.fsVerifyMerkleEnvelope(
+      feeFixture.params,
+      feeFixture.gamma,
+      feeFixture.k,
+      feeFixture.ck,
+      feeFixture.nk,
+      feeFixture.spent,
+      feeEnvelope,
+      feePolicy
+    )).toBe(true);
+    expect(tx.fsVerifyMerkleEnvelope(
+      feeFixture.params,
+      feeFixture.gamma,
+      feeFixture.k,
+      feeFixture.ck,
+      feeFixture.nk,
+      feeFixture.spent,
+      feeEnvelope,
+      { ...feePolicy, publicFee: 0 }
+    )).toBe(false);
     expect(tx.fsVerifyMerkleEnvelope(
       params,
       gamma,

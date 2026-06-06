@@ -116,11 +116,14 @@ benchmarks are independently checked.
   proof's Merkle membership fields instead of deriving membership from the
   supplied ledger. The SDK-equivalence validators exercise the TS and native
   envelope gates with native `ct-transaction-context` digests and native Merkle
-  transaction proofs, including stale-digest, wrong-policy, nonzero-fee,
-  context-root/proof-root mismatch, and the shared deterministic proof-mutation
-  matrix.
-  The envelope path intentionally rejects nonzero public fees until the balance
-  relation is extended to account for fees.
+  transaction proofs, including stale-digest, wrong-policy, fee-policy
+  mismatch, context-root/proof-root mismatch, and the shared deterministic
+  proof-mutation matrix. `Confidential_Balance.thy` now defines public amount
+  commitments and `fee_balance_commitment`; `Confidential_Transaction.thy`
+  exposes `transaction_relation_fee` and `transaction_fs_verify_merkle_fee`.
+  TypeScript exposes `fsProveMerkleWithFee` / `fsVerifyMerkleWithFee`, and the
+  OCaml/Haskell envelope commands verify nonzero public-fee proofs by checking
+  the balance proof against `balance_commitment - commit([fee], 0)`.
 - OCaml and Haskell expose explicit `ct-prove-scaffold`,
   `ct-verify-scaffold`, `ct-verify-bench-scaffold`, and
   `ct-ledger-step-verify-scaffold` commands for the algebraic ledger path. The
@@ -154,8 +157,9 @@ The formalization still needs these before production:
    selected dimensions.
 7. Extend the pinned wallet proof request serialization into consensus/indexer
    API contracts with non-canonical encoding rejection.
-8. Extend the zero-balance relation to a fee-aware balance relation before
-   accepting nonzero public fees in verifier envelopes.
+8. Extend fee-aware proof support from the envelope verifier into the remaining
+   consensus/indexer and wallet APIs, including change-output policy and
+   negative tests for every failure class.
 
 ## Parameter Baseline
 
@@ -259,8 +263,9 @@ Important validation caveats:
   requested nullifiers. It also checks that proof/envelope/request digests
   change under proof, public-context, root-window, or spent-snapshot mutation.
   It also checks that the TypeScript Merkle envelope verifier rejects stale
-  context digests, wrong network/asset policy, nonzero fees, and swapped proof
-  components. OCaml/Haskell SDK-equivalence validation now checks native
+  context digests, wrong network/asset policy, fee-policy mismatches, and
+  swapped proof components, and accepts a valid nonzero public-fee proof.
+  OCaml/Haskell SDK-equivalence validation now checks native
   proof/envelope/wallet-request digest parity against the pinned vectors,
   rejects malformed native wallet requests, rejects non-canonical native
   transaction encodings on production-facing commands, and verifies explicit

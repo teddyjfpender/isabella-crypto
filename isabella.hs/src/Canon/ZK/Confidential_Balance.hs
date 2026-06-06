@@ -11,6 +11,8 @@ module Canon.ZK.Confidential_Balance
   , randCommit
   , amountOfOpening
   , balanceCommitment
+  , publicAmountCommitment
+  , feeBalanceCommitment
   , aggregateRandomness
   , validBalanceWitness
   , validBalanceMask
@@ -106,6 +108,21 @@ balanceCommitment cIn1 cIn2 cOut1 cOut2 q =
   Zq.vec_mod
     (Listvec.vec_sub (Listvec.vec_add cIn1 cIn2) (Listvec.vec_add cOut1 cOut2))
     q
+
+publicAmountCommitment :: Commit.CommitParams -> [[Int]] -> Int -> [Int]
+publicAmountCommitment p ck fee =
+  Commit.commit
+    ck
+    (Commit.makeOpening [fee] (Prelude.replicate (Commit.cp_n2 p) 0))
+    (Commit.cp_q p)
+
+feeBalanceCommitment :: Commit.CommitParams -> [[Int]] -> [Int] -> [Int] -> [Int] -> [Int] -> Int -> [Int]
+feeBalanceCommitment p ck cIn1 cIn2 cOut1 cOut2 fee =
+  Zq.vec_mod
+    (Listvec.vec_sub
+      (balanceCommitment cIn1 cIn2 cOut1 cOut2 (Commit.cp_q p))
+      (publicAmountCommitment p ck fee))
+    (Commit.cp_q p)
 
 validBalanceWitness :: Commit.CommitParams -> [Int] -> Bool
 validBalanceWitness p r =

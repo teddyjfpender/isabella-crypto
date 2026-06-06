@@ -1885,6 +1885,43 @@ export namespace ConfidentialBalance {
   }
 
   /**
+   * Commit to a public fee amount with zero randomness.
+   */
+  export function publicAmountCommitment(
+    params: ScalarCommitParams,
+    ck: IntMatrix,
+    fee: number
+  ): IntVec {
+    assertNonNegativeSafeI64(fee, 'fee');
+    return Zq.matVecMultMod(
+      ck,
+      Vec.concat([fee], Array.from({ length: params.n2 }, () => 0)),
+      params.q
+    );
+  }
+
+  /**
+   * Subtract a public fee commitment from the aggregate balance commitment.
+   */
+  export function feeBalanceCommitment(
+    params: ScalarCommitParams,
+    ck: IntMatrix,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    fee: number
+  ): IntVec {
+    return Zq.vecMod(
+      Vec.sub(
+        balanceCommitment(cIn1, cIn2, cOut1, cOut2, params.q),
+        publicAmountCommitment(params, ck, fee)
+      ),
+      params.q
+    );
+  }
+
+  /**
    * Check witness bounds.
    *
    * @param params - Commitment parameters
@@ -2429,9 +2466,7 @@ export namespace ConfidentialTransaction {
     try {
       const protocolVersion = policy.protocolVersion ?? 1;
       const publicFee = policy.publicFee ?? 0;
-      if (publicFee !== 0) {
-        return false;
-      }
+      assertNonNegativeSafeI64(publicFee, 'policy.publicFee');
       return (
         context.protocolVersion === protocolVersion &&
         context.networkId === policy.networkId &&
@@ -3010,6 +3045,118 @@ export namespace ConfidentialTransaction {
     });
   }
 
+  export function fsProveMerkleWithFee(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    ledger: IntMatrix,
+    spent: IntMatrix,
+    publicFee: number,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    opIn1: CommitOpening,
+    opIn2: CommitOpening,
+    opOut1: CommitOpening,
+    opOut2: CommitOpening,
+    out1Bits: CommitOpening[],
+    out1Comps: CommitOpening[],
+    out2Bits: CommitOpening[],
+    out2Comps: CommitOpening[],
+    yIn1: CommitOpening[],
+    yIn2: CommitOpening[],
+    yBalance: IntMatrix,
+    yOut1: IntMatrix,
+    yOut1Pairs: IntMatrix[],
+    yOut2: IntMatrix,
+    yOut2Pairs: IntMatrix[]
+  ): MerkleTransactionProof | null {
+    try {
+      assertNonNegativeSafeI64(publicFee, 'publicFee');
+      const inputAmount =
+        ConfidentialBalance.amountOfOpening(opIn1) +
+        ConfidentialBalance.amountOfOpening(opIn2);
+      const outputAmount =
+        ConfidentialBalance.amountOfOpening(opOut1) +
+        ConfidentialBalance.amountOfOpening(opOut2);
+      if (inputAmount !== outputAmount + publicFee) {
+        return null;
+      }
+      const in1Member = ConfidentialMerkle.membershipProve(ledger, cIn1);
+      const in2Member = ConfidentialMerkle.membershipProve(ledger, cIn2);
+      if (in1Member === null || in2Member === null || in1Member.index === in2Member.index) {
+        return null;
+      }
+      const in1Nullifier = nullifierFsProve(params, gamma, ck, nk, cIn1, nf1, opIn1, yIn1);
+      const in2Nullifier = nullifierFsProve(params, gamma, ck, nk, cIn2, nf2, opIn2, yIn2);
+      const balance = ConfidentialBalance.fsProve(
+        params,
+        gamma,
+        ck,
+        ConfidentialBalance.feeBalanceCommitment(
+          params,
+          ck,
+          cIn1,
+          cIn2,
+          cOut1,
+          cOut2,
+          publicFee
+        ),
+        ConfidentialBalance.aggregateRandomness(opIn1, opIn2, opOut1, opOut2),
+        yBalance
+      );
+      const out1Range = ConfidentialRange.fsProve(
+        params,
+        gamma,
+        k,
+        ck,
+        cOut1,
+        opOut1,
+        out1Bits,
+        out1Comps,
+        yOut1,
+        yOut1Pairs
+      );
+      const out2Range = ConfidentialRange.fsProve(
+        params,
+        gamma,
+        k,
+        ck,
+        cOut2,
+        opOut2,
+        out2Bits,
+        out2Comps,
+        yOut2,
+        yOut2Pairs
+      );
+      if (
+        in1Nullifier === null ||
+        in2Nullifier === null ||
+        balance === null ||
+        out1Range === null ||
+        out2Range === null
+      ) {
+        return null;
+      }
+      return normalizeMerkleTransactionProof({
+        in1Member,
+        in2Member,
+        in1Nullifier,
+        in2Nullifier,
+        balance,
+        out1Range,
+        out2Range,
+      });
+    } catch {
+      return null;
+    }
+  }
+
   export function fsVerifyMerkle(
     params: ScalarCommitParams,
     gamma: number,
@@ -3051,6 +3198,61 @@ export namespace ConfidentialTransaction {
     );
   }
 
+  export function fsVerifyMerkleWithFee(
+    params: ScalarCommitParams,
+    gamma: number,
+    k: number,
+    ck: IntMatrix,
+    nk: IntMatrix,
+    root: MerkleDigest,
+    spent: IntMatrix,
+    publicFee: number,
+    cIn1: IntVec,
+    cIn2: IntVec,
+    cOut1: IntVec,
+    cOut2: IntVec,
+    nf1: IntVec,
+    nf2: IntVec,
+    proof: MerkleTransactionProof
+  ): boolean {
+    try {
+      assertNonNegativeSafeI64(publicFee, 'publicFee');
+      return (
+        validCommitKeyShape(params, ck) &&
+        validCommitKeyShape(params, nk) &&
+        ConfidentialMerkle.membershipVerify(cIn1, proof.in1Member) &&
+        ConfidentialMerkle.membershipVerify(cIn2, proof.in2Member) &&
+        proof.in1Member.root === root &&
+        proof.in2Member.root === root &&
+        proof.in1Member.index !== proof.in2Member.index &&
+        !containsVec(spent, nf1) &&
+        !containsVec(spent, nf2) &&
+        !sameVec(nf1, nf2) &&
+        nullifierFsVerify(params, gamma, ck, nk, cIn1, nf1, proof.in1Nullifier) &&
+        nullifierFsVerify(params, gamma, ck, nk, cIn2, nf2, proof.in2Nullifier) &&
+        ConfidentialBalance.fsVerify(
+          params,
+          gamma,
+          ck,
+          ConfidentialBalance.feeBalanceCommitment(
+            params,
+            ck,
+            cIn1,
+            cIn2,
+            cOut1,
+            cOut2,
+            publicFee
+          ),
+          proof.balance
+        ) &&
+        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut1, proof.out1Range) &&
+        ConfidentialRange.fsVerify(params, gamma, k, ck, cOut2, proof.out2Range)
+      );
+    } catch {
+      return false;
+    }
+  }
+
   export function fsVerifyMerkleEnvelope(
     params: ScalarCommitParams,
     gamma: number,
@@ -3066,7 +3268,7 @@ export namespace ConfidentialTransaction {
       return (
         envelope.contextDigest === contextDigest &&
         transactionContextMatchesPolicy(envelope.context, policy) &&
-        fsVerifyMerkle(
+        fsVerifyMerkleWithFee(
           params,
           gamma,
           k,
@@ -3074,6 +3276,7 @@ export namespace ConfidentialTransaction {
           nk,
           envelope.context.root,
           spent,
+          envelope.context.publicFee,
           envelope.context.cIn1,
           envelope.context.cIn2,
           envelope.context.cOut1,

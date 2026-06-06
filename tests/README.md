@@ -117,9 +117,10 @@ The harnesses are repair-aware:
   pinned vectors, assert malformed wallet-request rejection, assert native
   rejection of non-canonical numeric/list encodings on the production
   transaction context, wallet-request, proof-digest, Merkle verifier,
-  envelope-digest, and envelope-verifier commands, and assert rejection for
-  stale digests, wrong policy, nonzero public fees, and context roots not
-  matched by the Merkle proof.
+  envelope-digest, and envelope-verifier commands, assert acceptance for a
+  valid nonzero public-fee proof, and assert rejection for stale digests,
+  wrong policy, fee-policy mismatches, and context roots not matched by the
+  Merkle proof.
 
 The harnesses compare the Haskell and OCaml CLIs against the built
 TypeScript SDK artifact in `isabella.ts/dist/`.

@@ -61,10 +61,12 @@ module Canon.ZK.Confidential_Transaction
   , ledgerStepValidMerkle
   , semanticStepValidMerkle
   , transactionRelation
+  , transactionRelationFee
   , transactionFsProve
   , transactionFsProveMerkle
   , transactionFsVerify
   , transactionFsVerifyMerkle
+  , transactionFsVerifyMerkleFee
   , ledgerApplyNotes
   , ledgerApplyNotesMerkle
   , ledgerApplySpent
@@ -1051,6 +1053,42 @@ transactionRelation p ck nk ledger spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 opIn1 opI
   ConfidentialBalance.amountOfOpening opIn1 + ConfidentialBalance.amountOfOpening opIn2 ==
     ConfidentialBalance.amountOfOpening opOut1 + ConfidentialBalance.amountOfOpening opOut2
 
+transactionRelationFee ::
+  Commit.CommitParams ->
+  [[Int]] ->
+  [[Int]] ->
+  [[Int]] ->
+  [[Int]] ->
+  Int ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  Commit.CommitOpening ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  [Commit.CommitOpening] ->
+  Bool
+transactionRelationFee p ck nk ledger spent publicFee cIn1 cIn2 cOut1 cOut2 nf1 nf2 opIn1 opIn2 opOut1 opOut2 out1Bits out1Comps out2Bits out2Comps =
+  publicFee >= 0 &&
+  nullifierRelation p ck nk cIn1 nf1 opIn1 &&
+  nullifierRelation p ck nk cIn2 nf2 opIn2 &&
+  cIn1 `elem` ledger &&
+  cIn2 `elem` ledger &&
+  nf1 `notElem` spent &&
+  nf2 `notElem` spent &&
+  nf1 /= nf2 &&
+  ConfidentialRange.rangeRelation p ck cOut1 opOut1 out1Bits out1Comps &&
+  ConfidentialRange.rangeRelation p ck cOut2 opOut2 out2Bits out2Comps &&
+  ConfidentialBalance.amountOfOpening opIn1 + ConfidentialBalance.amountOfOpening opIn2 ==
+    ConfidentialBalance.amountOfOpening opOut1 + ConfidentialBalance.amountOfOpening opOut2 + publicFee
+
 transactionRelationWellformed ::
   Commit.CommitParams ->
   [[Int]] ->
@@ -1151,6 +1189,43 @@ transactionFsVerifyMerkle p gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 n
   nullifierFsVerify p gamma ck nk cIn2 nf2 (tx_merkle_in2_nullifier proof) &&
   ConfidentialBalance.balanceFsVerify p gamma ck
     (ConfidentialBalance.balanceCommitment cIn1 cIn2 cOut1 cOut2 (Commit.cp_q p))
+    (tx_merkle_balance proof) &&
+  ConfidentialRange.rangeFsVerify p gamma k ck cOut1 (tx_merkle_out1_range proof) &&
+  ConfidentialRange.rangeFsVerify p gamma k ck cOut2 (tx_merkle_out2_range proof)
+
+transactionFsVerifyMerkleFee ::
+  Commit.CommitParams ->
+  Int ->
+  Int ->
+  [[Int]] ->
+  [[Int]] ->
+  String ->
+  [[Int]] ->
+  Int ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  MerkleTransactionProof ->
+  Bool
+transactionFsVerifyMerkleFee p gamma k ck nk root spent publicFee cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+  publicFee >= 0 &&
+  Commit.valid_commit_key p ck &&
+  Commit.valid_commit_key p nk &&
+  merkleMembershipVerify cIn1 (tx_merkle_in1_member proof) &&
+  merkleMembershipVerify cIn2 (tx_merkle_in2_member proof) &&
+  merkleMemberRoot (tx_merkle_in1_member proof) == root &&
+  merkleMemberRoot (tx_merkle_in2_member proof) == root &&
+  merkleMemberIndex (tx_merkle_in1_member proof) /= merkleMemberIndex (tx_merkle_in2_member proof) &&
+  nf1 `notElem` spent &&
+  nf2 `notElem` spent &&
+  nf1 /= nf2 &&
+  nullifierFsVerify p gamma ck nk cIn1 nf1 (tx_merkle_in1_nullifier proof) &&
+  nullifierFsVerify p gamma ck nk cIn2 nf2 (tx_merkle_in2_nullifier proof) &&
+  ConfidentialBalance.balanceFsVerify p gamma ck
+    (ConfidentialBalance.feeBalanceCommitment p ck cIn1 cIn2 cOut1 cOut2 publicFee)
     (tx_merkle_balance proof) &&
   ConfidentialRange.rangeFsVerify p gamma k ck cOut1 (tx_merkle_out1_range proof) &&
   ConfidentialRange.rangeFsVerify p gamma k ck cOut2 (tx_merkle_out2_range proof)

@@ -107,6 +107,25 @@ definition balance_commitment ::
   "balance_commitment c_in1 c_in2 c_out1 c_out2 q =
     vec_mod (vec_sub (vec_add c_in1 c_in2) (vec_add c_out1 c_out2)) q"
 
+definition public_amount_opening :: "commit_params \<Rightarrow> int \<Rightarrow> commit_opening" where
+  "public_amount_opening p fee =
+    \<lparr> open_msg = [fee], open_rand = replicate (cp_n2 p) 0 \<rparr>"
+
+definition public_amount_commitment ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> int \<Rightarrow> commitment" where
+  "public_amount_commitment p ck fee =
+    commit ck (public_amount_opening p fee) (cp_q p)"
+
+definition fee_balance_commitment ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> int \<Rightarrow> commitment" where
+  "fee_balance_commitment p ck c_in1 c_in2 c_out1 c_out2 fee =
+    vec_mod
+      (vec_sub
+        (balance_commitment c_in1 c_in2 c_out1 c_out2 (cp_q p))
+        (public_amount_commitment p ck fee))
+      (cp_q p)"
+
 definition valid_balance_witness :: "commit_params \<Rightarrow> int_vec \<Rightarrow> bool" where
   "valid_balance_witness p r \<longleftrightarrow>
     valid_vec r (cp_n2 p) \<and> all_bounded r (4 * cp_beta p)"
@@ -1631,7 +1650,8 @@ export_code
   valid_scalar_commit_params
   valid_confidential_commit_key
   rand_commit_key rand_commit
-  amount_of_opening balance_commitment aggregate_randomness
+  amount_of_opening balance_commitment public_amount_commitment
+  fee_balance_commitment aggregate_randomness
   valid_balance_witness valid_balance_mask
   balance_response_bound valid_balance_challenge valid_balance_response
   balance_relation
@@ -1647,7 +1667,8 @@ export_code
   valid_scalar_commit_params
   valid_confidential_commit_key
   rand_commit_key rand_commit
-  amount_of_opening balance_commitment aggregate_randomness
+  amount_of_opening balance_commitment public_amount_commitment
+  fee_balance_commitment aggregate_randomness
   valid_balance_witness valid_balance_mask
   balance_response_bound valid_balance_challenge valid_balance_response
   balance_relation
