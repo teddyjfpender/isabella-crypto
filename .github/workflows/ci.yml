@@ -337,6 +337,9 @@ jobs:
       - name: Check confidential failure semantics
         run: python3 scripts/check_confidential_failure_semantics.py
 
+      - name: Check confidential launch readiness
+        run: python3 scripts/check_confidential_launch_readiness.py
+
       - name: Check confidential parameter screen artifact
         run: |
           python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
@@ -402,6 +405,7 @@ jobs:
         run: |
           python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
           git diff --exit-code -- bench/data/confidential-parameter-screen.json
+          python3 scripts/check_confidential_launch_readiness.py --require-production
           python3 scripts/check_confidential_parameter_readiness.py \
             --report bench/data/confidential-parameter-screen.json \
             --require-production

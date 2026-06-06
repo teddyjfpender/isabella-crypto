@@ -9,6 +9,7 @@
         check-confidential-runtime-surface \
         check-confidential-side-channel-review \
         check-confidential-failure-semantics \
+        check-confidential-launch-readiness \
         check-confidential-parameter-readiness \
         check-confidential-production-readiness \
         run-confidential-lattice-estimator \
@@ -128,6 +129,10 @@ check-confidential-failure-semantics:
 	@echo "Checking confidential failure-semantics coverage manifest..."
 	@python3 scripts/check_confidential_failure_semantics.py
 
+check-confidential-launch-readiness:
+	@echo "Checking confidential launch-readiness manifest..."
+	@python3 scripts/check_confidential_launch_readiness.py
+
 check-confidential-parameter-readiness:
 	@echo "Screening confidential transfer parameters..."
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
@@ -168,6 +173,8 @@ check-confidential-production-readiness:
 	@echo "Screening confidential transfer parameters..."
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
 	@git diff --exit-code -- bench/data/confidential-parameter-screen.json
+	@echo "Checking strict confidential launch-readiness gate..."
+	@python3 scripts/check_confidential_launch_readiness.py --require-production
 	@echo "Checking strict confidential production-readiness gate..."
 	@python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json --require-production
 	@echo "Checking strict confidential side-channel review gate..."
@@ -186,6 +193,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@$(MAKE) check-confidential-runtime-surface
 	@$(MAKE) check-confidential-side-channel-review
 	@$(MAKE) check-confidential-failure-semantics
+	@$(MAKE) check-confidential-launch-readiness
 	@$(MAKE) check-confidential-parameter-readiness
 	@echo "Checking confidential scaffold quarantine..."
 	@python3 scripts/check_confidential_scaffold_quarantine.py

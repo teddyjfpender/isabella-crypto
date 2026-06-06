@@ -29,6 +29,10 @@ This is still not production confidential transfers.
 The production-readiness ledger for the eight launch blockers is maintained in
 `plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md`.
 
+The machine-checkable launch-blocker manifest is maintained in
+`tests/fixtures/confidential-launch-readiness.json` and enforced by
+`scripts/check_confidential_launch_readiness.py`.
+
 The launch-scope protocol/product contract is maintained in
 `plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md`.
 
@@ -193,6 +197,15 @@ benchmarks are independently checked.
   `scripts/check_confidential_side_channel_review.py` is wired into CI and
   `make test-confidential-production`; strict production mode requires external
   side-channel signoff before launch.
+- `tests/fixtures/confidential-launch-readiness.json` now records the remaining
+  cross-cutting launch blockers in one place: formal ROM/HVZK assumptions,
+  external estimator/LaZer parameter evidence, bignum runtime migration,
+  scaffold retirement/service integration, consensus/wallet product
+  integration, external crypto/implementation review, and explicit RLWE/AHE
+  MVP exclusion. `scripts/check_confidential_launch_readiness.py` is wired into
+  CI and `make test-confidential-production`; strict production mode fails until
+  the manifest permits production claims, the parameter screen is ready, and no
+  launch blocker remains open.
 
 ## Remaining Security Work
 
@@ -348,6 +361,10 @@ current report is blocked:
 ```bash
 make check-confidential-production-readiness
 ```
+
+The strict gate also runs the launch-readiness manifest in production mode, so
+closing only the parameter blocker is not sufficient to claim launch readiness
+while formal, runtime, service-integration, or audit blockers remain open.
 
 Benchmark checks:
 

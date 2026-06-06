@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "launchScope": {
+    "target": "SIS note/nullifier MVP",
+    "productionClaimAllowed": false,
+    "includedRelations": [
+      "BalanceValid",
+      "RangeValid",
+      "NullifierValid",
+      "MerkleMembershipValid",
+      "FeeAdjustedBalanceValid"
+    ],
+    "excludedRelations": [
+      "EncryptValid",
+      "SamePlaintext",
+      "TransferValid",
+      "NoiseBoundValid"
+    ],
+    "evidence": [
+      {
+        "file": "plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md",
+        "snippets": [
+          "This is the launch-scope protocol specification for the SIS note/nullifier MVP.",
+          "The launch architecture is the SIS note/nullifier path:"
+        ]
+      },
+      {
+        "file": "plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md",
+        "snippets": [
+          "Keep the note/SIS path as the MVP.",
+          "The RLWE/AHE design from `idea.md` should become a separate relation layer:"
+        ]
+      }
+    ]
+  },
+  "parameterReport": {
+    "file": "bench/data/confidential-parameter-screen.json",
+    "expectedStatus": "blocked",
+    "requiredProductionStatus": "ready",
+    "requiredSnippets": [
+      "\"launch_readiness\": {",
+      "\"status\": \"blocked\"",
+      "\"ct_sis_note_mvp_q83_v0\"",
+      "\"runtime_integer_compatibility\"",
+      "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths"
+    ]
+  },
+  "launchBlockers": [
+    {
+      "id": "formal_rom_extraction_and_hvzk",
+      "category": "formal_security",
+      "status": "open",
+      "summary": "The algebraic scheduled-fork extractor and simulator core exists, but full Fiat-Shamir ROM/forking extraction, programmability, distributional HVZK, and rejection analysis are still assumptions or missing theorems.",
+      "acceptanceGate": "Replace the scheduled-forking and programmed-HVZK assumptions with theorems connected to the SHA3 transcript model, then validate the full Canon_ZK session.",
+      "evidence": [
+        {
+          "file": "Canon/ZK/Confidential_Transaction.thy",
+          "snippets": [
+            "balance_fs_scheduled_forking_assumption",
+            "range_fs_scheduled_forking_assumption",
+            "nullifier_fs_scheduled_forking_assumption",
+            "balance_fs_programmed_hvzk_assumption",
+            "nullifier_fs_programmed_hvzk_assumption"
+          ]
+        },
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "Full ROM/forking extraction from the deterministic SHA3 Fiat-Shamir transcript",
+            "distributional indistinguishability",
+            "rejection-sampling/FS-with-aborts analysis"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "production_parameter_evidence",
+      "category": "parameters",
+      "status": "open",
+      "summary": "No production candidate has both external lattice-estimator evidence and generated LaZer-style parameter evidence attached to the parameter screen.",
+      "acceptanceGate": "Check in fresh estimated lattice-estimator and generated LaZer report collections for the selected candidate, then pass the strict parameter-readiness gate.",
+      "evidence": [
+        {
+          "file": "bench/data/confidential-parameter-screen.json",
+          "snippets": [
+            "\"external_lattice_estimator_available\": false",
+            "\"availability_reason\": \"estimator.SIS or sage.all.oo is not importable\"",
+            "\"no_candidate_has_external_estimator_lazer_report_and_passing_formal_margins\""
+          ]
+        },
+        {
+          "file": "scripts/check_confidential_parameter_readiness.py",
+          "snippets": [
+            "--require-production",
+            "no production-ready confidential-transfer parameter candidate is available",
+            "generated LaZer parameter report"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runtime_bignum_representation",
+      "category": "implementation_boundary",
+      "status": "open",
+      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number and signed-64-bit runtime representation.",
+      "acceptanceGate": "Move the production proof/transcript/runtime integer surface to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
+      "evidence": [
+        {
+          "file": "bench/data/confidential-parameter-screen.json",
+          "snippets": [
+            "\"runtime_integer_model_incompatible\"",
+            "\"runtime_integer_model_exceeds:typescript_number_safe_integer\"",
+            "\"runtime_integer_model_exceeds:signed_64_bit_encoding\""
+          ]
+        },
+        {
+          "file": "scripts/confidential_parameter_screen.py",
+          "snippets": [
+            "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
+            "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ledger_scaffold_retirement_and_service_integration",
+      "category": "ledger",
+      "status": "open",
+      "summary": "The cryptographic Merkle verifier is the production target, but scaffold compatibility APIs remain and real consensus/indexer services are not yet forced onto accepted-root windows.",
+      "acceptanceGate": "Retire or isolate scaffold compatibility APIs from launch builds, wire consensus/indexer callers to depth-tagged accepted roots, and expand generated/native Merkle fuzz coverage.",
+      "evidence": [
+        {
+          "file": "Canon/ZK/Authenticated_Ledger.thy",
+          "snippets": [
+            "ledger_hash_execution_scaffold",
+            "ledger_hash_production_ready",
+            "\\<not> ledger_hash_production_ready"
+          ]
+        },
+        {
+          "file": "tests/fixtures/confidential-runtime-surface.json",
+          "snippets": [
+            "\"ct-prove-scaffold\"",
+            "\"ct-verify-scaffold\"",
+            "\"ct-ledger-step-verify-scaffold\""
+          ]
+        },
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "consensus/product callers are not yet forced onto Merkle roots",
+            "Retire scaffold compatibility APIs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "consensus_wallet_product_integration",
+      "category": "protocol_product",
+      "status": "open",
+      "summary": "The SIS-note protocol contract is specified and vector-pinned locally, but live consensus/indexer APIs, wallet flows, and change-output policy are not complete.",
+      "acceptanceGate": "Implement consensus/indexer accepted-root and spent-nullifier APIs, wallet proof request/prover flows, fee/change policy, and negative tests for the full product path.",
+      "evidence": [
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md",
+          "snippets": [
+            "Before launch, this specification must be backed by:",
+            "parameter and proof-size reports",
+            "external cryptography and implementation review"
+          ]
+        },
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "The spec is not yet fully reflected in live consensus/indexer services, wallet APIs, change-output policy",
+            "consensus/indexer APIs, wallet flows"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "external_crypto_implementation_review",
+      "category": "audit",
+      "status": "open",
+      "summary": "The local side-channel review records the wallet-local reference-runtime boundary, but external cryptography and implementation signoff is still required before production claims.",
+      "acceptanceGate": "Record signed external cryptography and side-channel review evidence for the selected prover/sampler implementation boundary.",
+      "evidence": [
+        {
+          "file": "tests/fixtures/confidential-side-channel-review.json",
+          "snippets": [
+            "\"externalReview\": {",
+            "\"status\": \"required_before_launch\"",
+            "high_level_runtimes_are_not_constant_time"
+          ]
+        },
+        {
+          "file": "scripts/check_confidential_side_channel_review.py",
+          "snippets": [
+            "--require-production",
+            "externalReview.status is",
+            "not signed_off"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rlwe_ahe_scope",
+      "category": "architecture",
+      "status": "mvp_excluded",
+      "summary": "The RLWE/AHE EncryptValid/SamePlaintext/TransferValid layer is intentionally outside the SIS-note MVP launch scope until it has independent relations, parameters, estimators, and benchmarks.",
+      "acceptanceGate": "Keep RLWE/AHE excluded from SIS-note production claims, or promote it only after independent formalization, estimator evidence, and benchmarks.",
+      "evidence": [
+        {
+          "file": "bench/data/confidential-parameter-screen.json",
+          "snippets": [
+            "\"rlwe_ahe_transfer_research_v0\"",
+            "\"formal_relation_missing:EncryptValid\"",
+            "\"formal_relation_missing:TransferValid\""
+          ]
+        },
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "Launch scope explicitly excludes RLWE/AHE",
+            "unless that layer gets independent proofs, parameter estimates, and benchmarks"
+          ]
+        }
+      ]
+    }
+  ],
+  "gateWiring": {
+    "Makefile": [
+      "scripts/check_confidential_launch_readiness.py",
+      "check-confidential-launch-readiness"
+    ],
+    ".github/workflows/ci.yml": [
+      "scripts/check_confidential_launch_readiness.py",
+      "Check confidential launch readiness"
+    ],
+    "plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md": [
+      "tests/fixtures/confidential-launch-readiness.json",
+      "scripts/check_confidential_launch_readiness.py"
+    ],
+    "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md": [
+      "confidential launch-readiness manifest",
+      "scripts/check_confidential_launch_readiness.py"
+    ]
+  }
+}
