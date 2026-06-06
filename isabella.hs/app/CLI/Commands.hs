@@ -109,17 +109,32 @@ parseCanonicalRead s = do
     value <- readMaybe s
     if show value == s then Just value else Nothing
 
+maxSafeProtocolInt :: Int
+maxSafeProtocolInt = 9007199254740991
+
+safeProtocolInt :: Int -> Bool
+safeProtocolInt value =
+    value >= negate maxSafeProtocolInt && value <= maxSafeProtocolInt
+
 parseCanonicalInt :: String -> Maybe Int
-parseCanonicalInt = parseCanonicalRead
+parseCanonicalInt s = do
+    value <- parseCanonicalRead s
+    if safeProtocolInt value then Just value else Nothing
 
 parseCanonicalVec :: String -> Maybe [Int]
-parseCanonicalVec = parseCanonicalRead
+parseCanonicalVec s = do
+    value <- parseCanonicalRead s
+    if all safeProtocolInt value then Just value else Nothing
 
 parseCanonicalMat :: String -> Maybe [[Int]]
-parseCanonicalMat = parseCanonicalRead
+parseCanonicalMat s = do
+    value <- parseCanonicalRead s
+    if all (all safeProtocolInt) value then Just value else Nothing
 
 parseCanonicalCube :: String -> Maybe [[[Int]]]
-parseCanonicalCube = parseCanonicalRead
+parseCanonicalCube s = do
+    value <- parseCanonicalRead s
+    if all (all (all safeProtocolInt)) value then Just value else Nothing
 
 parseBool :: String -> Maybe Bool
 parseBool "0" = Just False

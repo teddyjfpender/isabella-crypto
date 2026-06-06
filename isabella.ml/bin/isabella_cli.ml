@@ -135,24 +135,38 @@ let[@warning "-32"] json_of_mat m =
 let json_of_cube c =
   "[" ^ String.concat "," (List.map json_of_mat c) ^ "]"
 
+let max_safe_protocol_int = 9007199254740991
+
+let safe_protocol_int value =
+  value >= -max_safe_protocol_int && value <= max_safe_protocol_int
+
+let safe_protocol_vec values =
+  List.for_all safe_protocol_int values
+
+let safe_protocol_mat rows =
+  List.for_all safe_protocol_vec rows
+
+let safe_protocol_cube mats =
+  List.for_all safe_protocol_mat mats
+
 let parse_canonical_int s =
   match parse_int s with
-  | Some value when string_of_int value = s -> Some value
+  | Some value when string_of_int value = s && safe_protocol_int value -> Some value
   | _ -> None
 
 let parse_canonical_vec s =
   match parse_vec s with
-  | Some value when json_of_vec value = s -> Some value
+  | Some value when json_of_vec value = s && safe_protocol_vec value -> Some value
   | _ -> None
 
 let parse_canonical_mat s =
   match parse_mat s with
-  | Some value when json_of_mat value = s -> Some value
+  | Some value when json_of_mat value = s && safe_protocol_mat value -> Some value
   | _ -> None
 
 let parse_canonical_cube s =
   match parse_cube s with
-  | Some value when json_of_cube value = s -> Some value
+  | Some value when json_of_cube value = s && safe_protocol_cube value -> Some value
   | _ -> None
 
 let parse_canonical_bool_vec01 s =

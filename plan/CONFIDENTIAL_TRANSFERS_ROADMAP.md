@@ -267,8 +267,9 @@ Important validation caveats:
   swapped proof components, and accepts a valid nonzero public-fee proof.
   OCaml/Haskell SDK-equivalence validation now checks native
   proof/envelope/wallet-request digest parity against the pinned vectors,
-  rejects malformed native wallet requests, rejects non-canonical native
-  transaction encodings on production-facing commands, and verifies explicit
+  rejects malformed native wallet requests, rejects non-canonical and
+  out-of-range native transaction encodings on production-facing commands,
+  and verifies explicit
   Merkle proof rejection through native envelope commands; consensus/indexer
   serialization remains open.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,

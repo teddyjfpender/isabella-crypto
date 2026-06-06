@@ -102,6 +102,12 @@ function nonCanonicalFirstInteger(value: string): string {
   return value.replace(/-?\d+/, '-0');
 }
 
+const unsafeProtocolInteger = '9007199254740992';
+
+function unsafeFirstInteger(value: string): string {
+  return value.replace(/-?\d+/, unsafeProtocolInteger);
+}
+
 function allBounded(values: number[], bound: number): boolean {
   return values.every(value => Number.isSafeInteger(value) && Math.abs(value) <= bound);
 }
@@ -943,9 +949,21 @@ for (const { name, args } of [
     args: transactionContextArgs.map((arg, index) => (index === 3 ? `+${arg}` : arg)),
   },
   {
+    name: 'unsafe asset id',
+    args: transactionContextArgs.map((arg, index) =>
+      index === 3 ? unsafeProtocolInteger : arg
+    ),
+  },
+  {
     name: 'leading-zero input vector element',
     args: transactionContextArgs.map((arg, index) =>
       index === 7 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe input vector element',
+    args: transactionContextArgs.map((arg, index) =>
+      index === 7 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1068,9 +1086,21 @@ for (const { name, args } of [
     ),
   },
   {
+    name: 'unsafe protocol version',
+    args: walletProofRequestArgs.map((arg, index) =>
+      index === 1 ? unsafeProtocolInteger : arg
+    ),
+  },
+  {
     name: 'non-canonical spent-nullifier integer',
     args: walletProofRequestArgs.map((arg, index) =>
       index === 14 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe spent-nullifier integer',
+    args: walletProofRequestArgs.map((arg, index) =>
+      index === 14 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1375,6 +1405,12 @@ for (const { name, args } of [
     ),
   },
   {
+    name: 'unsafe parameter',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 1 ? unsafeProtocolInteger : arg
+    ),
+  },
+  {
     name: 'plus-signed gamma',
     args: merkleVerifyArgs.map((arg, index) => (index === 5 ? `+${arg}` : arg)),
   },
@@ -1385,9 +1421,21 @@ for (const { name, args } of [
     ),
   },
   {
+    name: 'unsafe key matrix integer',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 7 ? unsafeFirstInteger(arg) : arg
+    ),
+  },
+  {
     name: 'non-canonical public vector integer',
     args: merkleVerifyArgs.map((arg, index) =>
       index === 11 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe public vector integer',
+    args: merkleVerifyArgs.map((arg, index) =>
+      index === 11 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1413,15 +1461,33 @@ for (const { name, args } of [
     ),
   },
   {
+    name: 'unsafe membership index',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 1 ? unsafeProtocolInteger : arg
+    ),
+  },
+  {
     name: 'non-canonical directions vector',
     args: merkleProofDigestArgs.map((arg, index) =>
       index === 4 ? nonCanonicalFirstInteger(arg) : arg
     ),
   },
   {
+    name: 'unsafe directions vector',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 4 ? unsafeFirstInteger(arg) : arg
+    ),
+  },
+  {
     name: 'non-canonical proof matrix integer',
     args: merkleProofDigestArgs.map((arg, index) =>
       index === 9 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe proof matrix integer',
+    args: merkleProofDigestArgs.map((arg, index) =>
+      index === 9 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1473,9 +1539,21 @@ for (const { name, args } of [
     args: merkleEnvelopeDigestArgs.map((arg, index) => (index === 7 ? '-0' : arg)),
   },
   {
+    name: 'unsafe public fee',
+    args: merkleEnvelopeDigestArgs.map((arg, index) =>
+      index === 7 ? unsafeProtocolInteger : arg
+    ),
+  },
+  {
     name: 'non-canonical context vector integer',
     args: merkleEnvelopeDigestArgs.map((arg, index) =>
       index === 8 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe context vector integer',
+    args: merkleEnvelopeDigestArgs.map((arg, index) =>
+      index === 8 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1572,6 +1650,12 @@ for (const { name, args } of [
     args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 16 ? '-0' : arg)),
   },
   {
+    name: 'unsafe expected public fee',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) =>
+      index === 16 ? unsafeProtocolInteger : arg
+    ),
+  },
+  {
     name: 'plus-signed context protocol version',
     args: merkleEnvelopeVerifyArgs.map((arg, index) => (index === 18 ? `+${arg}` : arg)),
   },
@@ -1579,6 +1663,12 @@ for (const { name, args } of [
     name: 'non-canonical context vector integer',
     args: merkleEnvelopeVerifyArgs.map((arg, index) =>
       index === 24 ? nonCanonicalFirstInteger(arg) : arg
+    ),
+  },
+  {
+    name: 'unsafe context vector integer',
+    args: merkleEnvelopeVerifyArgs.map((arg, index) =>
+      index === 24 ? unsafeFirstInteger(arg) : arg
     ),
   },
 ]) {
@@ -1891,5 +1981,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical transaction encoding rejection, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation, and randomized sampler bound checks.'
 );

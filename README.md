@@ -760,7 +760,9 @@ Current status and roadmap:
   SIS-note MVP: canonical context digest, accepted-root window, and
   spent-nullifier snapshot. TypeScript, OCaml, and Haskell expose matching
   digest APIs; consensus/indexer API contracts are still open production
-  blockers.
+  blockers. Native OCaml/Haskell transaction CLIs reject non-canonical
+  encodings and integer values outside the shared safe protocol range on the
+  covered production-facing context/proof/envelope surfaces.
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.
