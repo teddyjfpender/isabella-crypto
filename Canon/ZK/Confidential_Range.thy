@@ -974,6 +974,56 @@ fun range_sigma_verify_pairs ::
      range_sigma_verify_pairs p gamma ck cs as e zs)"
 | "range_sigma_verify_pairs p gamma ck _ _ e _ = False"
 
+lemma range_sigma_verify_pairs_from_nth:
+  assumes len_as: "length anns = length cs"
+      and len_zs: "length zs = length cs"
+      and all_ok:
+        "\<forall>j < length cs.
+          range_pair_sigma_verify p gamma ck (cs ! j) (anns ! j) e (zs ! j)"
+  shows "range_sigma_verify_pairs p gamma ck cs anns e zs"
+  using len_as len_zs all_ok
+proof (induct cs arbitrary: anns zs)
+  case Nil
+  then show ?case
+    by (cases anns; cases zs; simp)
+next
+  case (Cons c cs)
+  then obtain a anns' where anns_def: "anns = a # anns'"
+    by (cases anns) auto
+  obtain z zs' where zs_def: "zs = z # zs'"
+    using Cons.prems by (cases zs) auto
+  have head:
+    "range_pair_sigma_verify p gamma ck c a e z"
+    using Cons.prems(3)[rule_format, of 0] anns_def zs_def by simp
+  have tail_len_anns: "length anns' = length cs"
+    using Cons.prems(1) anns_def by simp
+  have tail_len_zs: "length zs' = length cs"
+    using Cons.prems(2) zs_def by simp
+  have tail_all:
+    "\<forall>j < length cs.
+      range_pair_sigma_verify p gamma ck (cs ! j) (anns' ! j) e (zs' ! j)"
+  proof (intro allI impI)
+    fix j
+    assume j_lt: "j < length cs"
+    have all_cons:
+      "\<forall>j < length (c # cs).
+        range_pair_sigma_verify p gamma ck
+          ((c # cs) ! j) ((a # anns') ! j) e ((z # zs') ! j)"
+      using Cons.prems(3) anns_def zs_def by simp
+    have "range_pair_sigma_verify p gamma ck
+            ((c # cs) ! Suc j) ((a # anns') ! Suc j) e ((z # zs') ! Suc j)"
+      using all_cons[rule_format, of "Suc j"] j_lt by simp
+    then show "range_pair_sigma_verify p gamma ck
+                 (cs ! j) (anns' ! j) e (zs' ! j)"
+      by simp
+  qed
+  have tail:
+    "range_sigma_verify_pairs p gamma ck cs anns' e zs'"
+    using Cons.hyps[OF tail_len_anns tail_len_zs tail_all] .
+  show ?case
+    using head tail anns_def zs_def by simp
+qed
+
 definition range_fs_challenges ::
   "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow>
    commitment list \<Rightarrow> commitment list \<Rightarrow> commitment list list \<Rightarrow> int list" where
@@ -1028,6 +1078,167 @@ definition range_fs_verify ::
             (a_amounts ! i) (es ! i) (z_amounts ! i) \<and>
           range_sigma_verify_pairs p gamma ck c_pair_res
             (a_pairss ! i) (es ! i) (z_pairss ! i)))"
+
+lemma range_scheduled_verify_imp_fs_verify_if_challenges_match:
+  assumes scheduled:
+        "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+           a_amounts a_pairss es z_amounts z_pairss"
+      and challenge_match:
+        "range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss = es"
+  shows "range_fs_verify p gamma k ck c_amount
+           \<lparr> range_bits = c_bits,
+             range_comps = c_comps,
+             range_amount_as = a_amounts,
+             range_amount_zs = z_amounts,
+             range_pair_ass = a_pairss,
+             range_pair_zss = z_pairss \<rparr>"
+proof -
+  let ?c_pair_res = "range_pair_commitments p ck c_bits c_comps"
+  have c_valid: "valid_commitment p c_amount"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have bits_len: "length c_bits = k"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have comps_len: "length c_comps = k"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have c_pair_len: "length ?c_pair_res = k"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have a_amounts_len: "length a_amounts = range_fs_rounds"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have a_pairss_len: "length a_pairss = range_fs_rounds"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have z_amounts_len: "length z_amounts = range_fs_rounds"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have z_pairss_len: "length z_pairss = range_fs_rounds"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have pair_round_lengths:
+    "\<forall>i < range_fs_rounds. length (a_pairss ! i) = k \<and> length (z_pairss ! i) = k"
+    using scheduled unfolding range_scheduled_verify_def Let_def by simp
+  have amount_ok:
+    "\<forall>i < range_fs_rounds.
+      range_amount_sigma_verify p gamma k ck
+        (range_amount_commitment p ck c_amount c_bits)
+        (a_amounts ! i)
+        (range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss ! i)
+        (z_amounts ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < range_fs_rounds"
+    have "range_amount_sigma_verify p gamma k ck
+            (range_amount_commitment p ck c_amount c_bits)
+            (a_amounts ! i) (es ! i) (z_amounts ! i)"
+      using scheduled i_lt unfolding range_scheduled_verify_def Let_def by simp
+    then show "range_amount_sigma_verify p gamma k ck
+                 (range_amount_commitment p ck c_amount c_bits)
+                 (a_amounts ! i)
+                 (range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss ! i)
+                 (z_amounts ! i)"
+      using challenge_match by simp
+  qed
+  have pairs_ok:
+    "\<forall>i < range_fs_rounds.
+      range_sigma_verify_pairs p gamma ck ?c_pair_res
+        (a_pairss ! i)
+        (range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss ! i)
+        (z_pairss ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < range_fs_rounds"
+    have anns_len: "length (a_pairss ! i) = k"
+      using scheduled i_lt unfolding range_scheduled_verify_def Let_def by simp
+    have zs_len: "length (z_pairss ! i) = k"
+      using scheduled i_lt unfolding range_scheduled_verify_def Let_def by simp
+    have all_pair:
+      "\<forall>j < length ?c_pair_res.
+        range_pair_sigma_verify p gamma ck (?c_pair_res ! j)
+          ((a_pairss ! i) ! j) (es ! i) ((z_pairss ! i) ! j)"
+    proof (intro allI impI)
+      fix j
+      assume j_lt: "j < length ?c_pair_res"
+      then have j_lt_k: "j < k"
+        using c_pair_len by simp
+      show "range_pair_sigma_verify p gamma ck (?c_pair_res ! j)
+              ((a_pairss ! i) ! j) (es ! i) ((z_pairss ! i) ! j)"
+        using scheduled i_lt j_lt_k unfolding range_scheduled_verify_def Let_def by simp
+    qed
+    have recursive:
+      "range_sigma_verify_pairs p gamma ck ?c_pair_res
+        (a_pairss ! i) (es ! i) (z_pairss ! i)"
+    proof -
+      have anns_len_eq: "length (a_pairss ! i) = length ?c_pair_res"
+        using anns_len c_pair_len by simp
+      have zs_len_eq: "length (z_pairss ! i) = length ?c_pair_res"
+        using zs_len c_pair_len by simp
+      show ?thesis
+        using range_sigma_verify_pairs_from_nth[
+          OF anns_len_eq zs_len_eq all_pair] .
+    qed
+    show "range_sigma_verify_pairs p gamma ck ?c_pair_res
+            (a_pairss ! i)
+            (range_fs_challenges p ck c_amount c_bits c_comps a_amounts a_pairss ! i)
+            (z_pairss ! i)"
+      using recursive challenge_match by simp
+  qed
+  show ?thesis
+    unfolding range_fs_verify_def Let_def
+    using c_valid bits_len comps_len a_amounts_len a_pairss_len
+          z_amounts_len z_pairss_len pair_round_lengths amount_ok pairs_ok
+    by simp
+qed
+
+lemma range_fs_verify_scheduled_simulate_if_challenges_match:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_amount_public_valid: "valid_commitment p c_amount"
+      and c_amount_valid:
+        "valid_commitment p (range_amount_commitment p ck c_amount c_bits)"
+      and c_pair_len:
+        "length (range_pair_commitments p ck c_bits c_comps) = k"
+      and c_pair_valid:
+        "\<forall>j < k. valid_commitment p
+          ((range_pair_commitments p ck c_bits c_comps) ! j)"
+      and bits_len: "length c_bits = k"
+      and comps_len: "length c_comps = k"
+      and es_len: "length es = range_fs_rounds"
+      and z_amounts_len: "length z_amounts = range_fs_rounds"
+      and z_pairss_len: "length z_pairss = range_fs_rounds"
+      and challenges_ok:
+        "\<forall>i < range_fs_rounds. valid_range_challenge p (es ! i)"
+      and amount_responses_ok:
+        "\<forall>i < range_fs_rounds.
+          valid_range_amount_response p gamma k (es ! i) (z_amounts ! i)"
+      and pair_lengths_ok:
+        "\<forall>i < range_fs_rounds. length (z_pairss ! i) = k"
+      and pair_responses_ok:
+        "\<forall>i < range_fs_rounds.
+          (\<forall>j < k. valid_range_pair_response p gamma (es ! i) ((z_pairss ! i) ! j))"
+      and challenge_match:
+        "range_fs_challenges p ck c_amount c_bits c_comps
+          (range_amount_as
+            (range_scheduled_simulate p ck c_amount c_bits c_comps
+               es z_amounts z_pairss))
+          (range_pair_ass
+            (range_scheduled_simulate p ck c_amount c_bits c_comps
+               es z_amounts z_pairss)) = es"
+  shows "range_fs_verify p gamma k ck c_amount
+           (range_scheduled_simulate p ck c_amount c_bits c_comps
+             es z_amounts z_pairss)"
+proof -
+  let ?proof =
+    "range_scheduled_simulate p ck c_amount c_bits c_comps es z_amounts z_pairss"
+  have scheduled:
+    "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+      (range_amount_as ?proof) (range_pair_ass ?proof)
+      es (range_amount_zs ?proof) (range_pair_zss ?proof)"
+    using range_scheduled_simulate_verify[
+      OF params_ok key_ok c_amount_public_valid c_amount_valid c_pair_len
+         c_pair_valid bits_len comps_len es_len z_amounts_len z_pairss_len
+         challenges_ok amount_responses_ok pair_lengths_ok pair_responses_ok] .
+  show ?thesis
+    using range_scheduled_verify_imp_fs_verify_if_challenges_match[
+      OF scheduled challenge_match]
+    unfolding range_scheduled_simulate_def Let_def
+    by simp
+qed
 
 definition range_scheduled_fork_extract_amount ::
   "int list \<Rightarrow> int_vec list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow> nat \<Rightarrow>

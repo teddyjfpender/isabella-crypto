@@ -86,9 +86,12 @@ benchmarks are independently checked.
 - Balance, range, and nullifier proofs now also have concrete scheduled
   simulators. The scheduled simulator lemmas prove that programmed binary
   challenge schedules and valid simulated responses verify for the generated
-  announcements. This is the algebraic simulator core only; it does not prove
-  distributional HVZK, rejection-sampling bounds, or Fiat-Shamir
-  programmability.
+  announcements. The follow-on bridge lemmas prove that the deterministic
+  Fiat-Shamir verifier accepts those scheduled simulator proofs when the
+  transcript-derived challenge list equals the programmed schedule. This is
+  the algebraic simulator core plus an explicit challenge-match bridge only;
+  it does not prove distributional HVZK, rejection-sampling bounds, or
+  Fiat-Shamir programmability.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
@@ -168,8 +171,9 @@ The formalization still needs these before production:
    extraction model with a ROM/forking theorem, then replace the remaining
    extractor-correctness assumptions with full proof-object soundness for
    balance, range, and nullifier proofs.
-3. Lift the scheduled simulators to FS-level HVZK with programmable transcript
-   assumptions or theorems, rejection-sampling/distribution bounds, and
+3. Prove or assume the programmable-transcript theorem that realizes the
+   challenge-match condition for the scheduled simulators, then finish
+   FS-level HVZK with rejection-sampling/distribution bounds and
    Fiat-Shamir-with-aborts analysis.
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.

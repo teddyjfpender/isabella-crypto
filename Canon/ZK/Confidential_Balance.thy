@@ -959,6 +959,73 @@ proof -
     by simp
 qed
 
+lemma balance_scheduled_verify_imp_fs_verify_if_challenges_match:
+  assumes scheduled:
+        "balance_scheduled_verify p gamma ck c (balance_as proof) es (balance_zs proof)"
+      and params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and challenge_match: "balance_fs_challenges p ck c (balance_as proof) = es"
+  shows "balance_fs_verify p gamma ck c proof"
+proof -
+  have as_len: "length (balance_as proof) = balance_fs_rounds"
+    using scheduled unfolding balance_scheduled_verify_def by simp
+  have zs_len: "length (balance_zs proof) = balance_fs_rounds"
+    using scheduled unfolding balance_scheduled_verify_def by simp
+  have core_ok:
+    "\<forall>i < balance_fs_rounds.
+      balance_sigma_verify_core p gamma ck c
+        (balance_as proof ! i)
+        (balance_fs_challenges p ck c (balance_as proof) ! i)
+        (balance_zs proof ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < balance_fs_rounds"
+    have sigma:
+      "balance_sigma_verify p gamma ck c
+        (balance_as proof ! i) (es ! i) (balance_zs proof ! i)"
+      using scheduled i_lt unfolding balance_scheduled_verify_def by simp
+    have core:
+      "balance_sigma_verify_core p gamma ck c
+        (balance_as proof ! i) (es ! i) (balance_zs proof ! i)"
+      using balance_sigma_verify_imp_core[OF sigma] .
+    show "balance_sigma_verify_core p gamma ck c
+            (balance_as proof ! i)
+            (balance_fs_challenges p ck c (balance_as proof) ! i)
+            (balance_zs proof ! i)"
+      using core challenge_match by simp
+  qed
+  show ?thesis
+    unfolding balance_fs_verify_def Let_def
+    using params_ok key_ok as_len zs_len core_ok by simp
+qed
+
+lemma balance_fs_verify_scheduled_simulate_if_challenges_match:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and es_len: "length es = balance_fs_rounds"
+      and zs_len: "length zs = balance_fs_rounds"
+      and challenges_ok:
+        "\<forall>i < balance_fs_rounds. valid_balance_challenge p (es ! i)"
+      and responses_ok:
+        "\<forall>i < balance_fs_rounds. valid_balance_response p gamma (es ! i) (zs ! i)"
+      and challenge_match:
+        "balance_fs_challenges p ck c
+          (balance_as (balance_scheduled_simulate p ck c es zs)) = es"
+  shows "balance_fs_verify p gamma ck c (balance_scheduled_simulate p ck c es zs)"
+proof -
+  have scheduled:
+    "balance_scheduled_verify p gamma ck c
+      (balance_as (balance_scheduled_simulate p ck c es zs))
+      es
+      (balance_zs (balance_scheduled_simulate p ck c es zs))"
+    using balance_scheduled_simulate_verify[
+      OF params_ok key_ok c_valid es_len zs_len challenges_ok responses_ok] .
+  show ?thesis
+    using balance_scheduled_verify_imp_fs_verify_if_challenges_match[
+      OF scheduled params_ok key_ok challenge_match] .
+qed
+
 lemma balance_sigma_extract_some_if_distinct_binary:
   assumes e1_ok: "valid_balance_challenge p e1"
       and e2_ok: "valid_balance_challenge p e2"
