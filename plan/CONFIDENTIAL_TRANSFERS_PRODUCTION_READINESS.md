@@ -32,9 +32,12 @@ The canonical bignum codec target now has a vector fixture at
 `tests/fixtures/confidential-bignum-vectors.json` and TypeScript/OCaml/Haskell
 parity commands for `ct-bignum-encode` and `ct-bignum-vector-encode`. This is
 progress on the runtime integer blocker, not closure: Fiat-Shamir transcript
-fields now use the codec, but proof arithmetic, proof APIs, and
-transaction/runtime integer fields that can carry widened values still need
-multiprecision integration and regenerated vectors/benchmarks.
+fields now use the codec, and
+`tests/fixtures/confidential-bigint-balance-vectors.json` pins a TypeScript-only
+q83 balance proof reference path. OCaml/Haskell multiprecision proof parity,
+the rest of the proof APIs, and transaction/runtime integer fields that can
+carry widened values still need multiprecision integration and regenerated
+vectors/benchmarks.
 
 ## Current Stabilization Commands
 

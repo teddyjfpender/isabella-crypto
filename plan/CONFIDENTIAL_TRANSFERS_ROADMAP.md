@@ -82,6 +82,13 @@ benchmarks are independently checked.
   this codec; proof arithmetic, proof APIs, and transaction/runtime integer
   fields that can carry widened values still need multiprecision integration
   before the runtime bignum blocker can close.
+- `tests/fixtures/confidential-bigint-balance-vectors.json` now pins a
+  TypeScript-only q83 confidential-balance reference path using BigInt
+  arithmetic, q-sized commitment-key entries, canonical bignum transcript
+  fields, and a 128-round proof. This is concrete progress on widened
+  execution semantics, but it is not launch parity: OCaml/Haskell
+  multiprecision proof paths and every widened transaction/runtime integer
+  field remain open.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
   assumptions for HVZK, narrower programmed-schedule HVZK assumptions, and a
@@ -321,9 +328,11 @@ this check: the 64-bit range proof response/SIS bounds exceed both
 `Number.MAX_SAFE_INTEGER` and signed 64-bit encodings, and the q83 candidate
 additionally exceeds those limits at the modulus itself. Production for these
 parameters therefore needs BigInt or multiprecision proof arithmetic across
-TypeScript, OCaml, and Haskell, canonical bignum serialization for every proof
-API and transaction/runtime integer field that can carry widened values, and
-regenerated parity vectors. External estimator evidence alone is not enough to
+TypeScript, OCaml, and Haskell. The TypeScript balance slice now has a q83
+BigInt reference vector, but production still needs native OCaml/Haskell parity,
+canonical bignum serialization for every proof API and transaction/runtime
+integer field that can carry widened values, and regenerated parity vectors.
+External estimator evidence alone is not enough to
 mark the candidate launchable.
 
 The same artifact now records exact SIS requests. The legacy MVP request is:

@@ -68,6 +68,33 @@ export interface BalanceProof {
   zs: IntMatrix;
 }
 
+/** Arbitrary-precision integer vector for widened confidential parameters */
+export type BigIntVec = bigint[];
+
+/** Arbitrary-precision integer matrix for widened confidential parameters */
+export type BigIntMatrix = bigint[][];
+
+/** Input vector accepted by widened BigInt reference helpers */
+export type BigIntVecInput = readonly ConfidentialBigIntInput[];
+
+/** Input matrix accepted by widened BigInt reference helpers */
+export type BigIntMatrixInput = readonly BigIntVecInput[];
+
+/** BigInt scalar commitment parameters for widened confidential-balance checks */
+export interface BigIntScalarCommitParams {
+  n1: number;
+  n2: number;
+  m: number;
+  q: bigint;
+  beta: bigint;
+}
+
+/** BigInt Fiat-Shamir proof object for confidential balance */
+export interface BigIntBalanceProof {
+  as: BigIntMatrix;
+  zs: BigIntMatrix;
+}
+
 /** Deterministic Fiat-Shamir proof object for confidential range */
 export interface RangeProof {
   bits: IntMatrix;
@@ -1034,6 +1061,9 @@ const CT_TRANSACTION_TAGS = {
   walletProofRequest: 3,
   acceptedRootWindow: 4,
 } as const;
+const CT_FS_DST = 'ISABELLA-CT-FS-v1';
+const CT_FS_BALANCE_DOMAIN = 1001;
+const CT_FS_ROUNDS = 128;
 const CT_BIGNUM_DST = 'ISABELLA-CT-BIGNUM-v1';
 const CT_BIGNUM_ENCODING = 'sign_u8 || len_i64_le || magnitude_le_minimal';
 
@@ -1126,6 +1156,96 @@ function encodeConfidentialBigIntVector(
     encodeI64LE(values.length, `${label}.length`),
     ...values.map((value, index) => encodeConfidentialBigInt(value, `${label}[${index}]`)),
   ]);
+}
+
+function normalizeBigIntVec(values: readonly ConfidentialBigIntInput[], label: string): BigIntVec {
+  if (!Array.isArray(values)) {
+    throw new Error(`${label} must be an array`);
+  }
+  assertSafeArrayLength(values.length, `${label}.length`);
+  return values.map((value, index) => normalizeConfidentialBigInt(value, `${label}[${index}]`));
+}
+
+function normalizeBigIntMatrix(
+  rows: readonly (readonly ConfidentialBigIntInput[])[],
+  label: string
+): BigIntMatrix {
+  if (!Array.isArray(rows)) {
+    throw new Error(`${label} must be an array`);
+  }
+  assertSafeArrayLength(rows.length, `${label}.length`);
+  return rows.map((row, index) => normalizeBigIntVec(row, `${label}[${index}]`));
+}
+
+function bigintAbs(value: bigint): bigint {
+  return value < 0n ? -value : value;
+}
+
+function bigintMod(value: bigint, modulus: bigint): bigint {
+  if (modulus <= 1n) {
+    throw new RangeError('modulus must be greater than 1');
+  }
+  const reduced = value % modulus;
+  return reduced < 0n ? reduced + modulus : reduced;
+}
+
+function bigintVecMod(values: readonly bigint[], modulus: bigint): BigIntVec {
+  return values.map((value) => bigintMod(value, modulus));
+}
+
+function bigintVecAdd(left: readonly bigint[], right: readonly bigint[]): BigIntVec {
+  if (left.length !== right.length) {
+    throw new Error('vector lengths must agree');
+  }
+  return left.map((value, index) => value + right[index]);
+}
+
+function bigintScalarMult(scalar: bigint, values: readonly bigint[]): BigIntVec {
+  return values.map((value) => scalar * value);
+}
+
+function bigintMatVecMult(matrix: readonly (readonly bigint[])[], vector: readonly bigint[]): BigIntVec {
+  return matrix.map((row) => {
+    if (row.length !== vector.length) {
+      throw new Error('matrix row length must match vector length');
+    }
+    return row.reduce((acc, value, index) => acc + value * vector[index], 0n);
+  });
+}
+
+function bigintMatVecMultMod(
+  matrix: readonly (readonly bigint[])[],
+  vector: readonly bigint[],
+  modulus: bigint
+): BigIntVec {
+  return bigintVecMod(bigintMatVecMult(matrix, vector), modulus);
+}
+
+function bigintAllBounded(values: readonly bigint[], bound: bigint): boolean {
+  return bound >= 0n && values.every((value) => bigintAbs(value) <= bound);
+}
+
+function bigintSum(values: readonly bigint[]): bigint {
+  return values.reduce((acc, value) => acc + value, 0n);
+}
+
+function bigintMatrixSum(rows: readonly (readonly bigint[])[]): bigint {
+  return rows.reduce((acc, row) => acc + bigintSum(row), 0n);
+}
+
+function encodeFsTranscript(domain: number, round: number, fields: readonly bigint[]): Buffer {
+  return Buffer.concat([
+    Buffer.from(CT_FS_DST, 'ascii'),
+    encodeI64LE(domain, 'fs.domain'),
+    encodeI64LE(round, 'fs.round'),
+    encodeI64LE(fields.length, 'fs.field_count'),
+    ...fields.map((field, index) => encodeConfidentialBigInt(field, `fs.fields[${index}]`)),
+  ]);
+}
+
+function binaryFsChallenge(domain: number, fields: readonly bigint[], round: number): number {
+  const digest = createHash('sha3-256').update(encodeFsTranscript(domain, round, fields)).digest();
+  return digest[0] & 1;
 }
 
 function encodeIntVector(values: IntVec, label: string): Buffer {
@@ -2460,6 +2580,293 @@ export namespace ConfidentialBalance {
     try {
       const checkedProof = normalizeProof(proof);
       return checkedProof !== null && Isabella.cbFsVerify(params, gamma, ck, c, checkedProof);
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * BigInt reference implementation for the confidential-balance proof slice.
+ *
+ * This is a TypeScript reference path for widened parameter candidates whose
+ * modulus and proof bounds exceed the current js_of_ocaml number surface. It
+ * uses the same canonical Fiat-Shamir bignum transcript-field encoding as the
+ * native transcript backends. OCaml/Haskell multiprecision parity remains a
+ * separate launch-readiness blocker.
+ */
+export namespace ConfidentialBalanceBigInt {
+  export const transcriptDst = CT_FS_DST;
+  export const fsDomain = CT_FS_BALANCE_DOMAIN;
+  export const fieldEncoding = CT_BIGNUM_ENCODING;
+
+  export function makeParams(
+    m: number,
+    n2: number,
+    q: ConfidentialBigIntInput,
+    beta: ConfidentialBigIntInput
+  ): BigIntScalarCommitParams {
+    assertSafeArrayLength(m, 'm');
+    assertSafeArrayLength(n2, 'n2');
+    return {
+      n1: 1,
+      n2,
+      m,
+      q: normalizeConfidentialBigInt(q, 'q'),
+      beta: normalizeConfidentialBigInt(beta, 'beta'),
+    };
+  }
+
+  export function validScalarParams(params: BigIntScalarCommitParams): boolean {
+    return (
+      params.n1 === 1 &&
+      Number.isSafeInteger(params.n2) &&
+      params.n2 > 0 &&
+      Number.isSafeInteger(params.m) &&
+      params.m > 0 &&
+      params.q > 1n &&
+      params.beta > 0n
+    );
+  }
+
+  export function validCommitKey(params: BigIntScalarCommitParams, ck: BigIntMatrixInput): boolean {
+    if (!validScalarParams(params)) {
+      return false;
+    }
+    try {
+      const key = normalizeBigIntMatrix(ck, 'ck');
+      return key.length === params.m && key.every((row) => row.length === params.n1 + params.n2);
+    } catch {
+      return false;
+    }
+  }
+
+  export function randCommitKey(params: BigIntScalarCommitParams, ck: BigIntMatrixInput): BigIntMatrix {
+    if (!validCommitKey(params, ck)) {
+      throw new Error('invalid commitment key');
+    }
+    return normalizeBigIntMatrix(ck, 'ck').map((row) => row.slice(params.n1));
+  }
+
+  export function randCommit(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    r: BigIntVecInput
+  ): BigIntVec {
+    const randomness = normalizeBigIntVec(r, 'r');
+    if (!validScalarParams(params) || randomness.length !== params.n2) {
+      throw new Error('invalid balance commitment input');
+    }
+    return bigintMatVecMultMod(randCommitKey(params, ck), randomness, params.q);
+  }
+
+  export function validWitness(params: BigIntScalarCommitParams, r: BigIntVecInput): boolean {
+    try {
+      const witness = normalizeBigIntVec(r, 'r');
+      return (
+        validScalarParams(params) &&
+        witness.length === params.n2 &&
+        bigintAllBounded(witness, 4n * params.beta)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function validMask(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    y: BigIntVecInput
+  ): boolean {
+    try {
+      const bound = normalizeConfidentialBigInt(gamma, 'gamma');
+      const mask = normalizeBigIntVec(y, 'y');
+      return validScalarParams(params) && mask.length === params.n2 && bigintAllBounded(mask, bound);
+    } catch {
+      return false;
+    }
+  }
+
+  export function validResponse(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    challenge: number,
+    z: BigIntVecInput
+  ): boolean {
+    try {
+      if (challenge !== 0 && challenge !== 1) {
+        return false;
+      }
+      const bound = normalizeConfidentialBigInt(gamma, 'gamma') + BigInt(challenge) * 4n * params.beta;
+      const response = normalizeBigIntVec(z, 'z');
+      return (
+        validScalarParams(params) &&
+        response.length === params.n2 &&
+        bigintAllBounded(response, bound)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function relation(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    r: BigIntVecInput
+  ): boolean {
+    try {
+      const commitment = normalizeBigIntVec(c, 'c');
+      return (
+        commitment.length === params.m &&
+        validCommitKey(params, ck) &&
+        validWitness(params, r) &&
+        randCommit(params, ck, r).every((value, index) => value === commitment[index])
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function sigmaCommit(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    y: BigIntVecInput
+  ): BigIntVec {
+    return randCommit(params, ck, y);
+  }
+
+  export function sigmaRespond(r: BigIntVecInput, y: BigIntVecInput, challenge: number): BigIntVec {
+    if (challenge !== 0 && challenge !== 1) {
+      throw new Error('challenge must be binary');
+    }
+    const witness = normalizeBigIntVec(r, 'r');
+    const mask = normalizeBigIntVec(y, 'y');
+    return bigintVecAdd(mask, bigintScalarMult(BigInt(challenge), witness));
+  }
+
+  export function fsRounds(): number {
+    return CT_FS_ROUNDS;
+  }
+
+  export function fsFields(
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    as: BigIntMatrixInput
+  ): BigIntVec {
+    const key = normalizeBigIntMatrix(ck, 'ck');
+    const commitment = normalizeBigIntVec(c, 'c');
+    const announcements = normalizeBigIntMatrix(as, 'as');
+    return [bigintMatrixSum(key), bigintSum(commitment), bigintMatrixSum(announcements)];
+  }
+
+  export function canonicalChallenge(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    a: BigIntVecInput
+  ): number {
+    if (!validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    return binaryFsChallenge(CT_FS_BALANCE_DOMAIN, fsFields(ck, c, [a]), 0);
+  }
+
+  export function fsChallenges(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    as: BigIntMatrixInput,
+    rounds: number = CT_FS_ROUNDS
+  ): number[] {
+    assertSafeArrayLength(rounds, 'rounds');
+    if (!validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    const fields = fsFields(ck, c, as);
+    return Array.from({ length: rounds }, (_, round) =>
+      binaryFsChallenge(CT_FS_BALANCE_DOMAIN, fields, round)
+    );
+  }
+
+  export function sigmaVerify(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    a: BigIntVecInput,
+    challenge: number,
+    z: BigIntVecInput
+  ): boolean {
+    try {
+      const commitment = normalizeBigIntVec(c, 'c');
+      const announcement = normalizeBigIntVec(a, 'a');
+      const responseCommitment = randCommit(params, ck, z);
+      const expected = bigintVecMod(
+        bigintVecAdd(announcement, bigintScalarMult(BigInt(challenge), commitment)),
+        params.q
+      );
+      return (
+        commitment.length === params.m &&
+        announcement.length === params.m &&
+        validResponse(params, gamma, challenge, z) &&
+        responseCommitment.every((value, index) => value === expected[index])
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function fsProve(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    r: BigIntVecInput,
+    ys: BigIntMatrixInput
+  ): BigIntBalanceProof | null {
+    try {
+      const masks = normalizeBigIntMatrix(ys, 'ys');
+      if (
+        masks.length !== CT_FS_ROUNDS ||
+        !relation(params, ck, c, r) ||
+        !masks.every((mask) => validMask(params, gamma, mask))
+      ) {
+        return null;
+      }
+      const as = masks.map((mask) => sigmaCommit(params, ck, mask));
+      const challenges = fsChallenges(params, ck, c, as);
+      const zs = masks.map((mask, index) => sigmaRespond(r, mask, challenges[index]));
+      if (!zs.every((response, index) => validResponse(params, gamma, challenges[index], response))) {
+        return null;
+      }
+      return { as, zs };
+    } catch {
+      return null;
+    }
+  }
+
+  export function fsVerify(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    proof: BigIntBalanceProof
+  ): boolean {
+    try {
+      const as = normalizeBigIntMatrix(proof.as, 'proof.as');
+      const zs = normalizeBigIntMatrix(proof.zs, 'proof.zs');
+      if (
+        as.length !== CT_FS_ROUNDS ||
+        zs.length !== CT_FS_ROUNDS ||
+        !validCommitKey(params, ck)
+      ) {
+        return false;
+      }
+      const challenges = fsChallenges(params, ck, c, as);
+      return as.every((announcement, index) =>
+        sigmaVerify(params, gamma, ck, c, announcement, challenges[index], zs[index])
+      );
     } catch {
       return false;
     }

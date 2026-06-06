@@ -320,6 +320,11 @@ jobs:
           node scripts/generate_confidential_bignum_vectors.mjs
           git diff --exit-code -- tests/fixtures/confidential-bignum-vectors.json
 
+      - name: Check confidential BigInt balance vectors
+        run: |
+          node scripts/generate_confidential_bigint_balance_vectors.mjs
+          git diff --exit-code -- tests/fixtures/confidential-bigint-balance-vectors.json
+
       - name: Check confidential Merkle vectors
         run: |
           node scripts/generate_confidential_merkle_vectors.mjs
