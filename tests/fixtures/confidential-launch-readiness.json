@@ -158,7 +158,7 @@
       "id": "ledger_scaffold_retirement_and_service_integration",
       "category": "ledger",
       "status": "open",
-      "summary": "The cryptographic Merkle verifier is the production target, but scaffold compatibility APIs remain and real consensus/indexer services are not yet forced onto accepted-root windows.",
+      "summary": "The cryptographic Merkle verifier is the production target, and native scaffold compatibility commands now require ISABELLA_ENABLE_SCAFFOLD_COMPAT=1 in default launch mode. Explicit scaffold SDK compatibility APIs remain, and real consensus/indexer services are not yet forced onto accepted-root windows.",
       "acceptanceGate": "Retire or isolate scaffold compatibility APIs from launch builds, wire consensus/indexer callers to depth-tagged accepted roots, and expand generated/native Merkle fuzz coverage.",
       "evidence": [
         {
@@ -174,7 +174,16 @@
           "snippets": [
             "\"ct-prove-scaffold\"",
             "\"ct-verify-scaffold\"",
-            "\"ct-ledger-step-verify-scaffold\""
+            "\"ct-ledger-step-verify-scaffold\"",
+            "ISABELLA_ENABLE_SCAFFOLD_COMPAT"
+          ]
+        },
+        {
+          "file": "scripts/check_confidential_scaffold_quarantine.py",
+          "snippets": [
+            "ISABELLA_ENABLE_SCAFFOLD_COMPAT",
+            "excluded from launch builds",
+            "default launch mode requires explicit scaffold opt-in"
           ]
         },
         {

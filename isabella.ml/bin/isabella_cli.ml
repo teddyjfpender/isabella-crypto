@@ -1377,6 +1377,17 @@ let output_error msg =
   | Human -> Printf.eprintf "Error: %s\n" msg
   | Json -> Printf.printf "{\"error\":\"%s\"}\n" msg
 
+let scaffold_compat_enabled () =
+  match Sys.getenv_opt "ISABELLA_ENABLE_SCAFFOLD_COMPAT" with
+  | Some "1" | Some "true" -> true
+  | _ -> false
+
+let require_scaffold_compat action =
+  if scaffold_compat_enabled () then action ()
+  else
+    output_error
+      "Scaffold compatibility commands require ISABELLA_ENABLE_SCAFFOLD_COMPAT=1 and are excluded from launch builds"
+
 let benchmark_bool warmup iterations verify =
   let run_once () =
     let start = now_ns () in
@@ -3557,13 +3568,13 @@ let show_help () =
   print_endline "  ct-nullifier-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify repeated-round deterministic nullifier proof";
   print_endline "  ct-member-prove M N2 Q BETA LEDGER C   Build explicit ledger membership proof";
   print_endline "  ct-member-verify M N2 Q BETA LEDGER C  Verify explicit ledger membership proof";
-  print_endline "  ct-ledger-step-verify-scaffold ... Verify scaffold ledger-step validity from verified input notes";
-  print_endline "  ct-prove-scaffold ...  Build scaffold confidential-transaction proof over the algebraic ledger hash";
+  print_endline "  ct-ledger-step-verify-scaffold ... Verify scaffold ledger-step validity from verified input notes (requires ISABELLA_ENABLE_SCAFFOLD_COMPAT=1)";
+  print_endline "  ct-prove-scaffold ...  Build scaffold confidential-transaction proof over the algebraic ledger hash (requires ISABELLA_ENABLE_SCAFFOLD_COMPAT=1)";
   print_endline "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership";
-  print_endline "  ct-verify-scaffold ... Verify scaffold confidential-transaction proof over the algebraic ledger hash";
+  print_endline "  ct-verify-scaffold ... Verify scaffold confidential-transaction proof over the algebraic ledger hash (requires ISABELLA_ENABLE_SCAFFOLD_COMPAT=1)";
   print_endline "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify-merkle-envelope ... Verify context digest, expected policy, and Merkle transaction proof";
-  print_endline "  ct-verify-bench-scaffold I W ... Benchmark scaffold confidential-transaction verification natively";
+  print_endline "  ct-verify-bench-scaffold I W ... Benchmark scaffold confidential-transaction verification natively (requires ISABELLA_ENABLE_SCAFFOLD_COMPAT=1)";
   print_endline "";
   print_endline "Examples:";
   print_endline "  isabella_cli mod-centered 7 5";
@@ -3674,13 +3685,13 @@ let run_command cmd args =
   | "ct-nullifier-verify" -> cmd_ct_nullifier_verify args
   | "ct-member-prove" -> cmd_ct_member_prove args
   | "ct-member-verify" -> cmd_ct_member_verify args
-  | "ct-ledger-step-verify-scaffold" -> cmd_ct_ledger_step_verify_scaffold args
-  | "ct-prove-scaffold" -> cmd_ct_prove_scaffold args
+  | "ct-ledger-step-verify-scaffold" -> require_scaffold_compat (fun () -> cmd_ct_ledger_step_verify_scaffold args)
+  | "ct-prove-scaffold" -> require_scaffold_compat (fun () -> cmd_ct_prove_scaffold args)
   | "ct-prove-merkle" -> cmd_ct_prove_merkle args
-  | "ct-verify-scaffold" -> cmd_ct_verify_scaffold args
+  | "ct-verify-scaffold" -> require_scaffold_compat (fun () -> cmd_ct_verify_scaffold args)
   | "ct-verify-merkle" -> cmd_ct_verify_merkle args
   | "ct-verify-merkle-envelope" -> cmd_ct_verify_merkle_envelope args
-  | "ct-verify-bench-scaffold" -> cmd_ct_verify_bench_scaffold args
+  | "ct-verify-bench-scaffold" -> require_scaffold_compat (fun () -> cmd_ct_verify_bench_scaffold args)
   | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
 
 let () =

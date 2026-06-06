@@ -17,6 +17,7 @@ import Data.Bits ((.&.))
 import Data.Char (ord)
 import Data.List (intercalate, sort, zip4)
 import GHC.Clock (getMonotonicTimeNSec)
+import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
 data OutputFormat = Human | Json
@@ -99,13 +100,13 @@ runCommand format cmd args = case cmd of
     "ct-nullifier-verify" -> cmdCtNullifierVerify format args
     "ct-member-prove" -> cmdCtMemberProve format args
     "ct-member-verify" -> cmdCtMemberVerify format args
-    "ct-ledger-step-verify-scaffold" -> cmdCtLedgerStepVerifyScaffold format args
-    "ct-prove-scaffold" -> cmdCtProveScaffold format args
+    "ct-ledger-step-verify-scaffold" -> runScaffoldCompat format (cmdCtLedgerStepVerifyScaffold format args)
+    "ct-prove-scaffold" -> runScaffoldCompat format (cmdCtProveScaffold format args)
     "ct-prove-merkle" -> cmdCtProveMerkle format args
-    "ct-verify-scaffold" -> cmdCtVerifyScaffold format args
+    "ct-verify-scaffold" -> runScaffoldCompat format (cmdCtVerifyScaffold format args)
     "ct-verify-merkle" -> cmdCtVerifyMerkle format args
     "ct-verify-merkle-envelope" -> cmdCtVerifyMerkleEnvelope format args
-    "ct-verify-bench-scaffold" -> cmdCtVerifyBenchScaffold format args
+    "ct-verify-bench-scaffold" -> runScaffoldCompat format (cmdCtVerifyBenchScaffold format args)
     _ -> putStrLn $ "Unknown command: " ++ cmd ++ "\nUse --help for usage."
 
 -- Parse helpers
@@ -374,6 +375,18 @@ outputBenchStats Json _ stats =
 outputError :: OutputFormat -> String -> IO ()
 outputError Human msg = putStrLn $ "Error: " ++ msg
 outputError Json msg = putStrLn $ "{\"error\":" ++ jsonString msg ++ "}"
+
+scaffoldCompatEnabled :: IO Bool
+scaffoldCompatEnabled = do
+    value <- lookupEnv "ISABELLA_ENABLE_SCAFFOLD_COMPAT"
+    pure (value == Just "1" || value == Just "true")
+
+runScaffoldCompat :: OutputFormat -> IO () -> IO ()
+runScaffoldCompat format action = do
+    enabled <- scaffoldCompatEnabled
+    if enabled
+        then action
+        else outputError format "Scaffold compatibility commands require ISABELLA_ENABLE_SCAFFOLD_COMPAT=1 and are excluded from launch builds"
 
 outputUsage :: OutputFormat -> String -> IO ()
 outputUsage Human msg = putStrLn msg

@@ -116,6 +116,9 @@ def check_native_cli(manifest: dict[str, Any]) -> dict[str, int]:
         native.get("scaffoldCommands"),
         "nativeCli.scaffoldCommands",
     )
+    scaffold_opt_in_env = native.get("scaffoldOptInEnv")
+    if scaffold_opt_in_env != "ISABELLA_ENABLE_SCAFFOLD_COMPAT":
+        fail("nativeCli.scaffoldOptInEnv must be ISABELLA_ENABLE_SCAFFOLD_COMPAT")
     retired_commands = require_string_list(
         native.get("retiredCommands"),
         "nativeCli.retiredCommands",
@@ -127,6 +130,7 @@ def check_native_cli(manifest: dict[str, Any]) -> dict[str, int]:
         missing = sorted(command for command in required_commands if command not in commands)
         if missing:
             fail(f"{path.relative_to(ROOT)} is missing native confidential commands: {missing}")
+        require_snippet(path, scaffold_opt_in_env, "native scaffold opt-in guard")
         retired_present = sorted(command for command in retired_commands if command in commands)
         if retired_present:
             fail(f"{path.relative_to(ROOT)} reintroduces retired scaffold commands: {retired_present}")

@@ -253,7 +253,8 @@ The formalization still needs these before production:
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.
 5. Finish the Merkle-default migration in consensus/product callers, retire the
-   remaining algebraic scaffold compatibility APIs, replace the
+   remaining algebraic scaffold compatibility APIs beyond the current native
+   `ISABELLA_ENABLE_SCAFFOLD_COMPAT=1` audit opt-in, replace the
    hand-maintained native transaction digest/envelope command wrappers with
    generated or vector-locked surfaces, broaden native transaction-level
    negative/fuzz conformance for Merkle proofs, and wire the accepted-root

@@ -35,6 +35,7 @@ const bigintRangeVectorsPath = path.join(projectRoot, 'tests/fixtures/confidenti
 const bigintNullifierVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-nullifier-vectors.json');
 const ghcFallbackBinary = path.join('/tmp', `isabella-hs-validate-cli-${process.pid}`);
 const ghcFallbackBuildDir = path.join('/tmp', `isabella-hs-validate-build-${process.pid}`);
+const scaffoldCompatEnv = { ISABELLA_ENABLE_SCAFFOLD_COMPAT: '1' };
 let cachedHaskellCli: string | null | undefined;
 
 type JsonEnvelope<T> = { result: T } | { error: string };
@@ -100,9 +101,9 @@ function parseResult<T>(output: string): T {
   return (parseJson<JsonEnvelope<T>>(output) as { result: T }).result;
 }
 
-function tryParseJson<T>(args: string[]): T | null {
+function tryParseJson<T>(args: string[], extraEnv: Record<string, string> = {}): T | null {
   try {
-    return parseJson<T>(runHaskell(args));
+    return parseJson<T>(runHaskell(args, extraEnv));
   } catch (error) {
     if (error instanceof Error && error.message.includes('Haskell CLI returned an error')) {
       return null;
@@ -111,9 +112,9 @@ function tryParseJson<T>(args: string[]): T | null {
   }
 }
 
-function tryParseResult<T>(args: string[]): T | null {
+function tryParseResult<T>(args: string[], extraEnv: Record<string, string> = {}): T | null {
   try {
-    return parseResult<T>(runHaskell(args));
+    return parseResult<T>(runHaskell(args, extraEnv));
   } catch (error) {
     if (error instanceof Error && error.message.includes('Haskell CLI returned an error')) {
       return null;
@@ -273,7 +274,7 @@ function resolveHaskellCli(): string | null {
   }
 }
 
-function runHaskell(args: string[]): string {
+function runHaskell(args: string[], extraEnv: Record<string, string> = {}): string {
   const binary = resolveHaskellCli();
 
   if (binary) {
@@ -281,6 +282,7 @@ function runHaskell(args: string[]): string {
       cwd: haskellDir,
       encoding: 'utf8',
       timeout: 30000,
+      env: { ...process.env, ...extraEnv },
     }).trim();
   }
 
@@ -288,6 +290,7 @@ function runHaskell(args: string[]): string {
     cwd: haskellDir,
     encoding: 'utf8',
     timeout: 30000,
+    env: { ...process.env, ...extraEnv },
   }).trim();
 }
 
@@ -1251,22 +1254,22 @@ assert.equal(
 console.log('validate-haskell: confidential range shared surface passed');
 const listedCrProof = listRangeProof(crProof);
 const crCliAcceptsSdkProof = tryParseResult<boolean>([
-      'cr-verify',
-      crParamsCase.m.toString(),
-      crParamsCase.n2.toString(),
-      crParamsCase.q.toString(),
-      crParamsCase.beta.toString(),
-      crParamsCase.gamma.toString(),
-      crRangeK.toString(),
-      JSON.stringify(crKey),
-      JSON.stringify(crAmountCommit),
-      JSON.stringify(listedCrProof.bits),
-      JSON.stringify(listedCrProof.comps),
-      JSON.stringify(listedCrProof.amountAs),
-      JSON.stringify(listedCrProof.amountZs),
-      JSON.stringify(listedCrProof.pairAss),
-      JSON.stringify(listedCrProof.pairZss),
-    ]);
+  'cr-verify',
+  crParamsCase.m.toString(),
+  crParamsCase.n2.toString(),
+  crParamsCase.q.toString(),
+  crParamsCase.beta.toString(),
+  crParamsCase.gamma.toString(),
+  crRangeK.toString(),
+  JSON.stringify(crKey),
+  JSON.stringify(crAmountCommit),
+  JSON.stringify(listedCrProof.bits),
+  JSON.stringify(listedCrProof.comps),
+  JSON.stringify(listedCrProof.amountAs),
+  JSON.stringify(listedCrProof.amountZs),
+  JSON.stringify(listedCrProof.pairAss),
+  JSON.stringify(listedCrProof.pairZss),
+]);
 if (crCliAcceptsSdkProof !== null) {
   assert.equal(crCliAcceptsSdkProof, true, 'cr-verify Haskell CLI accepts SDK proofs');
 }
@@ -1885,6 +1888,12 @@ assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'functi
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'Merkle ledger-step export');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValidScaffold, 'function', 'explicit scaffold ledger-step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidScaffold, 'function', 'explicit scaffold semantic-step export');
+const haskellScaffoldDefault = JSON.parse(runHaskell(['ct-verify-scaffold'])) as { error?: string };
+assert.match(
+  haskellScaffoldDefault.error ?? '',
+  /ISABELLA_ENABLE_SCAFFOLD_COMPAT/,
+  'ct-verify-scaffold Haskell default launch mode requires explicit scaffold opt-in'
+);
 
 console.log('validate-haskell: confidential nullifier and membership shared surfaces passed');
 
@@ -1963,46 +1972,46 @@ const listedCtBalance = listBalanceProof(listedCtProof.balance);
 const listedCtOut1Range = listRangeProof(listedCtProof.out1Range);
 const listedCtOut2Range = listRangeProof(listedCtProof.out2Range);
 const ctCliAcceptsSdkProof = tryParseResult<boolean>([
-      'ct-verify-scaffold',
-      ctParamsCase.m.toString(),
-      ctParamsCase.n2.toString(),
-      ctParamsCase.q.toString(),
-      ctParamsCase.beta.toString(),
-      ctParamsCase.gamma.toString(),
-      ctOut1Bits.length.toString(),
-      JSON.stringify(ctCk),
-      JSON.stringify(ctNk),
-      JSON.stringify(ctLedger),
-      JSON.stringify(ctSpent),
-      JSON.stringify(ctCIn1),
-      JSON.stringify(ctCIn2),
-      JSON.stringify(ctCOut1),
-      JSON.stringify(ctCOut2),
-      JSON.stringify(ctNf1),
-      JSON.stringify(ctNf2),
-      JSON.stringify(listedCtIn1Nullifier.aCommits),
-      JSON.stringify(listedCtIn1Nullifier.aNullifiers),
-      JSON.stringify(listedCtIn1Nullifier.zMsgs),
-      JSON.stringify(listedCtIn1Nullifier.zRands),
-      JSON.stringify(listedCtIn2Nullifier.aCommits),
-      JSON.stringify(listedCtIn2Nullifier.aNullifiers),
-      JSON.stringify(listedCtIn2Nullifier.zMsgs),
-      JSON.stringify(listedCtIn2Nullifier.zRands),
-      JSON.stringify(listedCtBalance.as),
-      JSON.stringify(listedCtBalance.zs),
-      JSON.stringify(listedCtOut1Range.bits),
-      JSON.stringify(listedCtOut1Range.comps),
-      JSON.stringify(listedCtOut1Range.amountsA),
-      JSON.stringify(listedCtOut1Range.amountsZ),
-      JSON.stringify(listedCtOut1Range.pairAss),
-      JSON.stringify(listedCtOut1Range.pairZss),
-      JSON.stringify(listedCtOut2Range.bits),
-      JSON.stringify(listedCtOut2Range.comps),
-      JSON.stringify(listedCtOut2Range.amountsA),
-      JSON.stringify(listedCtOut2Range.amountsZ),
-      JSON.stringify(listedCtOut2Range.pairAss),
-      JSON.stringify(listedCtOut2Range.pairZss),
-    ]);
+  'ct-verify-scaffold',
+  ctParamsCase.m.toString(),
+  ctParamsCase.n2.toString(),
+  ctParamsCase.q.toString(),
+  ctParamsCase.beta.toString(),
+  ctParamsCase.gamma.toString(),
+  ctOut1Bits.length.toString(),
+  JSON.stringify(ctCk),
+  JSON.stringify(ctNk),
+  JSON.stringify(ctLedger),
+  JSON.stringify(ctSpent),
+  JSON.stringify(ctCIn1),
+  JSON.stringify(ctCIn2),
+  JSON.stringify(ctCOut1),
+  JSON.stringify(ctCOut2),
+  JSON.stringify(ctNf1),
+  JSON.stringify(ctNf2),
+  JSON.stringify(listedCtIn1Nullifier.aCommits),
+  JSON.stringify(listedCtIn1Nullifier.aNullifiers),
+  JSON.stringify(listedCtIn1Nullifier.zMsgs),
+  JSON.stringify(listedCtIn1Nullifier.zRands),
+  JSON.stringify(listedCtIn2Nullifier.aCommits),
+  JSON.stringify(listedCtIn2Nullifier.aNullifiers),
+  JSON.stringify(listedCtIn2Nullifier.zMsgs),
+  JSON.stringify(listedCtIn2Nullifier.zRands),
+  JSON.stringify(listedCtBalance.as),
+  JSON.stringify(listedCtBalance.zs),
+  JSON.stringify(listedCtOut1Range.bits),
+  JSON.stringify(listedCtOut1Range.comps),
+  JSON.stringify(listedCtOut1Range.amountsA),
+  JSON.stringify(listedCtOut1Range.amountsZ),
+  JSON.stringify(listedCtOut1Range.pairAss),
+  JSON.stringify(listedCtOut1Range.pairZss),
+  JSON.stringify(listedCtOut2Range.bits),
+  JSON.stringify(listedCtOut2Range.comps),
+  JSON.stringify(listedCtOut2Range.amountsA),
+  JSON.stringify(listedCtOut2Range.amountsZ),
+  JSON.stringify(listedCtOut2Range.pairAss),
+  JSON.stringify(listedCtOut2Range.pairZss),
+], scaffoldCompatEnv);
 assert.equal(ctCliAcceptsSdkProof, true, 'ct-verify-scaffold Haskell CLI accepts SDK proofs');
 
 const ctMerkleRoot = sdk.ConfidentialTransaction.merkleLedgerRoot(ctLedger);

@@ -70,6 +70,7 @@
       "ct-verify-scaffold",
       "ct-verify-bench-scaffold"
     ],
+    "scaffoldOptInEnv": "ISABELLA_ENABLE_SCAFFOLD_COMPAT",
     "retiredCommands": [
       "ct-prove",
       "ct-verify",

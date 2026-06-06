@@ -1750,6 +1750,12 @@ assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'functi
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'Merkle ledger-step export');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValidScaffold, 'function', 'explicit scaffold ledger-step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidScaffold, 'function', 'explicit scaffold semantic-step export');
+const ocamlScaffoldDefault = parseCliResult<{ error?: string }>(runCli(['ct-verify-scaffold']));
+assert.match(
+  ocamlScaffoldDefault.error ?? '',
+  /ISABELLA_ENABLE_SCAFFOLD_COMPAT/,
+  'ct-verify-scaffold OCaml default launch mode requires explicit scaffold opt-in'
+);
 
 console.log('validate-ocaml: confidential nullifier and membership shared surfaces passed');
 

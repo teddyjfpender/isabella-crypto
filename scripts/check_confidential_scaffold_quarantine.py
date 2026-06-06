@@ -2,10 +2,11 @@
 """Validate confidential-transfer scaffold quarantine.
 
 The algebraic ledger transaction verifier remains available for compatibility
-and audit tests, but production-facing validation must only reach it through
-explicit scaffold-native aliases. This gate requires those aliases, rejects
-legacy CLI spellings in production-facing scripts and validators, and verifies
-that the native CLIs no longer dispatch ambiguous scaffold command names.
+and audit tests, but launch/default native CLIs must not expose it without an
+explicit scaffold opt-in. This gate requires explicit scaffold-native aliases,
+requires the opt-in guard, rejects legacy CLI spellings in production-facing
+scripts and validators, and verifies that the native CLIs no longer dispatch
+ambiguous scaffold command names.
 """
 
 from __future__ import annotations
@@ -89,6 +90,8 @@ def main() -> None:
         require_snippet(path, "ct-verify-scaffold")
         require_snippet(path, "ct-verify-bench-scaffold")
         require_snippet(path, "ct-ledger-step-verify-scaffold")
+        require_snippet(path, "ISABELLA_ENABLE_SCAFFOLD_COMPAT")
+        require_snippet(path, "excluded from launch builds")
         forbid_snippet(path, '"ct-prove"')
         forbid_snippet(path, '"ct-verify"')
         forbid_snippet(path, '"ct-verify-bench"')
@@ -102,8 +105,12 @@ def main() -> None:
     require_snippet(ts_cli, "'ct-prove-scaffold'")
     require_snippet(ts_cli, "export function ctVerifyScaffold")
     require_snippet(ts_cli, "'ct-verify-scaffold'")
+    require_snippet(ts_cli, "ISABELLA_ENABLE_SCAFFOLD_COMPAT: '1'")
     forbid_snippet(ts_cli, "export const ctProve =")
     forbid_snippet(ts_cli, "export const ctVerify =")
+    for path in (ROOT / "tests" / "src" / "validate-ocaml.ts", ROOT / "tests" / "src" / "validate-haskell.ts"):
+        require_snippet(path, "ISABELLA_ENABLE_SCAFFOLD_COMPAT")
+        require_snippet(path, "default launch mode requires explicit scaffold opt-in")
     require_snippet(ts_sdk, "export function ledgerStepValidScaffold")
     require_snippet(ts_sdk, "export function ledgerStepValid")
     forbid_snippet(ts_sdk, "ctLedgerStepValid(")

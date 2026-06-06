@@ -24,7 +24,11 @@ const ocamlCliBinaryShell = JSON.stringify(ocamlCliBinary);
 /**
  * Run the Isabella OCaml CLI with given arguments
  */
-export function runCli(args: string[], json: boolean = true): string {
+export function runCli(
+  args: string[],
+  json: boolean = true,
+  extraEnv: Record<string, string> = {}
+): string {
   const allArgs = json ? ['--json', ...args] : args;
   try {
     const result = execSync(
@@ -33,6 +37,7 @@ export function runCli(args: string[], json: boolean = true): string {
         encoding: 'utf-8',
         shell: '/bin/bash',
         timeout: 30000,
+        env: { ...process.env, ...extraEnv },
       }
     );
     return result.trim();
@@ -1497,7 +1502,7 @@ export function ctProveScaffold(
     JSON.stringify(yOut1Pairs),
     JSON.stringify(yOut2),
     JSON.stringify(yOut2Pairs),
-  ]);
+  ], true, { ISABELLA_ENABLE_SCAFFOLD_COMPAT: '1' });
   return output === 'null' ? null : parseCliResult<TransactionProof>(output);
 }
 
@@ -1820,7 +1825,8 @@ function ctVerifyWithCommand(
   cOut2: number[],
   nf1: number[],
   nf2: number[],
-  proof: TransactionProof | MerkleTransactionProof
+  proof: TransactionProof | MerkleTransactionProof,
+  extraEnv: Record<string, string> = {}
 ): boolean {
   const output = runCli([
     command,
@@ -1843,7 +1849,7 @@ function ctVerifyWithCommand(
       nf2,
       proof
     ),
-  ]);
+  ], true, extraEnv);
   return parseCliBool(output);
 }
 
@@ -1884,7 +1890,8 @@ export function ctVerifyScaffold(
     cOut2,
     nf1,
     nf2,
-    proof
+    proof,
+    { ISABELLA_ENABLE_SCAFFOLD_COMPAT: '1' }
   );
 }
 
