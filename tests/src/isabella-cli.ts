@@ -1133,6 +1133,12 @@ export interface TransactionContextPolicy {
   publicFee: number;
 }
 
+export interface WalletProofRequest {
+  context: TransactionContext;
+  acceptedRoots: string[];
+  spentNullifiers: number[][];
+}
+
 export function ctNullifier(
   m: number,
   n2: number,
@@ -1336,6 +1342,28 @@ export function ctTransactionContext(
     JSON.stringify(cOut2),
     JSON.stringify(nf1),
     JSON.stringify(nf2),
+  ]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctWalletProofRequestDigest(request: WalletProofRequest): string {
+  const context = request.context;
+  const output = runCli([
+    'ct-wallet-proof-request-digest',
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root,
+    context.publicFee.toString(),
+    JSON.stringify(context.cIn1),
+    JSON.stringify(context.cIn2),
+    JSON.stringify(context.cOut1),
+    JSON.stringify(context.cOut2),
+    JSON.stringify(context.nf1),
+    JSON.stringify(context.nf2),
+    JSON.stringify(request.acceptedRoots),
+    JSON.stringify(request.spentNullifiers),
   ]);
   return parseCliResult<{ result: string }>(output).result;
 }

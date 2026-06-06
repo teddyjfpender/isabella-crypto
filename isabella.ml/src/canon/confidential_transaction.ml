@@ -103,6 +103,7 @@ let transaction_protocol_id = "ISABELLA-CT-SIS-NOTE"
 let transaction_context_tag = 0
 let transaction_merkle_proof_tag = 1
 let transaction_envelope_tag = 2
+let transaction_wallet_proof_request_tag = 3
 
 let require_nonnegative label value =
   if value < 0 then invalid_arg (label ^ " must be non-negative")
@@ -151,6 +152,38 @@ let encode_transaction_digest_vec label digests =
       (List.mapi
          (fun index digest -> encode_transaction_digest (Printf.sprintf "%s[%d]" label index) digest)
          digests)
+
+let rec compare_int_lists left right =
+  match left, right with
+  | [], [] -> 0
+  | [], _ -> -1
+  | _, [] -> 1
+  | l :: ls, r :: rs ->
+    if l < r then -1
+    else if l > r then 1
+    else compare_int_lists ls rs
+
+let require_sorted_unique compare label values =
+  let rec loop previous = function
+    | [] -> ()
+    | value :: rest ->
+      (match previous with
+       | Some p when compare p value >= 0 ->
+         invalid_arg (label ^ " must be sorted with no duplicates")
+       | _ -> loop (Some value) rest)
+  in
+  loop None values
+
+let require_canonical_digest_set label digests =
+  if digests = [] then invalid_arg (label ^ " must not be empty");
+  List.iteri
+    (fun index digest ->
+       ignore (encode_transaction_digest (Printf.sprintf "%s[%d]" label index) digest))
+    digests;
+  require_sorted_unique String.compare label digests
+
+let require_canonical_int_matrix_set label rows =
+  require_sorted_unique compare_int_lists label rows
 
 let transaction_context_preimage
     protocol_version
@@ -273,6 +306,57 @@ let transaction_envelope_digest
   transaction_envelope_preimage
     context_digest protocol_version network_id asset_id ledger_epoch root public_fee
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof
+  |> Confidential_merkle.digest
+
+let transaction_wallet_proof_request_preimage
+    protocol_version
+    network_id
+    asset_id
+    ledger_epoch
+    root
+    public_fee
+    c_in1
+    c_in2
+    c_out1
+    c_out2
+    nf1
+    nf2
+    accepted_roots
+    spent_nullifiers =
+  require_canonical_digest_set "acceptedRoots" accepted_roots;
+  require_canonical_int_matrix_set "spentNullifiers" spent_nullifiers;
+  let context_digest =
+    transaction_context_preimage
+      protocol_version network_id asset_id ledger_epoch root public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+    |> Confidential_merkle.digest
+  in
+  if not (List.mem root accepted_roots) then
+    invalid_arg "context.root must be inside acceptedRoots";
+  if nf1 = nf2 then
+    invalid_arg "context nullifiers must be distinct";
+  if List.mem nf1 spent_nullifiers || List.mem nf2 spent_nullifiers then
+    invalid_arg "context nullifiers must be absent from spentNullifiers";
+  transaction_tagged_preimage
+    transaction_wallet_proof_request_tag
+    (encode_transaction_digest "contextDigest" context_digest
+     @ encode_transaction_digest_vec "acceptedRoots" accepted_roots
+     @ encode_transaction_mat spent_nullifiers)
+
+let transaction_wallet_proof_request_preimage_hex
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers =
+  transaction_wallet_proof_request_preimage
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers
+  |> Confidential_merkle.digest_hex
+
+let transaction_wallet_proof_request_digest
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers =
+  transaction_wallet_proof_request_preimage
+    protocol_version network_id asset_id ledger_epoch root public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers
   |> Confidential_merkle.digest
 
 let transaction_context_preimage_hex

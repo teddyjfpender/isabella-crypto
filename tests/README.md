@@ -113,9 +113,9 @@ The harnesses are repair-aware:
   network/asset/root policy before delegating to the Merkle proof verifier.
   The OCaml and Haskell CLIs expose `ct-verify-merkle-envelope`; the validators
   feed native context digests and native Merkle transaction proofs through that
-  command, check native proof/envelope digest parity against the pinned vectors,
-  and assert rejection for stale digests, wrong policy, nonzero public fees, and
-  context roots not matched by the Merkle proof.
+  command, check native proof/envelope/wallet-request digest parity against the
+  pinned vectors, and assert rejection for stale digests, wrong policy, nonzero
+  public fees, and context roots not matched by the Merkle proof.
 
 The harnesses compare the Haskell and OCaml CLIs against the built
 TypeScript SDK artifact in `isabella.ts/dist/`.

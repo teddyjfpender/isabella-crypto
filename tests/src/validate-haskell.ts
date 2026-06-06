@@ -966,6 +966,7 @@ const transactionVectors = JSON.parse(
 const [transactionContextVector] = transactionVectors.cases;
 const [transactionMerkleProofVector] = transactionVectors.merkleProofCases;
 const [transactionEnvelopeVector] = transactionVectors.envelopeCases;
+const [transactionWalletProofRequestVector] = transactionVectors.walletProofRequestCases;
 const transactionContext = transactionContextVector.context;
 assert.equal(
   parseResult<string>(
@@ -992,6 +993,37 @@ assert.equal(
   sdk.ConfidentialTransaction.transactionContextDigest(transactionContext),
   transactionContextVector.digest,
   'ct-transaction-context vector'
+);
+const haskellWalletProofRequest = transactionWalletProofRequestVector.request;
+const haskellWalletProofRequestContext = haskellWalletProofRequest.context;
+const haskellWalletProofRequestDigest = parseResult<string>(
+  runHaskell([
+    'ct-wallet-proof-request-digest',
+    haskellWalletProofRequestContext.protocolVersion.toString(),
+    haskellWalletProofRequestContext.networkId,
+    haskellWalletProofRequestContext.assetId.toString(),
+    haskellWalletProofRequestContext.ledgerEpoch.toString(),
+    haskellWalletProofRequestContext.root,
+    haskellWalletProofRequestContext.publicFee.toString(),
+    JSON.stringify(haskellWalletProofRequestContext.cIn1),
+    JSON.stringify(haskellWalletProofRequestContext.cIn2),
+    JSON.stringify(haskellWalletProofRequestContext.cOut1),
+    JSON.stringify(haskellWalletProofRequestContext.cOut2),
+    JSON.stringify(haskellWalletProofRequestContext.nf1),
+    JSON.stringify(haskellWalletProofRequestContext.nf2),
+    JSON.stringify(haskellWalletProofRequest.acceptedRoots),
+    JSON.stringify(haskellWalletProofRequest.spentNullifiers),
+  ])
+);
+assert.equal(
+  haskellWalletProofRequestDigest,
+  sdk.ConfidentialTransaction.transactionWalletProofRequestDigest(haskellWalletProofRequest),
+  'ct-wallet-proof-request-digest Haskell/TypeScript parity'
+);
+assert.equal(
+  haskellWalletProofRequestDigest,
+  transactionWalletProofRequestVector.digest,
+  'ct-wallet-proof-request-digest vector'
 );
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
@@ -1631,5 +1663,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 80 deterministic shared-surface cases plus native Merkle envelope mutation and randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest parity, Merkle envelope mutation, and randomized sampler bound checks.'
 );

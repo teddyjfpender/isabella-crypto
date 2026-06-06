@@ -756,10 +756,11 @@ Current status and roadmap:
   the TypeScript SDK. The stable semantic ledger-step API now defaults to the
   Merkle-backed verifier; scaffold ledger-step calls remain available only as
   explicit compatibility APIs until they are retired.
-- The TypeScript transaction vector fixture also pins wallet proof request
-  bytes for the SIS-note MVP: canonical context digest, accepted-root window,
-  and spent-nullifier snapshot. Native wallet-request parity and
-  consensus/indexer API contracts are still open production blockers.
+- The transaction vector fixture also pins wallet proof request bytes for the
+  SIS-note MVP: canonical context digest, accepted-root window, and
+  spent-nullifier snapshot. TypeScript, OCaml, and Haskell expose matching
+  digest APIs; consensus/indexer API contracts are still open production
+  blockers.
 - `bench/data/confidential-balance-realistic.json` records a 1024x1024
   `ct_sis_note_mvp_v0` balance proof-size/runtime benchmark; it is not a
   replacement for the external lattice-estimator and LaZer parameter gates.

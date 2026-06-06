@@ -22,12 +22,15 @@ module Canon.ZK.Confidential_Transaction
   , transactionContextTag
   , transactionMerkleProofTag
   , transactionEnvelopeTag
+  , transactionWalletProofRequestTag
   , transactionContextPreimageHex
   , transactionContextDigest
   , transactionMerkleProofPreimageHex
   , transactionMerkleProofDigest
   , transactionEnvelopePreimageHex
   , transactionEnvelopeDigest
+  , transactionWalletProofRequestPreimageHex
+  , transactionWalletProofRequestDigest
   , nullifier
   , validNullifierMask
   , sampleNullifierMask
@@ -188,6 +191,9 @@ transactionMerkleProofTag = 1
 transactionEnvelopeTag :: Int
 transactionEnvelopeTag = 2
 
+transactionWalletProofRequestTag :: Int
+transactionWalletProofRequestTag = 3
+
 transactionWord64LeBytes :: Word64 -> [Word8]
 transactionWord64LeBytes value =
   [ fromIntegral ((value `shiftR` (8 * i)) .&. 0xff)
@@ -276,6 +282,22 @@ encodeTransactionDigestVector label digests =
     [ encodeTransactionDigest (label ++ "[" ++ show index ++ "]") digest
     | (index, digest) <- zip [0 :: Int ..] digests
     ]
+
+requireSortedUnique :: Ord a => String -> [a] -> ()
+requireSortedUnique label values
+  | any (uncurry (>=)) (zip values (drop 1 values)) =
+      error (label ++ " must be sorted with no duplicates")
+  | otherwise = ()
+
+requireCanonicalDigestSet :: String -> [String] -> ()
+requireCanonicalDigestSet label digests
+  | null digests = error (label ++ " must not be empty")
+  | otherwise =
+      let digestBytes = encodeTransactionDigestVector label digests
+       in length digestBytes `seq` requireSortedUnique label digests
+
+requireCanonicalIntMatrixSet :: String -> [[Int]] -> ()
+requireCanonicalIntMatrixSet = requireSortedUnique
 
 transactionContextPreimage ::
   Int ->
@@ -463,6 +485,80 @@ transactionEnvelopeDigest contextDigest protocolVersion networkId assetId ledger
     transactionEnvelopePreimage
       contextDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
       cIn1 cIn2 cOut1 cOut2 nf1 nf2
+
+transactionWalletProofRequestPreimage ::
+  Int ->
+  String ->
+  Int ->
+  Int ->
+  String ->
+  Int ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [Int] ->
+  [String] ->
+  [[Int]] ->
+  [Word8]
+transactionWalletProofRequestPreimage
+  protocolVersion
+  networkId
+  assetId
+  ledgerEpoch
+  rt
+  publicFee
+  cIn1
+  cIn2
+  cOut1
+  cOut2
+  nf1
+  nf2
+  acceptedRoots
+  spentNullifiers =
+  requireCanonicalDigestSet "acceptedRoots" acceptedRoots `seq`
+  requireCanonicalIntMatrixSet "spentNullifiers" spentNullifiers `seq`
+  let contextDigest =
+        transactionContextDigest
+          protocolVersion networkId assetId ledgerEpoch rt publicFee
+          cIn1 cIn2 cOut1 cOut2 nf1 nf2
+   in if rt `notElem` acceptedRoots
+        then error "context.root must be inside acceptedRoots"
+        else
+          if nf1 == nf2
+            then error "context nullifiers must be distinct"
+            else
+              if nf1 `elem` spentNullifiers || nf2 `elem` spentNullifiers
+                then error "context nullifiers must be absent from spentNullifiers"
+                else
+                  transactionTaggedPreimage transactionWalletProofRequestTag $
+                    encodeTransactionDigest "contextDigest" contextDigest ++
+                    encodeTransactionDigestVector "acceptedRoots" acceptedRoots ++
+                    encodeTransactionMat spentNullifiers
+
+transactionWalletProofRequestPreimageHex ::
+  Int -> String -> Int -> Int -> String -> Int ->
+  [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
+  [String] -> [[Int]] -> String
+transactionWalletProofRequestPreimageHex protocolVersion networkId assetId ledgerEpoch rt publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots =
+  transactionDigestHex .
+    transactionWalletProofRequestPreimage
+      protocolVersion networkId assetId ledgerEpoch rt publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots
+
+transactionWalletProofRequestDigest ::
+  Int -> String -> Int -> Int -> String -> Int ->
+  [Int] -> [Int] -> [Int] -> [Int] -> [Int] -> [Int] ->
+  [String] -> [[Int]] -> String
+transactionWalletProofRequestDigest protocolVersion networkId assetId ledgerEpoch rt publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots =
+  transactionDigestHex .
+    RepeatedFS.sha3_256 .
+    transactionWalletProofRequestPreimage
+      protocolVersion networkId assetId ledgerEpoch rt publicFee
+      cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots
 
 validCommitment :: Commit.CommitParams -> [Int] -> Bool
 validCommitment p = Listvec.valid_vec (Commit.cp_m p)

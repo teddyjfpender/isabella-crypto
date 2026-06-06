@@ -35,6 +35,7 @@ import {
   ctNullifierVerify,
   ctProveMerkle,
   ctTransactionContext,
+  ctWalletProofRequestDigest,
   ctVerifyScaffold,
   ctVerifyMerkle,
   ctVerifyMerkleEnvelope,
@@ -875,6 +876,7 @@ const transactionVectors = JSON.parse(
 const [transactionContextVector] = transactionVectors.cases;
 const [transactionMerkleProofVector] = transactionVectors.merkleProofCases;
 const [transactionEnvelopeVector] = transactionVectors.envelopeCases;
+const [transactionWalletProofRequestVector] = transactionVectors.walletProofRequestCases;
 const transactionContext = transactionContextVector.context;
 assert.equal(
   ctTransactionContext(
@@ -898,6 +900,21 @@ assert.equal(
   sdk.ConfidentialTransaction.transactionContextDigest(transactionContext),
   transactionContextVector.digest,
   'ct-transaction-context vector'
+);
+const ocamlWalletProofRequestDigest = ctWalletProofRequestDigest(
+  transactionWalletProofRequestVector.request
+);
+assert.equal(
+  ocamlWalletProofRequestDigest,
+  sdk.ConfidentialTransaction.transactionWalletProofRequestDigest(
+    transactionWalletProofRequestVector.request
+  ),
+  'ct-wallet-proof-request-digest OCaml/TypeScript parity'
+);
+assert.equal(
+  ocamlWalletProofRequestDigest,
+  transactionWalletProofRequestVector.digest,
+  'ct-wallet-proof-request-digest vector'
 );
 logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
@@ -1506,5 +1523,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on 80 deterministic shared-surface cases plus native Merkle envelope mutation and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest parity, Merkle envelope mutation, and randomized sampler bound checks.'
 );

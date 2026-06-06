@@ -68,6 +68,7 @@ runCommand format cmd args = case cmd of
     "ct-transaction-context" -> cmdCtTransactionContext format args
     "ct-merkle-proof-digest" -> cmdCtMerkleProofDigest format args
     "ct-merkle-envelope-digest" -> cmdCtMerkleEnvelopeDigest format args
+    "ct-wallet-proof-request-digest" -> cmdCtWalletProofRequestDigest format args
     "ct-sample-opening" -> cmdCtSampleOpening format args
     "ct-sample-openings" -> cmdCtSampleOpenings format args
     "ct-nullifier" -> cmdCtNullifier format args
@@ -1313,6 +1314,72 @@ cmdCtMerkleEnvelopeDigest format
             _ -> outputError format "Expected context digest, context fields, and Merkle proof fields"
 cmdCtMerkleEnvelopeDigest format _ =
     outputUsage format "Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ..."
+
+cmdCtWalletProofRequestDigest :: OutputFormat -> [String] -> IO ()
+cmdCtWalletProofRequestDigest
+    format
+    [ protocolVersionStr
+    , networkId
+    , assetIdStr
+    , ledgerEpochStr
+    , rootDigest
+    , publicFeeStr
+    , cIn1Str
+    , cIn2Str
+    , cOut1Str
+    , cOut2Str
+    , nf1Str
+    , nf2Str
+    , acceptedRootsStr
+    , spentNullifiersStr
+    ] =
+    case
+        ( parseInt protocolVersionStr
+        , parseInt assetIdStr
+        , parseInt ledgerEpochStr
+        , parseInt publicFeeStr
+        , parseVec cIn1Str
+        , parseVec cIn2Str
+        , parseVec cOut1Str
+        , parseVec cOut2Str
+        , parseVec nf1Str
+        , parseVec nf2Str
+        , parseStringList acceptedRootsStr
+        , parseMat spentNullifiersStr
+        )
+    of
+        ( Just protocolVersion
+          , Just assetId
+          , Just ledgerEpoch
+          , Just publicFee
+          , Just cIn1
+          , Just cIn2
+          , Just cOut1
+          , Just cOut2
+          , Just nf1
+          , Just nf2
+          , Just acceptedRoots
+          , Just spentNullifiers
+          ) ->
+            outputStringResult format "ct_wallet_proof_request_digest = " $
+                ConfidentialTransaction.transactionWalletProofRequestDigest
+                    protocolVersion
+                    networkId
+                    assetId
+                    ledgerEpoch
+                    rootDigest
+                    publicFee
+                    cIn1
+                    cIn2
+                    cOut1
+                    cOut2
+                    nf1
+                    nf2
+                    acceptedRoots
+                    spentNullifiers
+        _ -> outputError format "Expected wallet proof request context, accepted roots, and spent nullifiers"
+cmdCtWalletProofRequestDigest format _ =
+    outputUsage format "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS SPENT_NULLIFIERS"
 
 cmdCtSampleOpening :: OutputFormat -> [String] -> IO ()
 cmdCtSampleOpening format [msgLenStr, randLenStr, boundStr] =

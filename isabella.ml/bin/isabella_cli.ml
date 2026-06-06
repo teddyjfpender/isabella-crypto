@@ -1294,6 +1294,39 @@ let cmd_ct_merkle_envelope_digest args =
   | _ ->
     output_error ("Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ ct_merkle_proof_args_usage)
 
+let cmd_ct_wallet_proof_request_digest args =
+  match args with
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root;
+     public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str;
+     accepted_roots_str; spent_nullifiers_str] ->
+    (match
+       parse_int protocol_version_str,
+       parse_int asset_id_str,
+       parse_int ledger_epoch_str,
+       parse_int public_fee_str,
+       parse_vec c_in1_str,
+       parse_vec c_in2_str,
+       parse_vec c_out1_str,
+       parse_vec c_out2_str,
+       parse_vec nf1_str,
+       parse_vec nf2_str,
+       parse_string_list accepted_roots_str,
+       parse_mat spent_nullifiers_str
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
+       Some accepted_roots, Some spent_nullifiers ->
+       (try
+          output_string_result
+            "ct_wallet_proof_request_digest"
+            (Confidential_transaction.transaction_wallet_proof_request_digest
+               protocol_version network_id asset_id ledger_epoch root public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots spent_nullifiers)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected wallet proof request context, accepted roots, and spent nullifiers")
+  | _ ->
+    output_error "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS SPENT_NULLIFIERS"
+
 (** {1 Confidential Transaction Commands} *)
 
 let cmd_ct_nullifier args =
@@ -2102,6 +2135,7 @@ let show_help () =
   print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2";
   print_endline "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes";
   print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
+  print_endline "  ct-wallet-proof-request-digest ... Hash canonical wallet proof request bytes";
   print_endline "";
   print_endline "Confidential Transaction Commands:";
   print_endline "  ct-sample-opening MSG_LEN RAND_LEN BOUND  Sample a bounded CSPRNG opening";
@@ -2203,6 +2237,7 @@ let run_command cmd args =
   | "ct-transaction-context" -> cmd_ct_transaction_context args
   | "ct-merkle-proof-digest" -> cmd_ct_merkle_proof_digest args
   | "ct-merkle-envelope-digest" -> cmd_ct_merkle_envelope_digest args
+  | "ct-wallet-proof-request-digest" -> cmd_ct_wallet_proof_request_digest args
   | "ct-sample-opening" -> cmd_ct_sample_opening args
   | "ct-sample-openings" -> cmd_ct_sample_openings args
   | "ct-nullifier" -> cmd_ct_nullifier args
