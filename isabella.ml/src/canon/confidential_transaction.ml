@@ -332,6 +332,12 @@ let valid_nullifier_mask p gamma y =
   Norms.all_bounded y.Commit_sis.open_msg gamma &&
   Norms.all_bounded y.Commit_sis.open_rand gamma
 
+let sample_nullifier_mask p gamma =
+  Confidential_sampling.opening p.Commit_sis.cp_n1 p.Commit_sis.cp_n2 gamma
+
+let sample_nullifier_masks p gamma rounds =
+  Confidential_sampling.openings rounds p.Commit_sis.cp_n1 p.Commit_sis.cp_n2 gamma
+
 let nullifier_response_bound p gamma challenge =
   gamma + (abs challenge * p.Commit_sis.cp_beta)
 

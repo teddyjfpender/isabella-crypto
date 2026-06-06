@@ -1,12 +1,13 @@
 -- | CLI command handlers
 module CLI.Commands (OutputFormat(..), runCommand) where
 
-import Control.Exception (evaluate)
+import Control.Exception (SomeException, catch, evaluate)
 import Control.Monad (replicateM, replicateM_)
 import qualified Canon.Commit_sis as Commit
 import qualified Canon.Confidential_balance as ConfidentialBalance
 import qualified Canon.Confidential_merkle as ConfidentialMerkle
 import qualified Canon.Confidential_range as ConfidentialRange
+import qualified Canon.Confidential_sampling as ConfidentialSampling
 import qualified Canon.Confidential_transaction as ConfidentialTransaction
 import qualified Canon.Dilithium as Dilithium
 import qualified Canon.Listvec as Listvec
@@ -44,6 +45,8 @@ runCommand format cmd args = case cmd of
     "cb-rand-commit" -> cmdCbRandCommit format args
     "cb-valid-witness" -> cmdCbValidWitness format args
     "cb-valid-mask" -> cmdCbValidMask format args
+    "cb-sample-mask" -> cmdCbSampleMask format args
+    "cb-sample-masks" -> cmdCbSampleMasks format args
     "cb-valid-response" -> cmdCbValidResponse format args
     "cb-balance-commitment" -> cmdCbBalanceCommitment format args
     "cb-canonical-challenge" -> cmdCbCanonicalChallenge format args
@@ -65,7 +68,11 @@ runCommand format cmd args = case cmd of
     "ct-transaction-context" -> cmdCtTransactionContext format args
     "ct-merkle-proof-digest" -> cmdCtMerkleProofDigest format args
     "ct-merkle-envelope-digest" -> cmdCtMerkleEnvelopeDigest format args
+    "ct-sample-opening" -> cmdCtSampleOpening format args
+    "ct-sample-openings" -> cmdCtSampleOpenings format args
     "ct-nullifier" -> cmdCtNullifier format args
+    "ct-sample-nullifier-mask" -> cmdCtSampleNullifierMask format args
+    "ct-sample-nullifier-masks" -> cmdCtSampleNullifierMasks format args
     "ct-nullifier-canonical-challenge" -> cmdCtNullifierCanonicalChallenge format args
     "ct-nullifier-prove" -> cmdCtNullifierProve format args
     "ct-nullifier-verify" -> cmdCtNullifierVerify format args
@@ -272,6 +279,31 @@ outputVecResult Json _ result = putStrLn $ "{\"result\":" ++ jsonVec result ++ "
 outputMatResult :: OutputFormat -> String -> [[Int]] -> IO ()
 outputMatResult Human label result = putStrLn $ label ++ show result
 outputMatResult Json _ result = putStrLn $ "{\"result\":" ++ jsonMat result ++ "}"
+
+jsonOpening :: Commit.CommitOpening -> String
+jsonOpening opening =
+    jsonObject
+        [ ("msg", jsonVec (Commit.open_msg opening))
+        , ("rand", jsonVec (Commit.open_rand opening))
+        ]
+
+jsonOpenings :: [Commit.CommitOpening] -> String
+jsonOpenings = ("[" ++) . (++ "]") . intercalate "," . map jsonOpening
+
+outputOpeningResult :: OutputFormat -> String -> Commit.CommitOpening -> IO ()
+outputOpeningResult Human label result = putStrLn $ label ++ jsonOpening result
+outputOpeningResult Json _ result = putStrLn $ "{\"result\":" ++ jsonOpening result ++ "}"
+
+outputOpeningsResult :: OutputFormat -> String -> [Commit.CommitOpening] -> IO ()
+outputOpeningsResult Human label result = putStrLn $ label ++ jsonOpenings result
+outputOpeningsResult Json _ result = putStrLn $ "{\"result\":" ++ jsonOpenings result ++ "}"
+
+handleSampleError :: OutputFormat -> SomeException -> IO ()
+handleSampleError format error_ = outputError format (show error_)
+
+outputSampleResult :: OutputFormat -> (a -> IO ()) -> IO a -> IO ()
+outputSampleResult format output action =
+    (action >>= output) `catch` handleSampleError format
 
 jsonCbParams :: Commit.CommitParams -> String
 jsonCbParams params =
@@ -908,6 +940,26 @@ cmdCbValidMask format [mStr, n2Str, qStr, betaStr, gammaStr, yStr] =
         _ -> outputError format "Expected params (M N2 Q BETA), gamma, and a mask vector"
 cmdCbValidMask format _ = outputUsage format "Usage: cb-valid-mask M N2 Q BETA GAMMA \"[y]\""
 
+cmdCbSampleMask :: OutputFormat -> [String] -> IO ()
+cmdCbSampleMask format [mStr, n2Str, qStr, betaStr, gammaStr] =
+    case (parseCbParams mStr n2Str qStr betaStr, parseInt gammaStr) of
+        (Just params, Just gamma) ->
+            outputSampleResult format
+                (outputVecResult format "sample_balance_mask = ")
+                (ConfidentialBalance.sampleMask params gamma)
+        _ -> outputError format "Expected params (M N2 Q BETA) and gamma"
+cmdCbSampleMask format _ = outputUsage format "Usage: cb-sample-mask M N2 Q BETA GAMMA"
+
+cmdCbSampleMasks :: OutputFormat -> [String] -> IO ()
+cmdCbSampleMasks format [mStr, n2Str, qStr, betaStr, gammaStr, roundsStr] =
+    case (parseCbParams mStr n2Str qStr betaStr, parseInt gammaStr, parseInt roundsStr) of
+        (Just params, Just gamma, Just rounds) ->
+            outputSampleResult format
+                (outputMatResult format "sample_balance_masks = ")
+                (ConfidentialBalance.sampleMasks params gamma rounds)
+        _ -> outputError format "Expected params (M N2 Q BETA), gamma, and rounds"
+cmdCbSampleMasks format _ = outputUsage format "Usage: cb-sample-masks M N2 Q BETA GAMMA ROUNDS"
+
 cmdCbValidResponse :: OutputFormat -> [String] -> IO ()
 cmdCbValidResponse format [mStr, n2Str, qStr, betaStr, gammaStr, challengeStr, zStr] =
     case (parseCbParams mStr n2Str qStr betaStr, parseInt gammaStr, parseInt challengeStr, parseVec zStr) of
@@ -1262,6 +1314,28 @@ cmdCtMerkleEnvelopeDigest format
 cmdCtMerkleEnvelopeDigest format _ =
     outputUsage format "Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ..."
 
+cmdCtSampleOpening :: OutputFormat -> [String] -> IO ()
+cmdCtSampleOpening format [msgLenStr, randLenStr, boundStr] =
+    case (parseInt msgLenStr, parseInt randLenStr, parseInt boundStr) of
+        (Just msgLen, Just randLen, Just bound) ->
+            outputSampleResult format
+                (outputOpeningResult format "sample_opening = ")
+                (ConfidentialSampling.sampleOpening msgLen randLen bound)
+        _ -> outputError format "Expected message length, randomness length, and bound"
+cmdCtSampleOpening format _ =
+    outputUsage format "Usage: ct-sample-opening MSG_LEN RAND_LEN BOUND"
+
+cmdCtSampleOpenings :: OutputFormat -> [String] -> IO ()
+cmdCtSampleOpenings format [countStr, msgLenStr, randLenStr, boundStr] =
+    case (parseInt countStr, parseInt msgLenStr, parseInt randLenStr, parseInt boundStr) of
+        (Just count, Just msgLen, Just randLen, Just bound) ->
+            outputSampleResult format
+                (outputOpeningsResult format "sample_openings = ")
+                (ConfidentialSampling.sampleOpenings count msgLen randLen bound)
+        _ -> outputError format "Expected count, message length, randomness length, and bound"
+cmdCtSampleOpenings format _ =
+    outputUsage format "Usage: ct-sample-openings COUNT MSG_LEN RAND_LEN BOUND"
+
 cmdCtNullifier :: OutputFormat -> [String] -> IO ()
 cmdCtNullifier format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =
     case (parseCbParams mStr n2Str qStr betaStr, parseMat nkStr, parseInt amountStr, parseVec randStr) of
@@ -1271,6 +1345,28 @@ cmdCtNullifier format [mStr, n2Str, qStr, betaStr, nkStr, amountStr, randStr] =
         _ -> outputError format "Expected params, nullifier key, scalar amount, and randomness vector"
 cmdCtNullifier format _ =
     outputUsage format "Usage: ct-nullifier M N2 Q BETA \"[[nk]]\" AMOUNT \"[rand]\""
+
+cmdCtSampleNullifierMask :: OutputFormat -> [String] -> IO ()
+cmdCtSampleNullifierMask format [mStr, n2Str, qStr, betaStr, gammaStr] =
+    case (parseCbParams mStr n2Str qStr betaStr, parseInt gammaStr) of
+        (Just params, Just gamma) ->
+            outputSampleResult format
+                (outputOpeningResult format "sample_nullifier_mask = ")
+                (ConfidentialTransaction.sampleNullifierMask params gamma)
+        _ -> outputError format "Expected params (M N2 Q BETA) and gamma"
+cmdCtSampleNullifierMask format _ =
+    outputUsage format "Usage: ct-sample-nullifier-mask M N2 Q BETA GAMMA"
+
+cmdCtSampleNullifierMasks :: OutputFormat -> [String] -> IO ()
+cmdCtSampleNullifierMasks format [mStr, n2Str, qStr, betaStr, gammaStr, roundsStr] =
+    case (parseCbParams mStr n2Str qStr betaStr, parseInt gammaStr, parseInt roundsStr) of
+        (Just params, Just gamma, Just rounds) ->
+            outputSampleResult format
+                (outputOpeningsResult format "sample_nullifier_masks = ")
+                (ConfidentialTransaction.sampleNullifierMasks params gamma rounds)
+        _ -> outputError format "Expected params (M N2 Q BETA), gamma, and rounds"
+cmdCtSampleNullifierMasks format _ =
+    outputUsage format "Usage: ct-sample-nullifier-masks M N2 Q BETA GAMMA ROUNDS"
 
 cmdCtNullifierCanonicalChallenge :: OutputFormat -> [String] -> IO ()
 cmdCtNullifierCanonicalChallenge format [mStr, n2Str, qStr, betaStr, ckStr, nkStr, cStr, nfStr, aCommitStr, aNullifierStr] =

@@ -64,6 +64,12 @@ let valid_balance_witness p r =
 let valid_balance_mask p gamma y =
   Listvec.valid_vec p.Commit_sis.cp_n2 y && Norms.all_bounded y gamma
 
+let sample_mask p gamma =
+  Confidential_sampling.int_vector p.Commit_sis.cp_n2 gamma
+
+let sample_masks p gamma rounds =
+  Confidential_sampling.int_vectors rounds p.Commit_sis.cp_n2 gamma
+
 let balance_response_bound p gamma challenge =
   gamma + (abs challenge * (4 * p.Commit_sis.cp_beta))
 

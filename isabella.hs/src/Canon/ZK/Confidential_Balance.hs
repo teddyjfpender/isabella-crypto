@@ -14,6 +14,8 @@ module Canon.ZK.Confidential_Balance
   , aggregateRandomness
   , validBalanceWitness
   , validBalanceMask
+  , sampleMask
+  , sampleMasks
   , balanceResponseBound
   , validBalanceChallenge
   , validBalanceResponse
@@ -29,6 +31,7 @@ module Canon.ZK.Confidential_Balance
   ) where
 
 import qualified Canon.Commit_sis as Commit
+import qualified Canon.Confidential_sampling as ConfidentialSampling
 import qualified Canon.Listvec as Listvec
 import qualified Canon.Norms as Norms
 import qualified Canon.ZK.Internal.RepeatedFS as RepeatedFS
@@ -113,6 +116,14 @@ validBalanceMask :: Commit.CommitParams -> Int -> [Int] -> Bool
 validBalanceMask p gamma y =
   Listvec.valid_vec (Commit.cp_n2 p) y &&
   Norms.all_bounded y gamma
+
+sampleMask :: Commit.CommitParams -> Int -> IO [Int]
+sampleMask p gamma =
+  ConfidentialSampling.sampleIntVector (Commit.cp_n2 p) gamma
+
+sampleMasks :: Commit.CommitParams -> Int -> Int -> IO [[Int]]
+sampleMasks p gamma rounds =
+  ConfidentialSampling.sampleIntVectors rounds (Commit.cp_n2 p) gamma
 
 balanceResponseBound :: Commit.CommitParams -> Int -> Int -> Int
 balanceResponseBound p gamma challenge =

@@ -156,6 +156,15 @@ let json_of_cb_params params =
     params.Commit_sis.cp_q
     params.Commit_sis.cp_beta
 
+let json_of_opening opening =
+  Printf.sprintf
+    "{\"msg\":%s,\"rand\":%s}"
+    (json_of_vec opening.Commit_sis.open_msg)
+    (json_of_vec opening.Commit_sis.open_rand)
+
+let json_of_openings openings =
+  "[" ^ String.concat "," (List.map json_of_opening openings) ^ "]"
+
 let json_of_cb_proof proof =
   Printf.sprintf
     "{\"as\":%s,\"zs\":%s}"
@@ -928,6 +937,64 @@ let cmd_cb_valid_mask args =
      | _ -> output_error "Expected params (M N2 Q BETA), gamma, and a mask vector")
   | _ -> output_error "Usage: cb-valid-mask M N2 Q BETA GAMMA \"[y]\""
 
+let output_sample f =
+  try f ()
+  with
+  | Invalid_argument msg -> output_error msg
+  | Sys_error msg -> output_error msg
+
+let cmd_ct_sample_opening args =
+  match args with
+  | [msg_len_str; rand_len_str; bound_str] ->
+    (match parse_int msg_len_str, parse_int rand_len_str, parse_int bound_str with
+     | Some msg_len, Some rand_len, Some bound ->
+       output_sample (fun () ->
+         let result = Confidential_sampling.opening msg_len rand_len bound in
+         (match !output_format with
+          | Human -> Printf.printf "sample_opening = %s\n" (json_of_opening result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_opening result)))
+     | _ -> output_error "Expected message length, randomness length, and bound")
+  | _ -> output_error "Usage: ct-sample-opening MSG_LEN RAND_LEN BOUND"
+
+let cmd_ct_sample_openings args =
+  match args with
+  | [count_str; msg_len_str; rand_len_str; bound_str] ->
+    (match parse_int count_str, parse_int msg_len_str, parse_int rand_len_str, parse_int bound_str with
+     | Some count, Some msg_len, Some rand_len, Some bound ->
+       output_sample (fun () ->
+         let result = Confidential_sampling.openings count msg_len rand_len bound in
+         (match !output_format with
+          | Human -> Printf.printf "sample_openings = %s\n" (json_of_openings result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_openings result)))
+     | _ -> output_error "Expected count, message length, randomness length, and bound")
+  | _ -> output_error "Usage: ct-sample-openings COUNT MSG_LEN RAND_LEN BOUND"
+
+let cmd_cb_sample_mask args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str] ->
+    (match make_cb_params m_str n2_str q_str beta_str, parse_int gamma_str with
+     | Some params, Some gamma ->
+       output_sample (fun () ->
+         let result = Confidential_balance.sample_mask params gamma in
+         (match !output_format with
+          | Human -> Printf.printf "sample_balance_mask = %s\n" (string_of_vec result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_vec result)))
+     | _ -> output_error "Expected params (M N2 Q BETA) and gamma")
+  | _ -> output_error "Usage: cb-sample-mask M N2 Q BETA GAMMA"
+
+let cmd_cb_sample_masks args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; rounds_str] ->
+    (match make_cb_params m_str n2_str q_str beta_str, parse_int gamma_str, parse_int rounds_str with
+     | Some params, Some gamma, Some rounds ->
+       output_sample (fun () ->
+         let result = Confidential_balance.sample_masks params gamma rounds in
+         (match !output_format with
+          | Human -> Printf.printf "sample_balance_masks = %s\n" (string_of_mat result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_mat result)))
+     | _ -> output_error "Expected params (M N2 Q BETA), gamma, and rounds")
+  | _ -> output_error "Usage: cb-sample-masks M N2 Q BETA GAMMA ROUNDS"
+
 let cmd_cb_valid_response args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; challenge_str; z_str] ->
@@ -1237,6 +1304,32 @@ let cmd_ct_nullifier args =
         | Json -> Printf.printf "{\"result\":%s}\n" (json_of_vec result))
      | _ -> output_error "Expected params, nullifier key, scalar amount, and randomness vector")
   | _ -> output_error "Usage: ct-nullifier M N2 Q BETA \"[[nk]]\" AMOUNT \"[rand]\""
+
+let cmd_ct_sample_nullifier_mask args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str] ->
+    (match make_cb_params m_str n2_str q_str beta_str, parse_int gamma_str with
+     | Some params, Some gamma ->
+       output_sample (fun () ->
+         let result = Confidential_transaction.sample_nullifier_mask params gamma in
+         (match !output_format with
+          | Human -> Printf.printf "sample_nullifier_mask = %s\n" (json_of_opening result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_opening result)))
+     | _ -> output_error "Expected params (M N2 Q BETA) and gamma")
+  | _ -> output_error "Usage: ct-sample-nullifier-mask M N2 Q BETA GAMMA"
+
+let cmd_ct_sample_nullifier_masks args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; rounds_str] ->
+    (match make_cb_params m_str n2_str q_str beta_str, parse_int gamma_str, parse_int rounds_str with
+     | Some params, Some gamma, Some rounds ->
+       output_sample (fun () ->
+         let result = Confidential_transaction.sample_nullifier_masks params gamma rounds in
+         (match !output_format with
+          | Human -> Printf.printf "sample_nullifier_masks = %s\n" (json_of_openings result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_openings result)))
+     | _ -> output_error "Expected params (M N2 Q BETA), gamma, and rounds")
+  | _ -> output_error "Usage: ct-sample-nullifier-masks M N2 Q BETA GAMMA ROUNDS"
 
 let cmd_ct_nullifier_canonical_challenge args =
   match args with
@@ -1991,6 +2084,8 @@ let show_help () =
   print_endline "  cb-rand-commit M N2 Q BETA CK R     Commit to aggregate randomness";
   print_endline "  cb-valid-witness M N2 Q BETA R      Check witness bounds";
   print_endline "  cb-valid-mask M N2 Q BETA G Y       Check mask bounds";
+  print_endline "  cb-sample-mask M N2 Q BETA G        Sample a CSPRNG balance mask";
+  print_endline "  cb-sample-masks M N2 Q BETA G ROUNDS  Sample CSPRNG balance masks";
   print_endline "  cb-valid-response M N2 Q BETA G Z   Check response bounds";
   print_endline "  cb-balance-commitment C1 C2 C3 C4 Q Aggregate commitments for zero-balance checking";
   print_endline "  cb-canonical-challenge M N2 Q BETA CK C A  Deterministic Fiat-Shamir challenge";
@@ -2018,7 +2113,11 @@ let show_help () =
   print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
   print_endline "";
   print_endline "Confidential Transaction Commands:";
+  print_endline "  ct-sample-opening MSG_LEN RAND_LEN BOUND  Sample a bounded CSPRNG opening";
+  print_endline "  ct-sample-openings COUNT MSG_LEN RAND_LEN BOUND  Sample bounded CSPRNG openings";
   print_endline "  ct-nullifier M N2 Q BETA NK AMOUNT RAND  Compute a deterministic note nullifier";
+  print_endline "  ct-sample-nullifier-mask M N2 Q BETA G  Sample a CSPRNG nullifier mask";
+  print_endline "  ct-sample-nullifier-masks M N2 Q BETA G ROUNDS  Sample CSPRNG nullifier masks";
   print_endline "  ct-nullifier-canonical-challenge M N2 Q BETA CK NK C NF ACOMMIT ANULLIFIER  Deterministic nullifier Fiat-Shamir challenge";
   print_endline "  ct-nullifier-prove M N2 Q BETA G CK NK C NF AMOUNT RAND YMSGS YRANDS  Build repeated-round deterministic nullifier proof";
   print_endline "  ct-nullifier-verify M N2 Q BETA G CK NK C NF ACOMMITS ANULLIFIERS ZMSGS ZRANDS  Verify repeated-round deterministic nullifier proof";
@@ -2090,6 +2189,8 @@ let run_command cmd args =
   | "cb-rand-commit" -> cmd_cb_rand_commit args
   | "cb-valid-witness" -> cmd_cb_valid_witness args
   | "cb-valid-mask" -> cmd_cb_valid_mask args
+  | "cb-sample-mask" -> cmd_cb_sample_mask args
+  | "cb-sample-masks" -> cmd_cb_sample_masks args
   | "cb-valid-response" -> cmd_cb_valid_response args
   | "cb-balance-commitment" -> cmd_cb_balance_commitment args
   | "cb-canonical-challenge" -> cmd_cb_canonical_challenge args
@@ -2111,7 +2212,11 @@ let run_command cmd args =
   | "ct-transaction-context" -> cmd_ct_transaction_context args
   | "ct-merkle-proof-digest" -> cmd_ct_merkle_proof_digest args
   | "ct-merkle-envelope-digest" -> cmd_ct_merkle_envelope_digest args
+  | "ct-sample-opening" -> cmd_ct_sample_opening args
+  | "ct-sample-openings" -> cmd_ct_sample_openings args
   | "ct-nullifier" -> cmd_ct_nullifier args
+  | "ct-sample-nullifier-mask" -> cmd_ct_sample_nullifier_mask args
+  | "ct-sample-nullifier-masks" -> cmd_ct_sample_nullifier_masks args
   | "ct-nullifier-canonical-challenge" -> cmd_ct_nullifier_canonical_challenge args
   | "ct-nullifier-prove" -> cmd_ct_nullifier_prove args
   | "ct-nullifier-verify" -> cmd_ct_nullifier_verify args

@@ -43,6 +43,12 @@ async function loadSdk() {
   return import(pathToFileURL(typeScriptEntry).href);
 }
 
+type SampleOpening = { msg: number[]; rand: number[] };
+
+function allBounded(values: number[], bound: number): boolean {
+  return values.every(value => Number.isSafeInteger(value) && Math.abs(value) <= bound);
+}
+
 function parseJson<T>(output: string): T {
   const lines = output
     .split(/\r?\n/)
@@ -465,6 +471,86 @@ assert.equal(
   sdk.ConfidentialBalance.validMask(cbParamsExpected, cbParamsCase.gamma, cbMask),
   'cb-valid-mask shared surface'
 );
+
+const haskellSampleBalanceMask = parseResult<number[]>(
+  runHaskell([
+    'cb-sample-mask',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+  ])
+);
+assert.equal(haskellSampleBalanceMask.length, cbParamsCase.n2, 'cb-sample-mask length');
+assert.ok(allBounded(haskellSampleBalanceMask, cbParamsCase.gamma), 'cb-sample-mask bound');
+assert.ok(
+  sdk.ConfidentialBalance.validMask(cbParamsExpected, cbParamsCase.gamma, haskellSampleBalanceMask),
+  'cb-sample-mask valid mask'
+);
+
+const haskellSampleBalanceMasks = parseResult<number[][]>(
+  runHaskell([
+    'cb-sample-masks',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+    '4',
+  ])
+);
+assert.equal(haskellSampleBalanceMasks.length, 4, 'cb-sample-masks count');
+assert.ok(
+  haskellSampleBalanceMasks.every(mask => mask.length === cbParamsCase.n2 && allBounded(mask, cbParamsCase.gamma)),
+  'cb-sample-masks shape and bound'
+);
+
+const haskellSampleOpening = parseResult<SampleOpening>(
+  runHaskell(['ct-sample-opening', '1', cbParamsCase.n2.toString(), cbParamsCase.gamma.toString()])
+);
+assert.equal(haskellSampleOpening.msg.length, 1, 'ct-sample-opening msg length');
+assert.equal(haskellSampleOpening.rand.length, cbParamsCase.n2, 'ct-sample-opening rand length');
+assert.ok(allBounded(haskellSampleOpening.msg, cbParamsCase.gamma), 'ct-sample-opening msg bound');
+assert.ok(allBounded(haskellSampleOpening.rand, cbParamsCase.gamma), 'ct-sample-opening rand bound');
+
+const haskellSampleNullifierMask = parseResult<SampleOpening>(
+  runHaskell([
+    'ct-sample-nullifier-mask',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+  ])
+);
+assert.equal(haskellSampleNullifierMask.msg.length, 1, 'ct-sample-nullifier-mask msg length');
+assert.equal(haskellSampleNullifierMask.rand.length, cbParamsCase.n2, 'ct-sample-nullifier-mask rand length');
+assert.ok(allBounded(haskellSampleNullifierMask.msg, cbParamsCase.gamma), 'ct-sample-nullifier-mask msg bound');
+assert.ok(allBounded(haskellSampleNullifierMask.rand, cbParamsCase.gamma), 'ct-sample-nullifier-mask rand bound');
+
+const haskellSampleNullifierMasks = parseResult<SampleOpening[]>(
+  runHaskell([
+    'ct-sample-nullifier-masks',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+    '4',
+  ])
+);
+assert.equal(haskellSampleNullifierMasks.length, 4, 'ct-sample-nullifier-masks count');
+assert.ok(
+  haskellSampleNullifierMasks.every(mask =>
+    mask.msg.length === 1 &&
+    mask.rand.length === cbParamsCase.n2 &&
+    allBounded(mask.msg, cbParamsCase.gamma) &&
+    allBounded(mask.rand, cbParamsCase.gamma)
+  ),
+  'ct-sample-nullifier-masks shape and bound'
+);
+
 const cbSigmaA = sdk.ConfidentialBalance.sigmaCommit(cbParamsExpected, cbKey, cbMask);
 const cbExpectedChallenge = sdk.ConfidentialBalance.canonicalChallenge(cbParamsExpected, cbKey, cbCommitment, cbSigmaA);
 const cbSigmaZ = sdk.ConfidentialBalance.sigmaRespond(cbWitness, cbMask, cbExpectedChallenge);
@@ -1529,5 +1615,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 80 deterministic shared-surface cases.'
+  'Validated Haskell CLI and SDK surfaces on 80 deterministic shared-surface cases plus randomized sampler bound checks.'
 );

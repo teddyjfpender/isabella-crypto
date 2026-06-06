@@ -30,6 +30,8 @@ module Canon.ZK.Confidential_Transaction
   , transactionEnvelopeDigest
   , nullifier
   , validNullifierMask
+  , sampleNullifierMask
+  , sampleNullifierMasks
   , validNullifierResponse
   , nullifierRelation
   , nullifierFsRounds
@@ -70,6 +72,7 @@ import Data.Char (ord)
 import Data.List (delete, nub)
 import Data.Word (Word64, Word8)
 import qualified Canon.Commit_sis as Commit
+import qualified Canon.Confidential_sampling as ConfidentialSampling
 import qualified Canon.Confidential_balance as ConfidentialBalance
 import qualified Canon.Confidential_merkle as ConfidentialMerkle
 import qualified Canon.Confidential_range as ConfidentialRange
@@ -519,6 +522,14 @@ validNullifierMask p gamma y =
   Listvec.valid_vec (Commit.cp_n2 p) (Commit.open_rand y) &&
   Norms.all_bounded (Commit.open_msg y) gamma &&
   Norms.all_bounded (Commit.open_rand y) gamma
+
+sampleNullifierMask :: Commit.CommitParams -> Int -> IO Commit.CommitOpening
+sampleNullifierMask p gamma =
+  ConfidentialSampling.sampleOpening (Commit.cp_n1 p) (Commit.cp_n2 p) gamma
+
+sampleNullifierMasks :: Commit.CommitParams -> Int -> Int -> IO [Commit.CommitOpening]
+sampleNullifierMasks p gamma rounds =
+  ConfidentialSampling.sampleOpenings rounds (Commit.cp_n1 p) (Commit.cp_n2 p) gamma
 
 nullifierResponseBound :: Commit.CommitParams -> Int -> Int -> Int
 nullifierResponseBound p gamma challenge =

@@ -82,6 +82,12 @@ async function loadSdk() {
 const sdk = await loadSdk();
 const trace = process.env.ISABELLA_VALIDATE_TRACE === '1';
 
+type SampleOpening = { msg: number[]; rand: number[] };
+
+function allBounded(values: number[], bound: number): boolean {
+  return values.every(value => Number.isSafeInteger(value) && Math.abs(value) <= bound);
+}
+
 function logProgress(message: string): void {
   if (trace) {
     console.log(message);
@@ -324,6 +330,90 @@ assert.equal(
   ),
   'cb-valid-mask shared surface'
 );
+
+const ocamlSampleBalanceMask = parseCliResult<{ result: number[] }>(
+  runCli([
+    'cb-sample-mask',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+  ])
+).result;
+assert.equal(ocamlSampleBalanceMask.length, cbParamsCase.n2, 'cb-sample-mask length');
+assert.ok(allBounded(ocamlSampleBalanceMask, cbParamsCase.gamma), 'cb-sample-mask bound');
+assert.ok(
+  sdk.ConfidentialBalance.validMask(
+    sdk.ConfidentialBalance.makeParams(cbParamsCase.m, cbParamsCase.n2, cbParamsCase.q, cbParamsCase.beta),
+    cbParamsCase.gamma,
+    ocamlSampleBalanceMask
+  ),
+  'cb-sample-mask valid mask'
+);
+
+const ocamlSampleBalanceMasks = parseCliResult<{ result: number[][] }>(
+  runCli([
+    'cb-sample-masks',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+    '4',
+  ])
+).result;
+assert.equal(ocamlSampleBalanceMasks.length, 4, 'cb-sample-masks count');
+assert.ok(
+  ocamlSampleBalanceMasks.every(mask => mask.length === cbParamsCase.n2 && allBounded(mask, cbParamsCase.gamma)),
+  'cb-sample-masks shape and bound'
+);
+
+const ocamlSampleOpening = parseCliResult<{ result: SampleOpening }>(
+  runCli(['ct-sample-opening', '1', cbParamsCase.n2.toString(), cbParamsCase.gamma.toString()])
+).result;
+assert.equal(ocamlSampleOpening.msg.length, 1, 'ct-sample-opening msg length');
+assert.equal(ocamlSampleOpening.rand.length, cbParamsCase.n2, 'ct-sample-opening rand length');
+assert.ok(allBounded(ocamlSampleOpening.msg, cbParamsCase.gamma), 'ct-sample-opening msg bound');
+assert.ok(allBounded(ocamlSampleOpening.rand, cbParamsCase.gamma), 'ct-sample-opening rand bound');
+
+const ocamlSampleNullifierMask = parseCliResult<{ result: SampleOpening }>(
+  runCli([
+    'ct-sample-nullifier-mask',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+  ])
+).result;
+assert.equal(ocamlSampleNullifierMask.msg.length, 1, 'ct-sample-nullifier-mask msg length');
+assert.equal(ocamlSampleNullifierMask.rand.length, cbParamsCase.n2, 'ct-sample-nullifier-mask rand length');
+assert.ok(allBounded(ocamlSampleNullifierMask.msg, cbParamsCase.gamma), 'ct-sample-nullifier-mask msg bound');
+assert.ok(allBounded(ocamlSampleNullifierMask.rand, cbParamsCase.gamma), 'ct-sample-nullifier-mask rand bound');
+
+const ocamlSampleNullifierMasks = parseCliResult<{ result: SampleOpening[] }>(
+  runCli([
+    'ct-sample-nullifier-masks',
+    cbParamsCase.m.toString(),
+    cbParamsCase.n2.toString(),
+    cbParamsCase.q.toString(),
+    cbParamsCase.beta.toString(),
+    cbParamsCase.gamma.toString(),
+    '4',
+  ])
+).result;
+assert.equal(ocamlSampleNullifierMasks.length, 4, 'ct-sample-nullifier-masks count');
+assert.ok(
+  ocamlSampleNullifierMasks.every(mask =>
+    mask.msg.length === 1 &&
+    mask.rand.length === cbParamsCase.n2 &&
+    allBounded(mask.msg, cbParamsCase.gamma) &&
+    allBounded(mask.rand, cbParamsCase.gamma)
+  ),
+  'ct-sample-nullifier-masks shape and bound'
+);
+
 const cbExpectedChallenge = sdk.ConfidentialBalance.canonicalChallenge(
   sdk.ConfidentialBalance.makeParams(cbParamsCase.m, cbParamsCase.n2, cbParamsCase.q, cbParamsCase.beta),
   cbKey,
@@ -1339,4 +1429,6 @@ logProgress('validate-ocaml: verified input notes constructed');
 
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
-console.log('Validated the TypeScript SDK against the OCaml surface on 80 deterministic shared-surface cases.');
+console.log(
+  'Validated the TypeScript SDK against the OCaml surface on 80 deterministic shared-surface cases plus randomized sampler bound checks.'
+);
