@@ -189,6 +189,8 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@node scripts/generate_confidential_bignum_vectors.mjs
 	@echo "Generating confidential BigInt balance vectors..."
 	@node scripts/generate_confidential_bigint_balance_vectors.mjs
+	@echo "Generating confidential BigInt range vectors..."
+	@node scripts/generate_confidential_bigint_range_vectors.mjs
 	@echo "Generating confidential Merkle vectors..."
 	@node scripts/generate_confidential_merkle_vectors.mjs
 	@echo "Generating confidential transaction context vectors..."
@@ -207,6 +209,8 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@cd tests && bun test confidential-bignum
 	@echo "Running confidential BigInt balance vector tests..."
 	@cd tests && bun test confidential-bigint-balance
+	@echo "Running confidential BigInt range vector tests..."
+	@cd tests && bun test confidential-bigint-range
 	@echo "Running confidential CSPRNG sampling tests..."
 	@cd tests && bun test confidential-sampling
 	@echo "Running confidential Merkle vector tests..."

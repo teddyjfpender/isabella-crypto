@@ -132,6 +132,20 @@
         "fsProve",
         "fsVerify"
       ],
+      "ConfidentialRangeBigInt": [
+        "oneOpening",
+        "amountCommitment",
+        "pairCommitment",
+        "amountWitnessBound",
+        "pairWitnessBound",
+        "amountResponseBound",
+        "pairResponseBound",
+        "fsRounds",
+        "fsFields",
+        "fsChallenges",
+        "fsProve",
+        "fsVerify"
+      ],
       "ConfidentialTransaction": [
         "transactionContextDigest",
         "transactionMerkleProofDigest",

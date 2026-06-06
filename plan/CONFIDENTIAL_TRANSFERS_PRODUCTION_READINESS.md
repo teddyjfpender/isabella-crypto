@@ -35,9 +35,12 @@ progress on the runtime integer blocker, not closure: Fiat-Shamir transcript
 fields now use the codec, and
 `tests/fixtures/confidential-bigint-balance-vectors.json` pins a q83 balance
 proof reference path with TypeScript BigInt arithmetic and OCaml/Haskell
-multiprecision preview parity. Full native launch parity, the rest of the proof
-APIs, and transaction/runtime integer fields that can carry widened values still
-need multiprecision integration and regenerated vectors/benchmarks.
+multiprecision preview parity, and
+`tests/fixtures/confidential-bigint-range-vectors.json` pins a q83 `k = 64`
+range proof reference path in TypeScript BigInt arithmetic. Native range
+multiprecision parity, full native launch parity, the rest of the proof APIs,
+and transaction/runtime integer fields that can carry widened values still need
+multiprecision integration and regenerated vectors/benchmarks.
 
 ## Current Stabilization Commands
 

@@ -327,6 +327,11 @@ jobs:
           node scripts/generate_confidential_bigint_balance_vectors.mjs
           git diff --exit-code -- tests/fixtures/confidential-bigint-balance-vectors.json
 
+      - name: Check confidential BigInt range vectors
+        run: |
+          node scripts/generate_confidential_bigint_range_vectors.mjs
+          git diff --exit-code -- tests/fixtures/confidential-bigint-range-vectors.json
+
       - name: Check confidential Merkle vectors
         run: |
           node scripts/generate_confidential_merkle_vectors.mjs

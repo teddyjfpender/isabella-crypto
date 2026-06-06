@@ -95,6 +95,22 @@ export interface BigIntBalanceProof {
   zs: BigIntMatrix;
 }
 
+/** BigInt SIS commitment opening for widened reference helpers */
+export interface BigIntCommitOpening {
+  msg: BigIntVec;
+  rand: BigIntVec;
+}
+
+/** BigInt Fiat-Shamir proof object for confidential range */
+export interface BigIntRangeProof {
+  bits: BigIntMatrix;
+  comps: BigIntMatrix;
+  amountAs: BigIntMatrix;
+  amountZs: BigIntMatrix;
+  pairAss: BigIntMatrix[];
+  pairZss: BigIntMatrix[];
+}
+
 /** Deterministic Fiat-Shamir proof object for confidential range */
 export interface RangeProof {
   bits: IntMatrix;
@@ -1063,6 +1079,7 @@ const CT_TRANSACTION_TAGS = {
 } as const;
 const CT_FS_DST = 'ISABELLA-CT-FS-v1';
 const CT_FS_BALANCE_DOMAIN = 1001;
+const CT_FS_RANGE_DOMAIN = 2001;
 const CT_FS_ROUNDS = 128;
 const CT_BIGNUM_DST = 'ISABELLA-CT-BIGNUM-v1';
 const CT_BIGNUM_ENCODING = 'sign_u8 || len_i64_le || magnitude_le_minimal';
@@ -2866,6 +2883,583 @@ export namespace ConfidentialBalanceBigInt {
       const challenges = fsChallenges(params, ck, c, as);
       return as.every((announcement, index) =>
         sigmaVerify(params, gamma, ck, c, announcement, challenges[index], zs[index])
+      );
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * BigInt reference implementation for the confidential-range proof slice.
+ *
+ * This exists to exercise widened q83-style arithmetic and transcript encoding
+ * before the production OCaml/Haskell/TypeScript proof APIs are fully migrated
+ * to canonical bignum values.
+ */
+export namespace ConfidentialRangeBigInt {
+  export const transcriptDst = CT_FS_DST;
+  export const fsDomain = CT_FS_RANGE_DOMAIN;
+  export const fieldEncoding = CT_BIGNUM_ENCODING;
+
+  type OpeningInput = {
+    msg: BigIntVecInput;
+    rand: BigIntVecInput;
+  };
+
+  function normalizeOpening(opening: OpeningInput, label: string): BigIntCommitOpening {
+    return {
+      msg: normalizeBigIntVec(opening.msg, `${label}.msg`),
+      rand: normalizeBigIntVec(opening.rand, `${label}.rand`),
+    };
+  }
+
+  function validOpening(params: BigIntScalarCommitParams, opening: OpeningInput): boolean {
+    try {
+      const normalized = normalizeOpening(opening, 'opening');
+      return (
+        ConfidentialBalanceBigInt.validScalarParams(params) &&
+        normalized.msg.length === params.n1 &&
+        normalized.rand.length === params.n2 &&
+        bigintAllBounded(normalized.msg, params.beta) &&
+        bigintAllBounded(normalized.rand, params.beta)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function commit(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    opening: OpeningInput
+  ): BigIntVec {
+    const normalized = normalizeOpening(opening, 'opening');
+    if (!validOpening(params, normalized) || !ConfidentialBalanceBigInt.validCommitKey(params, ck)) {
+      throw new Error('invalid commitment input');
+    }
+    return bigintMatVecMultMod(
+      normalizeBigIntMatrix(ck, 'ck'),
+      [...normalized.msg, ...normalized.rand],
+      params.q
+    );
+  }
+
+  function zeroOpening(params: BigIntScalarCommitParams): BigIntCommitOpening {
+    return {
+      msg: Array.from({ length: params.n1 }, () => 0n),
+      rand: Array.from({ length: params.n2 }, () => 0n),
+    };
+  }
+
+  export function oneOpening(params: BigIntScalarCommitParams): BigIntCommitOpening {
+    return {
+      msg: [1n],
+      rand: Array.from({ length: params.n2 }, () => 0n),
+    };
+  }
+
+  function openingAdd(left: BigIntCommitOpening, right: BigIntCommitOpening): BigIntCommitOpening {
+    return {
+      msg: bigintVecAdd(left.msg, right.msg),
+      rand: bigintVecAdd(left.rand, right.rand),
+    };
+  }
+
+  function openingSub(left: BigIntCommitOpening, right: BigIntCommitOpening): BigIntCommitOpening {
+    return {
+      msg: bigintVecAdd(left.msg, bigintScalarMult(-1n, right.msg)),
+      rand: bigintVecAdd(left.rand, bigintScalarMult(-1n, right.rand)),
+    };
+  }
+
+  function openingScale(scalar: bigint, opening: BigIntCommitOpening): BigIntCommitOpening {
+    return {
+      msg: bigintScalarMult(scalar, opening.msg),
+      rand: bigintScalarMult(scalar, opening.rand),
+    };
+  }
+
+  function weightedOpening(
+    params: BigIntScalarCommitParams,
+    base: bigint,
+    openings: readonly OpeningInput[]
+  ): BigIntCommitOpening {
+    let acc = zeroOpening(params);
+    for (let index = openings.length - 1; index >= 0; index -= 1) {
+      acc = openingAdd(normalizeOpening(openings[index], `openings[${index}]`), openingScale(base, acc));
+    }
+    return acc;
+  }
+
+  function weightedCommitment(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    base: bigint,
+    commitments: BigIntMatrixInput
+  ): BigIntVec {
+    const rows = normalizeBigIntMatrix(commitments, 'commitments');
+    let acc = ConfidentialBalanceBigInt.randCommit(params, ck, Array.from({ length: params.n2 }, () => 0n));
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      acc = bigintVecMod(bigintVecAdd(rows[index], bigintScalarMult(base, acc)), params.q);
+    }
+    return acc;
+  }
+
+  function amountOfOpening(opening: OpeningInput): bigint {
+    const normalized = normalizeOpening(opening, 'opening');
+    if (normalized.msg.length !== 1) {
+      throw new Error('amount opening must have one message coordinate');
+    }
+    return normalized.msg[0];
+  }
+
+  function validBitOpening(params: BigIntScalarCommitParams, opening: OpeningInput): boolean {
+    try {
+      const normalized = normalizeOpening(opening, 'opening');
+      return validOpening(params, normalized) && bigintAllBounded(normalized.msg, 1n);
+    } catch {
+      return false;
+    }
+  }
+
+  function bitPairRelation(
+    params: BigIntScalarCommitParams,
+    bitOpening: OpeningInput,
+    compOpening: OpeningInput
+  ): boolean {
+    try {
+      return (
+        validBitOpening(params, bitOpening) &&
+        validBitOpening(params, compOpening) &&
+        amountOfOpening(bitOpening) + amountOfOpening(compOpening) === 1n
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function recomposeBits(bitOpenings: readonly OpeningInput[]): bigint {
+    return bitOpenings.reduce(
+      (acc, opening, index) => acc + amountOfOpening(opening) * (1n << BigInt(index)),
+      0n
+    );
+  }
+
+  export function amountCommitment(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    cAmount: BigIntVecInput,
+    cBits: BigIntMatrixInput
+  ): BigIntVec {
+    const amount = normalizeBigIntVec(cAmount, 'cAmount');
+    return bigintVecMod(
+      bigintVecAdd(amount, bigintScalarMult(-1n, weightedCommitment(params, ck, 2n, cBits))),
+      params.q
+    );
+  }
+
+  export function pairCommitment(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    cBit: BigIntVecInput,
+    cComp: BigIntVecInput
+  ): BigIntVec {
+    return bigintVecMod(
+      bigintVecAdd(
+        bigintVecAdd(normalizeBigIntVec(cBit, 'cBit'), normalizeBigIntVec(cComp, 'cComp')),
+        bigintScalarMult(-1n, commit(params, ck, oneOpening(params)))
+      ),
+      params.q
+    );
+  }
+
+  function pairCommitments(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    cBits: BigIntMatrixInput,
+    cComps: BigIntMatrixInput
+  ): BigIntMatrix {
+    const bits = normalizeBigIntMatrix(cBits, 'cBits');
+    const comps = normalizeBigIntMatrix(cComps, 'cComps');
+    if (bits.length !== comps.length) {
+      throw new Error('bit and complement commitments must have the same length');
+    }
+    return bits.map((bit, index) => pairCommitment(params, ck, bit, comps[index]));
+  }
+
+  function rangeAmountOpening(
+    params: BigIntScalarCommitParams,
+    amountOpening: OpeningInput,
+    bitOpenings: readonly OpeningInput[]
+  ): BigIntCommitOpening {
+    return openingSub(
+      normalizeOpening(amountOpening, 'amountOpening'),
+      weightedOpening(params, 2n, bitOpenings)
+    );
+  }
+
+  function rangePairOpening(
+    params: BigIntScalarCommitParams,
+    bitOpening: OpeningInput,
+    compOpening: OpeningInput
+  ): BigIntCommitOpening {
+    return openingSub(
+      openingAdd(
+        normalizeOpening(bitOpening, 'bitOpening'),
+        normalizeOpening(compOpening, 'compOpening')
+      ),
+      oneOpening(params)
+    );
+  }
+
+  function rangePairOpenings(
+    params: BigIntScalarCommitParams,
+    bitOpenings: readonly OpeningInput[],
+    compOpenings: readonly OpeningInput[]
+  ): BigIntCommitOpening[] {
+    if (bitOpenings.length !== compOpenings.length) {
+      throw new Error('bit and complement openings must have the same length');
+    }
+    return bitOpenings.map((bitOpening, index) =>
+      rangePairOpening(params, bitOpening, compOpenings[index])
+    );
+  }
+
+  export function amountWitnessBound(params: BigIntScalarCommitParams, k: number): bigint {
+    assertSafeArrayLength(k, 'k');
+    return (1n << BigInt(k)) * params.beta;
+  }
+
+  export function pairWitnessBound(params: BigIntScalarCommitParams): bigint {
+    return 2n * params.beta;
+  }
+
+  function validAmountWitness(
+    params: BigIntScalarCommitParams,
+    k: number,
+    r: BigIntVecInput
+  ): boolean {
+    try {
+      const witness = normalizeBigIntVec(r, 'r');
+      return (
+        witness.length === params.n2 &&
+        bigintAllBounded(witness, amountWitnessBound(params, k))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function validPairWitness(params: BigIntScalarCommitParams, r: BigIntVecInput): boolean {
+    try {
+      const witness = normalizeBigIntVec(r, 'r');
+      return witness.length === params.n2 && bigintAllBounded(witness, pairWitnessBound(params));
+    } catch {
+      return false;
+    }
+  }
+
+  function validMask(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    y: BigIntVecInput
+  ): boolean {
+    try {
+      const bound = normalizeConfidentialBigInt(gamma, 'gamma');
+      const mask = normalizeBigIntVec(y, 'y');
+      return mask.length === params.n2 && bigintAllBounded(mask, bound);
+    } catch {
+      return false;
+    }
+  }
+
+  export function amountResponseBound(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    challenge: number
+  ): bigint {
+    if (challenge !== 0 && challenge !== 1) {
+      throw new Error('challenge must be binary');
+    }
+    return normalizeConfidentialBigInt(gamma, 'gamma') + BigInt(challenge) * amountWitnessBound(params, k);
+  }
+
+  export function pairResponseBound(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    challenge: number
+  ): bigint {
+    if (challenge !== 0 && challenge !== 1) {
+      throw new Error('challenge must be binary');
+    }
+    return normalizeConfidentialBigInt(gamma, 'gamma') + BigInt(challenge) * pairWitnessBound(params);
+  }
+
+  function validAmountResponse(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    challenge: number,
+    z: BigIntVecInput
+  ): boolean {
+    try {
+      const response = normalizeBigIntVec(z, 'z');
+      return (
+        response.length === params.n2 &&
+        bigintAllBounded(response, amountResponseBound(params, gamma, k, challenge))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function validPairResponse(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    challenge: number,
+    z: BigIntVecInput
+  ): boolean {
+    try {
+      const response = normalizeBigIntVec(z, 'z');
+      return (
+        response.length === params.n2 &&
+        bigintAllBounded(response, pairResponseBound(params, gamma, challenge))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function rangeRelation(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    cAmount: BigIntVecInput,
+    amountOpening: OpeningInput,
+    bitOpenings: readonly OpeningInput[],
+    compOpenings: readonly OpeningInput[]
+  ): boolean {
+    try {
+      const amount = normalizeBigIntVec(cAmount, 'cAmount');
+      return (
+        ConfidentialBalanceBigInt.validScalarParams(params) &&
+        ConfidentialBalanceBigInt.validCommitKey(params, ck) &&
+        commit(params, ck, amountOpening).every((value, index) => value === amount[index]) &&
+        bitOpenings.length === compOpenings.length &&
+        bitOpenings.every((bitOpening, index) =>
+          bitPairRelation(params, bitOpening, compOpenings[index])
+        ) &&
+        amountOfOpening(amountOpening) === recomposeBits(bitOpenings)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function fsRounds(): number {
+    return CT_FS_ROUNDS;
+  }
+
+  export function fsFields(
+    ck: BigIntMatrixInput,
+    cAmount: BigIntVecInput,
+    cBits: BigIntMatrixInput,
+    cComps: BigIntMatrixInput,
+    aAmounts: BigIntMatrixInput,
+    aPairss: readonly BigIntMatrixInput[]
+  ): BigIntVec {
+    return [
+      bigintMatrixSum(normalizeBigIntMatrix(ck, 'ck')),
+      bigintSum(normalizeBigIntVec(cAmount, 'cAmount')),
+      bigintMatrixSum(normalizeBigIntMatrix(cBits, 'cBits')),
+      bigintMatrixSum(normalizeBigIntMatrix(cComps, 'cComps')),
+      bigintMatrixSum(normalizeBigIntMatrix(aAmounts, 'aAmounts')),
+      aPairss.reduce((acc, rows, index) =>
+        acc + bigintMatrixSum(normalizeBigIntMatrix(rows, `aPairss[${index}]`)), 0n),
+    ];
+  }
+
+  export function fsChallenges(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    cAmount: BigIntVecInput,
+    cBits: BigIntMatrixInput,
+    cComps: BigIntMatrixInput,
+    aAmounts: BigIntMatrixInput,
+    aPairss: readonly BigIntMatrixInput[],
+    rounds: number = CT_FS_ROUNDS
+  ): number[] {
+    assertSafeArrayLength(rounds, 'rounds');
+    if (!ConfidentialBalanceBigInt.validScalarParams(params)) {
+      throw new Error('invalid scalar commitment parameters');
+    }
+    const fields = fsFields(ck, cAmount, cBits, cComps, aAmounts, aPairss);
+    return Array.from({ length: rounds }, (_, round) =>
+      binaryFsChallenge(CT_FS_RANGE_DOMAIN, fields, round)
+    );
+  }
+
+  function sigmaVerify(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    ck: BigIntMatrixInput,
+    c: BigIntVecInput,
+    a: BigIntVecInput,
+    challenge: number,
+    z: BigIntVecInput,
+    validResponse: (challenge: number, z: BigIntVecInput) => boolean
+  ): boolean {
+    try {
+      const commitment = normalizeBigIntVec(c, 'c');
+      const announcement = normalizeBigIntVec(a, 'a');
+      const responseCommitment = ConfidentialBalanceBigInt.randCommit(params, ck, z);
+      const expected = bigintVecMod(
+        bigintVecAdd(announcement, bigintScalarMult(BigInt(challenge), commitment)),
+        params.q
+      );
+      return (
+        commitment.length === params.m &&
+        announcement.length === params.m &&
+        (challenge === 0 || challenge === 1) &&
+        validResponse(challenge, z) &&
+        responseCommitment.every((value, index) => value === expected[index])
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function fsProve(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    cAmount: BigIntVecInput,
+    amountOpening: OpeningInput,
+    bitOpenings: readonly OpeningInput[],
+    compOpenings: readonly OpeningInput[],
+    yAmounts: BigIntMatrixInput,
+    yPairss: readonly BigIntMatrixInput[]
+  ): BigIntRangeProof | null {
+    try {
+      assertSafeArrayLength(k, 'k');
+      const amountMasks = normalizeBigIntMatrix(yAmounts, 'yAmounts');
+      const pairMasks = yPairss.map((rows, index) => normalizeBigIntMatrix(rows, `yPairss[${index}]`));
+      if (
+        bitOpenings.length !== k ||
+        compOpenings.length !== k ||
+        amountMasks.length !== CT_FS_ROUNDS ||
+        pairMasks.length !== CT_FS_ROUNDS ||
+        !rangeRelation(params, ck, cAmount, amountOpening, bitOpenings, compOpenings) ||
+        !amountMasks.every((mask) => validMask(params, gamma, mask)) ||
+        !pairMasks.every((roundMasks) =>
+          roundMasks.length === k && roundMasks.every((mask) => validMask(params, gamma, mask))
+        )
+      ) {
+        return null;
+      }
+
+      const bits = bitOpenings.map((opening, index) => commit(params, ck, normalizeOpening(opening, `bitOpenings[${index}]`)));
+      const comps = compOpenings.map((opening, index) => commit(params, ck, normalizeOpening(opening, `compOpenings[${index}]`)));
+      const amountWitness = rangeAmountOpening(params, amountOpening, bitOpenings).rand;
+      const pairWitnesses = rangePairOpenings(params, bitOpenings, compOpenings).map((opening) => opening.rand);
+      if (
+        !validAmountWitness(params, k, amountWitness) ||
+        !pairWitnesses.every((witness) => validPairWitness(params, witness))
+      ) {
+        return null;
+      }
+
+      const amountAs = amountMasks.map((mask) => ConfidentialBalanceBigInt.sigmaCommit(params, ck, mask));
+      const pairAss = pairMasks.map((roundMasks) =>
+        roundMasks.map((mask) => ConfidentialBalanceBigInt.sigmaCommit(params, ck, mask))
+      );
+      const challenges = fsChallenges(params, ck, cAmount, bits, comps, amountAs, pairAss);
+      const amountZs = amountMasks.map((mask, index) =>
+        ConfidentialBalanceBigInt.sigmaRespond(amountWitness, mask, challenges[index])
+      );
+      const pairZss = pairMasks.map((roundMasks, round) =>
+        roundMasks.map((mask, index) =>
+          ConfidentialBalanceBigInt.sigmaRespond(pairWitnesses[index], mask, challenges[round])
+        )
+      );
+
+      if (
+        !amountZs.every((response, index) =>
+          validAmountResponse(params, gamma, k, challenges[index], response)
+        ) ||
+        !pairZss.every((roundResponses, round) =>
+          roundResponses.every((response) =>
+            validPairResponse(params, gamma, challenges[round], response)
+          )
+        )
+      ) {
+        return null;
+      }
+
+      return { bits, comps, amountAs, amountZs, pairAss, pairZss };
+    } catch {
+      return null;
+    }
+  }
+
+  export function fsVerify(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    cAmount: BigIntVecInput,
+    proof: BigIntRangeProof
+  ): boolean {
+    try {
+      assertSafeArrayLength(k, 'k');
+      const bits = normalizeBigIntMatrix(proof.bits, 'proof.bits');
+      const comps = normalizeBigIntMatrix(proof.comps, 'proof.comps');
+      const amountAs = normalizeBigIntMatrix(proof.amountAs, 'proof.amountAs');
+      const amountZs = normalizeBigIntMatrix(proof.amountZs, 'proof.amountZs');
+      const pairAss = proof.pairAss.map((rows, index) => normalizeBigIntMatrix(rows, `proof.pairAss[${index}]`));
+      const pairZss = proof.pairZss.map((rows, index) => normalizeBigIntMatrix(rows, `proof.pairZss[${index}]`));
+      if (
+        bits.length !== k ||
+        comps.length !== k ||
+        amountAs.length !== CT_FS_ROUNDS ||
+        amountZs.length !== CT_FS_ROUNDS ||
+        pairAss.length !== CT_FS_ROUNDS ||
+        pairZss.length !== CT_FS_ROUNDS ||
+        !ConfidentialBalanceBigInt.validCommitKey(params, ck)
+      ) {
+        return false;
+      }
+      const amountCommit = amountCommitment(params, ck, cAmount, bits);
+      const pairs = pairCommitments(params, ck, bits, comps);
+      const challenges = fsChallenges(params, ck, cAmount, bits, comps, amountAs, pairAss);
+      return amountAs.every((announcement, index) =>
+        sigmaVerify(
+          params,
+          gamma,
+          ck,
+          amountCommit,
+          announcement,
+          challenges[index],
+          amountZs[index],
+          (challenge, response) => validAmountResponse(params, gamma, k, challenge, response)
+        )
+      ) && pairAss.every((roundAnnouncements, round) =>
+        roundAnnouncements.length === k &&
+        pairZss[round].length === k &&
+        roundAnnouncements.every((announcement, index) =>
+          sigmaVerify(
+            params,
+            gamma,
+            ck,
+            pairs[index],
+            announcement,
+            challenges[round],
+            pairZss[round][index],
+            (challenge, response) => validPairResponse(params, gamma, challenge, response)
+          )
+        )
       );
     } catch {
       return false;
