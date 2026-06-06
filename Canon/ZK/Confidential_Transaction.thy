@@ -735,6 +735,64 @@ theorem merkle_membership_verify_same_path_sound:
   unfolding merkle_membership_verify_def
   by blast
 
+theorem merkle_membership_verify_same_directions_sound:
+  assumes cr: "collision_resistant_hash h"
+      and valid1: "merkle_membership_verify h c1 proof1"
+      and valid2: "merkle_membership_verify h c2 proof2"
+      and root_eq: "merkle_member_root proof1 = merkle_member_root proof2"
+      and directions_eq: "merkle_member_directions proof1 = merkle_member_directions proof2"
+  shows "c1 = c2"
+proof -
+  have v1:
+    "merkle_membership_valid h c1
+      (merkle_member_root proof1)
+      (merkle_member_siblings proof1)
+      (merkle_member_directions proof1)"
+    using valid1 unfolding merkle_membership_verify_def by blast
+  have raw_v2:
+    "merkle_membership_valid h c2
+      (merkle_member_root proof2)
+      (merkle_member_siblings proof2)
+      (merkle_member_directions proof2)"
+    using valid2 unfolding merkle_membership_verify_def by blast
+  have v2:
+    "merkle_membership_valid h c2
+      (merkle_member_root proof1)
+      (merkle_member_siblings proof2)
+      (merkle_member_directions proof1)"
+    using raw_v2 root_eq directions_eq by simp
+  show ?thesis
+    using merkle_membership_same_directions_sound[OF cr v1 v2] .
+qed
+
+theorem merkle_membership_verify_same_index_depth_sound:
+  assumes cr: "collision_resistant_hash h"
+      and valid1: "merkle_membership_verify h c1 proof1"
+      and valid2: "merkle_membership_verify h c2 proof2"
+      and root_eq: "merkle_member_root proof1 = merkle_member_root proof2"
+      and index_eq: "merkle_member_index proof1 = merkle_member_index proof2"
+      and depth_eq: "length (merkle_member_siblings proof1) =
+        length (merkle_member_siblings proof2)"
+  shows "c1 = c2"
+proof -
+  have directions1:
+    "merkle_member_directions proof1 =
+      index_directions (length (merkle_member_siblings proof1))
+        (merkle_member_index proof1)"
+    using valid1 unfolding merkle_membership_verify_def by blast
+  have directions2:
+    "merkle_member_directions proof2 =
+      index_directions (length (merkle_member_siblings proof2))
+        (merkle_member_index proof2)"
+    using valid2 unfolding merkle_membership_verify_def by blast
+  have directions_eq:
+    "merkle_member_directions proof1 = merkle_member_directions proof2"
+    using directions1 directions2 index_eq depth_eq by simp
+  show ?thesis
+    using merkle_membership_verify_same_directions_sound[
+      OF cr valid1 valid2 root_eq directions_eq] .
+qed
+
 record verified_note =
   note_commitment :: commitment
   note_range_proof :: range_proof
@@ -1006,6 +1064,118 @@ theorem transaction_fs_verify_merkle_fee_in2_same_path_sound:
         verified
   unfolding transaction_fs_verify_merkle_fee_def
   by blast
+
+theorem transaction_fs_verify_merkle_in1_same_index_depth_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in1' alternate_proof"
+      and alternate_root: "merkle_member_root alternate_proof = ledger_rt"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in1_member proof)"
+      and alternate_depth:
+        "length (merkle_member_siblings alternate_proof) =
+         length (merkle_member_siblings (tx_merkle_in1_member proof))"
+  shows "c_in1' = c_in1"
+proof -
+  have member_valid:
+    "merkle_membership_verify h c_in1 (tx_merkle_in1_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_def by simp
+  have member_root: "merkle_member_root (tx_merkle_in1_member proof) = ledger_rt"
+    using verified unfolding transaction_fs_verify_merkle_def by simp
+  have root_eq:
+    "merkle_member_root alternate_proof =
+     merkle_member_root (tx_merkle_in1_member proof)"
+    using alternate_root member_root by simp
+  show ?thesis
+    using merkle_membership_verify_same_index_depth_sound[
+      OF cr alternate member_valid root_eq alternate_index alternate_depth] .
+qed
+
+theorem transaction_fs_verify_merkle_in2_same_index_depth_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in2' alternate_proof"
+      and alternate_root: "merkle_member_root alternate_proof = ledger_rt"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in2_member proof)"
+      and alternate_depth:
+        "length (merkle_member_siblings alternate_proof) =
+         length (merkle_member_siblings (tx_merkle_in2_member proof))"
+  shows "c_in2' = c_in2"
+proof -
+  have member_valid:
+    "merkle_membership_verify h c_in2 (tx_merkle_in2_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_def by simp
+  have member_root: "merkle_member_root (tx_merkle_in2_member proof) = ledger_rt"
+    using verified unfolding transaction_fs_verify_merkle_def by simp
+  have root_eq:
+    "merkle_member_root alternate_proof =
+     merkle_member_root (tx_merkle_in2_member proof)"
+    using alternate_root member_root by simp
+  show ?thesis
+    using merkle_membership_verify_same_index_depth_sound[
+      OF cr alternate member_valid root_eq alternate_index alternate_depth] .
+qed
+
+theorem transaction_fs_verify_merkle_fee_in1_same_index_depth_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_fee h p gamma k ck nk ledger_rt spent public_fee
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in1' alternate_proof"
+      and alternate_root: "merkle_member_root alternate_proof = ledger_rt"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in1_member proof)"
+      and alternate_depth:
+        "length (merkle_member_siblings alternate_proof) =
+         length (merkle_member_siblings (tx_merkle_in1_member proof))"
+  shows "c_in1' = c_in1"
+proof -
+  have member_valid:
+    "merkle_membership_verify h c_in1 (tx_merkle_in1_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_fee_def by simp
+  have member_root: "merkle_member_root (tx_merkle_in1_member proof) = ledger_rt"
+    using verified unfolding transaction_fs_verify_merkle_fee_def by simp
+  have root_eq:
+    "merkle_member_root alternate_proof =
+     merkle_member_root (tx_merkle_in1_member proof)"
+    using alternate_root member_root by simp
+  show ?thesis
+    using merkle_membership_verify_same_index_depth_sound[
+      OF cr alternate member_valid root_eq alternate_index alternate_depth] .
+qed
+
+theorem transaction_fs_verify_merkle_fee_in2_same_index_depth_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_fee h p gamma k ck nk ledger_rt spent public_fee
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify h c_in2' alternate_proof"
+      and alternate_root: "merkle_member_root alternate_proof = ledger_rt"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in2_member proof)"
+      and alternate_depth:
+        "length (merkle_member_siblings alternate_proof) =
+         length (merkle_member_siblings (tx_merkle_in2_member proof))"
+  shows "c_in2' = c_in2"
+proof -
+  have member_valid:
+    "merkle_membership_verify h c_in2 (tx_merkle_in2_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_fee_def by simp
+  have member_root: "merkle_member_root (tx_merkle_in2_member proof) = ledger_rt"
+    using verified unfolding transaction_fs_verify_merkle_fee_def by simp
+  have root_eq:
+    "merkle_member_root alternate_proof =
+     merkle_member_root (tx_merkle_in2_member proof)"
+    using alternate_root member_root by simp
+  show ?thesis
+    using merkle_membership_verify_same_index_depth_sound[
+      OF cr alternate member_valid root_eq alternate_index alternate_depth] .
+qed
 
 definition transaction_fs_prove ::
   "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>

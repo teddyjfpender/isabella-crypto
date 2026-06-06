@@ -101,19 +101,22 @@ benchmarks are independently checked.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
-  leaf, and internal-node encodings, an abstract Merkle hash, and same-path
-  membership soundness under collision resistance. Runtime SHA3-256 Merkle
-  encoding vectors live in `tests/fixtures/confidential-merkle-vectors.json`,
-  and the TypeScript, OCaml, and Haskell surfaces expose Merkle leaf/node/root
-  and membership-path APIs checked by the SDK-equivalence harnesses.
+  leaf, and internal-node encodings, an abstract Merkle hash, same-path
+  membership soundness, and same-direction membership soundness under collision
+  resistance. Runtime SHA3-256 Merkle encoding vectors live in
+  `tests/fixtures/confidential-merkle-vectors.json`, and the TypeScript, OCaml,
+  and Haskell surfaces expose Merkle leaf/node/root and membership-path APIs
+  checked by the SDK-equivalence harnesses.
   `Confidential_Transaction.thy` also now has a Merkle-backed transaction
-  proof record, verifier, and transaction-level same-path membership soundness
-  lemmas. OCaml, Haskell, and TypeScript expose matching Merkle transaction
-  prover/verifier APIs; the SDK-equivalence harnesses now cover native Merkle
-  transaction proving and verification for OCaml and Haskell, and TypeScript
-  has a focused test for root/path tampering. Stable semantic/ledger-step APIs
-  now default to the Merkle-backed verifier, with algebraic scaffold calls
-  exposed only through explicit scaffold names.
+  proof record, verifier, transaction-level same-path membership soundness
+  lemmas, and same-root/same-index/same-depth input membership soundness for
+  both fee and non-fee Merkle transaction verifiers. OCaml, Haskell, and
+  TypeScript expose matching Merkle transaction prover/verifier APIs; the
+  SDK-equivalence harnesses now cover native Merkle transaction proving and
+  verification for OCaml and Haskell, and TypeScript has a focused test for
+  root/path tampering. Stable semantic/ledger-step APIs now default to the
+  Merkle-backed verifier, with algebraic scaffold calls exposed only through
+  explicit scaffold names.
 - `CONFIDENTIAL_TRANSFERS_PROTOCOL.md` now fixes the SIS-note MVP protocol
   contract: note lifecycle, nullifier rules, root/reorg behavior, fees/change,
   asset IDs, version contexts, wallet proof generation, and failure semantics.

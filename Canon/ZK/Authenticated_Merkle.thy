@@ -208,6 +208,55 @@ next
   qed
 qed
 
+lemma merkle_path_root_same_directions_digest_injective:
+  assumes cr: "collision_resistant_hash h"
+      and root_eq:
+        "merkle_path_root h d1 siblings1 directions =
+         merkle_path_root h d2 siblings2 directions"
+      and len1: "length siblings1 = length directions"
+      and len2: "length siblings2 = length directions"
+  shows "d1 = d2"
+  using root_eq len1 len2
+proof (induction directions arbitrary: siblings1 siblings2 d1 d2)
+  case Nil
+  then show ?case
+    by (cases siblings1; cases siblings2; simp)
+next
+  case (Cons b ds)
+  obtain s1 ss1 where siblings1_def: "siblings1 = s1 # ss1"
+    using Cons.prems(2) by (cases siblings1) auto
+  obtain s2 ss2 where siblings2_def: "siblings2 = s2 # ss2"
+    using Cons.prems(3) by (cases siblings2) auto
+  have len1_tail: "length ss1 = length ds"
+    using Cons.prems(2) siblings1_def by simp
+  have len2_tail: "length ss2 = length ds"
+    using Cons.prems(3) siblings2_def by simp
+  show ?case
+  proof (cases b)
+    case False
+    have parent_root_eq:
+      "merkle_path_root h (merkle_node h d1 s1) ss1 ds =
+       merkle_path_root h (merkle_node h d2 s2) ss2 ds"
+      using Cons.prems(1) siblings1_def siblings2_def False by simp
+    have parent_eq: "merkle_node h d1 s1 = merkle_node h d2 s2"
+      using Cons.IH[OF parent_root_eq len1_tail len2_tail] .
+    show ?thesis
+      using merkle_node_injective_if_collision_resistant[OF cr parent_eq]
+      by simp
+  next
+    case True
+    have parent_root_eq:
+      "merkle_path_root h (merkle_node h s1 d1) ss1 ds =
+       merkle_path_root h (merkle_node h s2 d2) ss2 ds"
+      using Cons.prems(1) siblings1_def siblings2_def True by simp
+    have parent_eq: "merkle_node h s1 d1 = merkle_node h s2 d2"
+      using Cons.IH[OF parent_root_eq len1_tail len2_tail] .
+    show ?thesis
+      using merkle_node_injective_if_collision_resistant[OF cr parent_eq]
+      by simp
+  qed
+qed
+
 theorem merkle_membership_same_path_sound:
   assumes cr: "collision_resistant_hash h"
       and valid1: "merkle_membership_valid h leaf1 rt siblings directions"
@@ -222,6 +271,27 @@ proof -
     using valid1 valid2 unfolding merkle_membership_valid_def by simp
   have leaf_digest_eq: "merkle_leaf h leaf1 = merkle_leaf h leaf2"
     using merkle_path_root_same_path_digest_injective[OF cr root_eq len] .
+  show ?thesis
+    using merkle_leaf_injective_if_collision_resistant[OF cr leaf_digest_eq] .
+qed
+
+theorem merkle_membership_same_directions_sound:
+  assumes cr: "collision_resistant_hash h"
+      and valid1: "merkle_membership_valid h leaf1 rt siblings1 directions"
+      and valid2: "merkle_membership_valid h leaf2 rt siblings2 directions"
+  shows "leaf1 = leaf2"
+proof -
+  have len1: "length siblings1 = length directions"
+    using valid1 unfolding merkle_membership_valid_def by simp
+  have len2: "length siblings2 = length directions"
+    using valid2 unfolding merkle_membership_valid_def by simp
+  have root_eq:
+    "merkle_path_root h (merkle_leaf h leaf1) siblings1 directions =
+     merkle_path_root h (merkle_leaf h leaf2) siblings2 directions"
+    using valid1 valid2 unfolding merkle_membership_valid_def by simp
+  have leaf_digest_eq: "merkle_leaf h leaf1 = merkle_leaf h leaf2"
+    using merkle_path_root_same_directions_digest_injective[
+      OF cr root_eq len1 len2] .
   show ?thesis
     using merkle_leaf_injective_if_collision_resistant[OF cr leaf_digest_eq] .
 qed
