@@ -47,11 +47,18 @@ def volume_bits(dimension: int, bound: int) -> float:
 
 
 def bound_check(q: int, bound: int) -> dict[str, Any]:
+    minimum_q = bound + 1
+    q_shortfall = max(0, minimum_q - q)
     return {
         "bound": bound,
         "log2_bound": round(log2(bound), 2) if bound > 0 else None,
         "less_than_modulus": bound < q,
         "bound_to_modulus_ratio": round(bound / q, 6),
+        "minimum_q": minimum_q,
+        "minimum_q_bits": minimum_q.bit_length(),
+        "current_q_bits": q.bit_length(),
+        "q_shortfall": q_shortfall,
+        "q_bits_shortfall": max(0, minimum_q.bit_length() - q.bit_length()),
     }
 
 
@@ -109,6 +116,7 @@ def proof_margins(candidate: Candidate) -> dict[str, Any]:
         for name, check in checks.items()
         if not check["less_than_modulus"]
     ]
+    minimum_q = max(check["minimum_q"] for check in checks.values())
 
     return {
         "applicable": True,
@@ -141,6 +149,15 @@ def proof_margins(candidate: Candidate) -> dict[str, Any]:
             ),
         },
         "modulus_checks": checks,
+        "minimum_modulus_requirement": {
+            "current_q": candidate.q,
+            "current_q_bits": candidate.q.bit_length(),
+            "minimum_q": minimum_q,
+            "minimum_q_bits": minimum_q.bit_length(),
+            "q_shortfall": max(0, minimum_q - candidate.q),
+            "q_bits_shortfall": max(0, minimum_q.bit_length() - candidate.q.bit_length()),
+            "blocking_checks": warnings,
+        },
         "warnings": warnings,
     }
 
@@ -220,6 +237,10 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
             blockers.append(
                 "formal_proof_margin_modulus_failures:" + ",".join(str(warning) for warning in warnings)
             )
+            requirement = margins.get("minimum_modulus_requirement", {})
+            minimum_q_bits = requirement.get("minimum_q_bits")
+            if isinstance(minimum_q_bits, int) and minimum_q_bits > 0:
+                blockers.append(f"formal_minimum_q_bits_required:{minimum_q_bits}")
         checks = margins.get("modulus_checks", {})
         failed_checks = [
             name

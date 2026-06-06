@@ -82,6 +82,12 @@ The output is written to `bench/data/confidential-balance-realistic.json` and
 includes proof-size metadata. The fixture uses a structured deterministic key;
 it is a runtime/proof-size benchmark, not a lattice security estimate.
 
+Pair the runtime artifact with `bench/data/confidential-parameter-screen.json`
+before drawing production conclusions. The current `ct_sis_note_mvp_v0`
+parameter screen records `q = 8380417` (23 bits) but an 82-bit aggregate formal
+minimum modulus requirement for the SIS proof margins, so this baseline remains
+blocked even when runtime budgets pass.
+
 ### Function-Specific Examples
 
 **Quick benchmark (recommended):**

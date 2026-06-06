@@ -59,6 +59,12 @@ def require_positive_number(value: Any, label: str) -> int | float:
     return value
 
 
+def require_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        fail(f"{label} must be a positive integer")
+    return value
+
+
 def candidate_name(candidate: dict[str, Any]) -> str:
     name = candidate.get("name")
     if not isinstance(name, str) or not name:
@@ -185,6 +191,69 @@ def validate_lazer_parameter_report(report: dict[str, Any], candidate: dict[str,
     validate_report_security_level(report, candidate, label)
 
 
+def validate_formal_modulus_requirements(
+    candidate: dict[str, Any],
+    margins: dict[str, Any],
+    warnings: list[Any],
+) -> None:
+    candidate_id = candidate_name(candidate)
+    q = require_positive_int(candidate.get("q"), f"{candidate_id}.q")
+    checks = require_object(margins.get("modulus_checks"), f"{candidate_id}.formal_proof_margins.modulus_checks")
+    failed_checks: list[str] = []
+    minimum_q = 1
+
+    for check_name, raw_check in checks.items():
+        if not isinstance(check_name, str) or not check_name:
+            fail(f"{candidate_id}.formal_proof_margins.modulus_checks keys must be non-empty strings")
+        check = require_object(raw_check, f"{candidate_id}.formal_proof_margins.modulus_checks.{check_name}")
+        bound = require_positive_int(check.get("bound"), f"{candidate_id}.{check_name}.bound")
+        expected_minimum_q = bound + 1
+        minimum_q = max(minimum_q, expected_minimum_q)
+        less_than_modulus = check.get("less_than_modulus")
+        if not isinstance(less_than_modulus, bool):
+            fail(f"{candidate_id}.{check_name}.less_than_modulus must be a boolean")
+        if less_than_modulus != (bound < q):
+            fail(f"{candidate_id}.{check_name}.less_than_modulus is inconsistent with bound and q")
+        if not less_than_modulus:
+            failed_checks.append(check_name)
+        if check.get("minimum_q") != expected_minimum_q:
+            fail(f"{candidate_id}.{check_name}.minimum_q must be bound + 1")
+        if check.get("minimum_q_bits") != expected_minimum_q.bit_length():
+            fail(f"{candidate_id}.{check_name}.minimum_q_bits is inconsistent with minimum_q")
+        if check.get("current_q_bits") != q.bit_length():
+            fail(f"{candidate_id}.{check_name}.current_q_bits is inconsistent with candidate.q")
+        if check.get("q_shortfall") != max(0, expected_minimum_q - q):
+            fail(f"{candidate_id}.{check_name}.q_shortfall is inconsistent with minimum_q and candidate.q")
+        if check.get("q_bits_shortfall") != max(0, expected_minimum_q.bit_length() - q.bit_length()):
+            fail(f"{candidate_id}.{check_name}.q_bits_shortfall is inconsistent with minimum_q_bits and candidate.q")
+
+    if warnings != failed_checks:
+        fail(f"{candidate_id}.formal_proof_margins.warnings must match failed modulus checks")
+
+    requirement = require_object(
+        margins.get("minimum_modulus_requirement"),
+        f"{candidate_id}.formal_proof_margins.minimum_modulus_requirement",
+    )
+    if requirement.get("current_q") != q:
+        fail(f"{candidate_id}.minimum_modulus_requirement.current_q must equal candidate.q")
+    if requirement.get("current_q_bits") != q.bit_length():
+        fail(f"{candidate_id}.minimum_modulus_requirement.current_q_bits is inconsistent with candidate.q")
+    if requirement.get("minimum_q") != minimum_q:
+        fail(f"{candidate_id}.minimum_modulus_requirement.minimum_q must equal the maximum check minimum_q")
+    if requirement.get("minimum_q_bits") != minimum_q.bit_length():
+        fail(f"{candidate_id}.minimum_modulus_requirement.minimum_q_bits is inconsistent with minimum_q")
+    if requirement.get("q_shortfall") != max(0, minimum_q - q):
+        fail(f"{candidate_id}.minimum_modulus_requirement.q_shortfall is inconsistent with minimum_q and candidate.q")
+    if requirement.get("q_bits_shortfall") != max(0, minimum_q.bit_length() - q.bit_length()):
+        fail(f"{candidate_id}.minimum_modulus_requirement.q_bits_shortfall is inconsistent with minimum_q_bits and candidate.q")
+    blocking_checks = require_list(
+        requirement.get("blocking_checks"),
+        f"{candidate_id}.minimum_modulus_requirement.blocking_checks",
+    )
+    if blocking_checks != failed_checks:
+        fail(f"{candidate_id}.minimum_modulus_requirement.blocking_checks must match failed modulus checks")
+
+
 def validate_candidate(candidate: dict[str, Any], external_estimator_available: bool) -> bool:
     name = candidate_name(candidate)
     readiness = require_object(candidate.get("production_readiness"), f"{name}.production_readiness")
@@ -201,6 +270,8 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
         warnings = []
     if not isinstance(warnings, list):
         fail(f"{name}.formal_proof_margins.warnings must be a list when present")
+    if margins.get("applicable", False):
+        validate_formal_modulus_requirements(candidate, margins, warnings)
 
     estimator_report = candidate.get("external_lattice_estimator_report")
     if estimator_report is not None:

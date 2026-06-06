@@ -230,8 +230,9 @@ python3 scripts/confidential_parameter_screen.py \
 
 `scripts/check_confidential_parameter_readiness.py` now validates the estimator
 probe, external-estimator report fields, LaZer parameter-generation report
-fields, candidate target-security floors, and exact parameter-snapshot equality
-before any candidate can be marked production-ready. The regression gate
+fields, candidate target-security floors, exact parameter-snapshot equality, and
+the arithmetic behind each formal proof-margin modulus requirement before any
+candidate can be marked production-ready. The regression gate
 `scripts/check_confidential_parameter_readiness_regressions.py` checks that
 below-target estimator evidence and mismatched estimator/LaZer parameter
 snapshots are rejected.
@@ -246,7 +247,12 @@ Selected baseline candidates:
 The local screen is not a production security estimate. The generated artifact
 now records the exact estimator import probe. On this machine the Python
 `estimator`, `lattice_estimator`, and `lwe_estimator` modules were not
-installed, so the external estimator gate is still open.
+installed, so the external estimator gate is still open. It also records exact
+formal modulus requirements: for `ct_sis_note_mvp_v0`, the current modulus is
+`q = 8380417` (23 bits), while the proof-margin aggregate requires an 82-bit
+minimum modulus, dominated by the `sis_range_amount_residual_vs_honest` bound.
+That gap is surfaced as the machine-readable blocker
+`formal_minimum_q_bits_required:82`.
 
 ## Validation Plan
 

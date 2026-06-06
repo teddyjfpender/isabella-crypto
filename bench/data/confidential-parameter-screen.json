@@ -93,50 +93,108 @@
             "bound": 33816576,
             "log2_bound": 25.01,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 4.03519
+            "bound_to_modulus_ratio": 4.03519,
+            "minimum_q": 33816577,
+            "minimum_q_bits": 26,
+            "current_q_bits": 23,
+            "q_shortfall": 25436160,
+            "q_bits_shortfall": 3
           },
           "range_amount_extracted_response": {
             "bound": 1208925819614629208260608,
             "log2_bound": 80.0,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 1.442560459240428e+17
+            "bound_to_modulus_ratio": 1.442560459240428e+17,
+            "minimum_q": 1208925819614629208260609,
+            "minimum_q_bits": 81,
+            "current_q_bits": 23,
+            "q_shortfall": 1208925819614629199880192,
+            "q_bits_shortfall": 58
           },
           "range_pair_extracted_response": {
             "bound": 33685504,
             "log2_bound": 25.01,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 4.01955
+            "bound_to_modulus_ratio": 4.01955,
+            "minimum_q": 33685505,
+            "minimum_q_bits": 26,
+            "current_q_bits": 23,
+            "q_shortfall": 25305088,
+            "q_bits_shortfall": 3
           },
           "nullifier_extracted_opening": {
             "bound": 33619968,
             "log2_bound": 25.0,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 4.01173
+            "bound_to_modulus_ratio": 4.01173,
+            "minimum_q": 33619969,
+            "minimum_q_bits": 26,
+            "current_q_bits": 23,
+            "q_shortfall": 25239552,
+            "q_bits_shortfall": 3
           },
           "sis_balance_zero_opening_vs_honest": {
             "bound": 34078720,
             "log2_bound": 25.02,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 4.066471
+            "bound_to_modulus_ratio": 4.066471,
+            "minimum_q": 34078721,
+            "minimum_q_bits": 26,
+            "current_q_bits": 23,
+            "q_shortfall": 25698304,
+            "q_bits_shortfall": 3
           },
           "sis_range_amount_residual_vs_honest": {
             "bound": 2417851639229258382966784,
             "log2_bound": 81.0,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 2.885120918480856e+17
+            "bound_to_modulus_ratio": 2.885120918480856e+17,
+            "minimum_q": 2417851639229258382966785,
+            "minimum_q_bits": 82,
+            "current_q_bits": 23,
+            "q_shortfall": 2417851639229258374586368,
+            "q_bits_shortfall": 59
           },
           "sis_range_pair_residual_vs_honest": {
             "bound": 33816576,
             "log2_bound": 25.01,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 4.03519
+            "bound_to_modulus_ratio": 4.03519,
+            "minimum_q": 33816577,
+            "minimum_q_bits": 26,
+            "current_q_bits": 23,
+            "q_shortfall": 25436160,
+            "q_bits_shortfall": 3
           },
           "sis_nullifier_opening_vs_honest": {
             "bound": 33685504,
             "log2_bound": 25.01,
             "less_than_modulus": false,
-            "bound_to_modulus_ratio": 4.01955
+            "bound_to_modulus_ratio": 4.01955,
+            "minimum_q": 33685505,
+            "minimum_q_bits": 26,
+            "current_q_bits": 23,
+            "q_shortfall": 25305088,
+            "q_bits_shortfall": 3
           }
+        },
+        "minimum_modulus_requirement": {
+          "current_q": 8380417,
+          "current_q_bits": 23,
+          "minimum_q": 2417851639229258382966785,
+          "minimum_q_bits": 82,
+          "q_shortfall": 2417851639229258374586368,
+          "q_bits_shortfall": 59,
+          "blocking_checks": [
+            "balance_extracted_response",
+            "range_amount_extracted_response",
+            "range_pair_extracted_response",
+            "nullifier_extracted_opening",
+            "sis_balance_zero_opening_vs_honest",
+            "sis_range_amount_residual_vs_honest",
+            "sis_range_pair_residual_vs_honest",
+            "sis_nullifier_opening_vs_honest"
+          ]
         },
         "warnings": [
           "balance_extracted_response",
@@ -158,6 +216,7 @@
           "external_lattice_estimator_report_missing",
           "lazer_parameter_generation_report_missing",
           "formal_proof_margin_modulus_failures:balance_extracted_response,range_amount_extracted_response,range_pair_extracted_response,nullifier_extracted_opening,sis_balance_zero_opening_vs_honest,sis_range_amount_residual_vs_honest,sis_range_pair_residual_vs_honest,sis_nullifier_opening_vs_honest",
+          "formal_minimum_q_bits_required:82",
           "sis_bound_checks_failed:balance_extracted_response,range_amount_extracted_response,range_pair_extracted_response,nullifier_extracted_opening,sis_balance_zero_opening_vs_honest,sis_range_amount_residual_vs_honest,sis_range_pair_residual_vs_honest,sis_nullifier_opening_vs_honest"
         ]
       }
