@@ -793,6 +793,40 @@ proof -
       OF cr valid1 valid2 root_eq directions_eq] .
 qed
 
+record merkle_accepted_root =
+  merkle_accepted_digest :: digest
+  merkle_accepted_depth :: nat
+
+definition merkle_membership_verify_at_root ::
+  "merkle_hash \<Rightarrow> commitment \<Rightarrow> merkle_accepted_root \<Rightarrow>
+   merkle_membership_proof \<Rightarrow> bool" where
+  "merkle_membership_verify_at_root h c accepted proof \<longleftrightarrow>
+    merkle_membership_verify h c proof \<and>
+    merkle_member_root proof = merkle_accepted_digest accepted \<and>
+    length (merkle_member_siblings proof) = merkle_accepted_depth accepted"
+
+theorem merkle_membership_verify_at_root_same_index_sound:
+  assumes cr: "collision_resistant_hash h"
+      and valid1: "merkle_membership_verify_at_root h c1 accepted proof1"
+      and valid2: "merkle_membership_verify_at_root h c2 accepted proof2"
+      and index_eq: "merkle_member_index proof1 = merkle_member_index proof2"
+  shows "c1 = c2"
+proof -
+  have member1: "merkle_membership_verify h c1 proof1"
+    using valid1 unfolding merkle_membership_verify_at_root_def by blast
+  have member2: "merkle_membership_verify h c2 proof2"
+    using valid2 unfolding merkle_membership_verify_at_root_def by blast
+  have root_eq: "merkle_member_root proof1 = merkle_member_root proof2"
+    using valid1 valid2 unfolding merkle_membership_verify_at_root_def by simp
+  have depth_eq:
+    "length (merkle_member_siblings proof1) =
+     length (merkle_member_siblings proof2)"
+    using valid1 valid2 unfolding merkle_membership_verify_at_root_def by simp
+  show ?thesis
+    using merkle_membership_verify_same_index_depth_sound[
+      OF cr member1 member2 root_eq index_eq depth_eq] .
+qed
+
 record verified_note =
   note_commitment :: commitment
   note_range_proof :: range_proof
@@ -1012,6 +1046,77 @@ definition transaction_fs_verify_merkle_fee ::
     range_fs_verify p gamma k ck c_out1 (tx_merkle_out1_range proof) \<and>
     range_fs_verify p gamma k ck c_out2 (tx_merkle_out2_range proof)"
 
+definition transaction_fs_verify_merkle_at_root ::
+  "merkle_hash \<Rightarrow> commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow>
+   merkle_accepted_root \<Rightarrow> commitment list \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   merkle_transaction_proof \<Rightarrow> bool" where
+  "transaction_fs_verify_merkle_at_root h p gamma k ck nk accepted spent
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof \<longleftrightarrow>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
+    merkle_membership_verify_at_root h c_in1 accepted (tx_merkle_in1_member proof) \<and>
+    merkle_membership_verify_at_root h c_in2 accepted (tx_merkle_in2_member proof) \<and>
+    merkle_member_index (tx_merkle_in1_member proof) \<noteq> merkle_member_index (tx_merkle_in2_member proof) \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    nullifier_fs_verify p gamma ck nk c_in1 nf1 (tx_merkle_in1_nullifier proof) \<and>
+    nullifier_fs_verify p gamma ck nk c_in2 nf2 (tx_merkle_in2_nullifier proof) \<and>
+    balance_fs_verify p gamma ck
+      (balance_commitment c_in1 c_in2 c_out1 c_out2 (cp_q p))
+      (tx_merkle_balance proof) \<and>
+    range_fs_verify p gamma k ck c_out1 (tx_merkle_out1_range proof) \<and>
+    range_fs_verify p gamma k ck c_out2 (tx_merkle_out2_range proof)"
+
+definition transaction_fs_verify_merkle_fee_at_root ::
+  "merkle_hash \<Rightarrow> commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow>
+   merkle_accepted_root \<Rightarrow> commitment list \<Rightarrow> int \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow> commitment \<Rightarrow>
+   merkle_transaction_proof \<Rightarrow> bool" where
+  "transaction_fs_verify_merkle_fee_at_root h p gamma k ck nk accepted spent public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof \<longleftrightarrow>
+    public_fee \<ge> 0 \<and>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
+    merkle_membership_verify_at_root h c_in1 accepted (tx_merkle_in1_member proof) \<and>
+    merkle_membership_verify_at_root h c_in2 accepted (tx_merkle_in2_member proof) \<and>
+    merkle_member_index (tx_merkle_in1_member proof) \<noteq> merkle_member_index (tx_merkle_in2_member proof) \<and>
+    nf1 \<notin> set spent \<and>
+    nf2 \<notin> set spent \<and>
+    nf1 \<noteq> nf2 \<and>
+    nullifier_fs_verify p gamma ck nk c_in1 nf1 (tx_merkle_in1_nullifier proof) \<and>
+    nullifier_fs_verify p gamma ck nk c_in2 nf2 (tx_merkle_in2_nullifier proof) \<and>
+    balance_fs_verify p gamma ck
+      (fee_balance_commitment p ck c_in1 c_in2 c_out1 c_out2 public_fee)
+      (tx_merkle_balance proof) \<and>
+    range_fs_verify p gamma k ck c_out1 (tx_merkle_out1_range proof) \<and>
+    range_fs_verify p gamma k ck c_out2 (tx_merkle_out2_range proof)"
+
+lemma transaction_fs_verify_merkle_at_root_refines_digest:
+  assumes "transaction_fs_verify_merkle_at_root h p gamma k ck nk accepted spent
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+  shows "transaction_fs_verify_merkle h p gamma k ck nk
+    (merkle_accepted_digest accepted) spent
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+  using assms
+  unfolding transaction_fs_verify_merkle_at_root_def
+            transaction_fs_verify_merkle_def
+            merkle_membership_verify_at_root_def
+  by blast
+
+lemma transaction_fs_verify_merkle_fee_at_root_refines_digest:
+  assumes "transaction_fs_verify_merkle_fee_at_root h p gamma k ck nk accepted spent public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+  shows "transaction_fs_verify_merkle_fee h p gamma k ck nk
+    (merkle_accepted_digest accepted) spent public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+  using assms
+  unfolding transaction_fs_verify_merkle_fee_at_root_def
+            transaction_fs_verify_merkle_fee_def
+            merkle_membership_verify_at_root_def
+  by blast
+
 lemma transaction_fs_verify_merkle_roots:
   assumes "transaction_fs_verify_merkle h p gamma k ck nk ledger_rt spent
     c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
@@ -1175,6 +1280,78 @@ proof -
   show ?thesis
     using merkle_membership_verify_same_index_depth_sound[
       OF cr alternate member_valid root_eq alternate_index alternate_depth] .
+qed
+
+theorem transaction_fs_verify_merkle_at_root_in1_same_index_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_at_root h p gamma k ck nk accepted spent
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify_at_root h c_in1' accepted alternate_proof"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in1_member proof)"
+  shows "c_in1' = c_in1"
+proof -
+  have member_valid:
+    "merkle_membership_verify_at_root h c_in1 accepted (tx_merkle_in1_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_at_root_def by simp
+  show ?thesis
+    using merkle_membership_verify_at_root_same_index_sound[
+      OF cr alternate member_valid alternate_index] .
+qed
+
+theorem transaction_fs_verify_merkle_at_root_in2_same_index_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_at_root h p gamma k ck nk accepted spent
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify_at_root h c_in2' accepted alternate_proof"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in2_member proof)"
+  shows "c_in2' = c_in2"
+proof -
+  have member_valid:
+    "merkle_membership_verify_at_root h c_in2 accepted (tx_merkle_in2_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_at_root_def by simp
+  show ?thesis
+    using merkle_membership_verify_at_root_same_index_sound[
+      OF cr alternate member_valid alternate_index] .
+qed
+
+theorem transaction_fs_verify_merkle_fee_at_root_in1_same_index_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_fee_at_root h p gamma k ck nk accepted spent public_fee
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify_at_root h c_in1' accepted alternate_proof"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in1_member proof)"
+  shows "c_in1' = c_in1"
+proof -
+  have member_valid:
+    "merkle_membership_verify_at_root h c_in1 accepted (tx_merkle_in1_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_fee_at_root_def by simp
+  show ?thesis
+    using merkle_membership_verify_at_root_same_index_sound[
+      OF cr alternate member_valid alternate_index] .
+qed
+
+theorem transaction_fs_verify_merkle_fee_at_root_in2_same_index_sound:
+  assumes cr: "collision_resistant_hash h"
+      and verified: "transaction_fs_verify_merkle_fee_at_root h p gamma k ck nk accepted spent public_fee
+        c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof"
+      and alternate: "merkle_membership_verify_at_root h c_in2' accepted alternate_proof"
+      and alternate_index:
+        "merkle_member_index alternate_proof =
+         merkle_member_index (tx_merkle_in2_member proof)"
+  shows "c_in2' = c_in2"
+proof -
+  have member_valid:
+    "merkle_membership_verify_at_root h c_in2 accepted (tx_merkle_in2_member proof)"
+    using verified unfolding transaction_fs_verify_merkle_fee_at_root_def by simp
+  show ?thesis
+    using merkle_membership_verify_at_root_same_index_sound[
+      OF cr alternate member_valid alternate_index] .
 qed
 
 definition transaction_fs_prove ::

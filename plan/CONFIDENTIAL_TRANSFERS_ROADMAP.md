@@ -113,7 +113,12 @@ benchmarks are independently checked.
   `Confidential_Transaction.thy` also now has a Merkle-backed transaction
   proof record, verifier, transaction-level same-path membership soundness
   lemmas, and same-root/same-index/same-depth input membership soundness for
-  both fee and non-fee Merkle transaction verifiers. OCaml, Haskell, and
+  both fee and non-fee Merkle transaction verifiers. It now also defines a
+  depth-tagged `merkle_accepted_root`, root-scoped membership verifier,
+  root-scoped fee and non-fee transaction verifiers, refinement lemmas back to
+  the digest-only verifier, and same-accepted-root/same-index soundness
+  theorems without requiring callers to provide a separate depth equality
+  assumption. OCaml, Haskell, and
   TypeScript expose matching Merkle transaction prover/verifier APIs; the
   SDK-equivalence harnesses now cover native Merkle transaction proving and
   verification for OCaml and Haskell, and TypeScript has a focused test for
@@ -193,8 +198,9 @@ The formalization still needs these before production:
    remaining algebraic scaffold compatibility APIs, replace the
    hand-maintained native transaction digest/envelope command wrappers with
    generated or vector-locked surfaces, broaden native transaction-level
-   negative/fuzz conformance for Merkle proofs, and extend transaction
-   membership soundness beyond same-path uniqueness.
+   negative/fuzz conformance for Merkle proofs, and migrate runtime and
+   consensus accepted-root contexts from digest-only roots to the depth-tagged
+   Merkle root model.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
 7. Extend the pinned wallet proof request serialization into consensus/indexer
