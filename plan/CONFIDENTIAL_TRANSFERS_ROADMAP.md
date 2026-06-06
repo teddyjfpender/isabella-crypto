@@ -220,15 +220,19 @@ python3 scripts/confidential_parameter_screen.py \
 ```
 
 `scripts/check_confidential_parameter_readiness.py` now validates the estimator
-probe, external-estimator report fields, and LaZer parameter-generation report
-fields before any candidate can be marked production-ready.
+probe, external-estimator report fields, LaZer parameter-generation report
+fields, candidate target-security floors, and exact parameter-snapshot equality
+before any candidate can be marked production-ready. The regression gate
+`scripts/check_confidential_parameter_readiness_regressions.py` checks that
+below-target estimator evidence and mismatched estimator/LaZer parameter
+snapshots are rejected.
 
 Selected baseline candidates:
 
-| Candidate | Architecture | q | n1 | n2 | m | beta | gamma | range bits | FS bits |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `ct_sis_note_mvp_v0` | SIS note commitment MVP | 8380417 | 1 | 1024 | 1024 | 65536 | 16777216 | 64 | 128 |
-| `rlwe_ahe_transfer_research_v0` | RLWE/AHE research layer | 8380417 | 1 | 2048 | 2048 | 65536 | 16777216 | 64 | 128 |
+| Candidate | Architecture | q | n1 | n2 | m | beta | gamma | range bits | FS bits | target bits |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `ct_sis_note_mvp_v0` | SIS note commitment MVP | 8380417 | 1 | 1024 | 1024 | 65536 | 16777216 | 64 | 128 | 128 |
+| `rlwe_ahe_transfer_research_v0` | RLWE/AHE research layer | 8380417 | 1 | 2048 | 2048 | 65536 | 16777216 | 64 | 128 | 128 |
 
 The local screen is not a production security estimate. The generated artifact
 now records the exact estimator import probe. On this machine the Python

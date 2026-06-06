@@ -31,7 +31,11 @@ class Candidate:
     gamma: int
     range_bits: int
     fs_rounds: int
+    target_security_bits: int
     notes: str
+
+
+PARAMETER_FIELDS = ("n1", "n2", "m", "q", "beta", "gamma", "range_bits", "fs_rounds")
 
 
 def log2(x: float) -> float:
@@ -174,6 +178,37 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
     if "lazer_parameter_generation_report" not in screened:
         blockers.append("lazer_parameter_generation_report_missing")
 
+    target_security_bits = screened.get("target_security_bits")
+    estimator_report = screened.get("external_lattice_estimator_report")
+    if isinstance(estimator_report, dict):
+        security_bits = estimator_report.get("security_level_bits")
+        if (
+            not isinstance(security_bits, (int, float))
+            or isinstance(security_bits, bool)
+            or not isinstance(target_security_bits, (int, float))
+            or isinstance(target_security_bits, bool)
+            or security_bits < target_security_bits
+        ):
+            blockers.append("external_lattice_estimator_security_below_target")
+        parameters = estimator_report.get("parameters")
+        if not isinstance(parameters, dict) or not parameter_snapshot_matches(screened, parameters):
+            blockers.append("external_lattice_estimator_parameter_mismatch")
+
+    lazer_report = screened.get("lazer_parameter_generation_report")
+    if isinstance(lazer_report, dict):
+        security_bits = lazer_report.get("security_level_bits")
+        if (
+            not isinstance(security_bits, (int, float))
+            or isinstance(security_bits, bool)
+            or not isinstance(target_security_bits, (int, float))
+            or isinstance(target_security_bits, bool)
+            or security_bits < target_security_bits
+        ):
+            blockers.append("lazer_parameter_security_below_target")
+        parameter_set = lazer_report.get("parameter_set")
+        if not isinstance(parameter_set, dict) or not parameter_snapshot_matches(screened, parameter_set):
+            blockers.append("lazer_parameter_set_mismatch")
+
     margins = screened.get("formal_proof_margins", {})
     if not margins.get("applicable", False):
         blockers.append("formal_proof_margins_not_applicable")
@@ -195,6 +230,10 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
             blockers.append("sis_bound_checks_failed:" + ",".join(failed_checks))
 
     return blockers
+
+
+def parameter_snapshot_matches(candidate: dict[str, Any], parameters: dict[str, Any]) -> bool:
+    return all(parameters.get(field) == candidate.get(field) for field in PARAMETER_FIELDS)
 
 
 def module_version(distribution: str) -> str | None:
@@ -291,6 +330,7 @@ def main() -> None:
             gamma=2**24,
             range_bits=64,
             fs_rounds=128,
+            target_security_bits=128,
             notes=(
                 "Formal MVP target for note commitments/nullifiers/range proofs; "
                 "requires external lattice-estimator validation before production."
@@ -307,6 +347,7 @@ def main() -> None:
             gamma=2**24,
             range_bits=64,
             fs_rounds=128,
+            target_security_bits=128,
             notes=(
                 "Research track from idea.md; kept separate from the SIS-note MVP "
                 "until EncryptValid/SamePlaintext/TransferValid relations are formalized."

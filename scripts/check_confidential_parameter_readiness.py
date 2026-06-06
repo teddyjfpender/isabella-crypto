@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import Any
 
 
+PARAMETER_FIELDS = ("n1", "n2", "m", "q", "beta", "gamma", "range_bits", "fs_rounds")
+
+
 def fail(message: str) -> None:
     raise SystemExit(message)
 
@@ -114,48 +117,72 @@ def validate_command(value: Any, label: str) -> None:
     fail(f"{label} must be a non-empty string or non-empty string list")
 
 
-def validate_external_estimator_report(report: dict[str, Any], candidate: str) -> None:
-    if require_string(report.get("candidate"), f"{candidate}.external_lattice_estimator_report.candidate") != candidate:
-        fail(f"{candidate}.external_lattice_estimator_report.candidate does not match candidate name")
-    require_string(report.get("tool"), f"{candidate}.external_lattice_estimator_report.tool")
-    require_string(report.get("source"), f"{candidate}.external_lattice_estimator_report.source")
-    require_string(report.get("generated_at"), f"{candidate}.external_lattice_estimator_report.generated_at")
-    validate_command(report.get("command"), f"{candidate}.external_lattice_estimator_report.command")
-    require_positive_number(
-        report.get("security_level_bits"),
-        f"{candidate}.external_lattice_estimator_report.security_level_bits",
+def validate_parameter_snapshot(parameters: dict[str, Any], candidate: dict[str, Any], label: str) -> None:
+    for field in PARAMETER_FIELDS:
+        expected = candidate.get(field)
+        if not isinstance(expected, int) or isinstance(expected, bool) or expected <= 0:
+            fail(f"{candidate_name(candidate)}.{field} must be a positive integer")
+        actual = parameters.get(field)
+        if actual != expected:
+            fail(f"{label}.{field} must equal candidate.{field} ({expected})")
+
+
+def validate_report_security_level(
+    report: dict[str, Any],
+    candidate: dict[str, Any],
+    label: str,
+) -> None:
+    security_bits = require_positive_number(report.get("security_level_bits"), f"{label}.security_level_bits")
+    target_security_bits = require_positive_number(
+        candidate.get("target_security_bits"),
+        f"{candidate_name(candidate)}.target_security_bits",
     )
-    require_object(
+    if security_bits < target_security_bits:
+        fail(f"{label}.security_level_bits is below target_security_bits={target_security_bits}")
+
+
+def validate_external_estimator_report(report: dict[str, Any], candidate: dict[str, Any]) -> None:
+    candidate_id = candidate_name(candidate)
+    label = f"{candidate_id}.external_lattice_estimator_report"
+    if require_string(report.get("candidate"), f"{label}.candidate") != candidate_id:
+        fail(f"{label}.candidate does not match candidate name")
+    require_string(report.get("tool"), f"{label}.tool")
+    require_string(report.get("source"), f"{label}.source")
+    require_string(report.get("generated_at"), f"{label}.generated_at")
+    validate_command(report.get("command"), f"{label}.command")
+    validate_report_security_level(report, candidate, label)
+    parameters = require_object(
         report.get("parameters"),
-        f"{candidate}.external_lattice_estimator_report.parameters",
+        f"{label}.parameters",
     )
+    validate_parameter_snapshot(parameters, candidate, f"{label}.parameters")
     assumptions = require_list(
         report.get("assumptions"),
-        f"{candidate}.external_lattice_estimator_report.assumptions",
+        f"{label}.assumptions",
     )
     if not assumptions or not all(isinstance(assumption, str) and assumption for assumption in assumptions):
-        fail(f"{candidate}.external_lattice_estimator_report.assumptions must contain non-empty strings")
+        fail(f"{label}.assumptions must contain non-empty strings")
 
 
-def validate_lazer_parameter_report(report: dict[str, Any], candidate: str) -> None:
-    if require_string(report.get("candidate"), f"{candidate}.lazer_parameter_generation_report.candidate") != candidate:
-        fail(f"{candidate}.lazer_parameter_generation_report.candidate does not match candidate name")
-    require_string(report.get("tool"), f"{candidate}.lazer_parameter_generation_report.tool")
-    require_string(report.get("source"), f"{candidate}.lazer_parameter_generation_report.source")
-    require_string(report.get("generated_at"), f"{candidate}.lazer_parameter_generation_report.generated_at")
-    validate_command(report.get("command"), f"{candidate}.lazer_parameter_generation_report.command")
-    require_object(
+def validate_lazer_parameter_report(report: dict[str, Any], candidate: dict[str, Any]) -> None:
+    candidate_id = candidate_name(candidate)
+    label = f"{candidate_id}.lazer_parameter_generation_report"
+    if require_string(report.get("candidate"), f"{label}.candidate") != candidate_id:
+        fail(f"{label}.candidate does not match candidate name")
+    require_string(report.get("tool"), f"{label}.tool")
+    require_string(report.get("source"), f"{label}.source")
+    require_string(report.get("generated_at"), f"{label}.generated_at")
+    validate_command(report.get("command"), f"{label}.command")
+    parameter_set = require_object(
         report.get("parameter_set"),
-        f"{candidate}.lazer_parameter_generation_report.parameter_set",
+        f"{label}.parameter_set",
     )
+    validate_parameter_snapshot(parameter_set, candidate, f"{label}.parameter_set")
     require_object(
         report.get("proof_size_estimate"),
-        f"{candidate}.lazer_parameter_generation_report.proof_size_estimate",
+        f"{label}.proof_size_estimate",
     )
-    require_positive_number(
-        report.get("security_level_bits"),
-        f"{candidate}.lazer_parameter_generation_report.security_level_bits",
-    )
+    validate_report_security_level(report, candidate, label)
 
 
 def validate_candidate(candidate: dict[str, Any], external_estimator_available: bool) -> bool:
@@ -179,14 +206,14 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
     if estimator_report is not None:
         validate_external_estimator_report(
             require_object(estimator_report, f"{name}.external_lattice_estimator_report"),
-            name,
+            candidate,
         )
 
     lazer_report = candidate.get("lazer_parameter_generation_report")
     if lazer_report is not None:
         validate_lazer_parameter_report(
             require_object(lazer_report, f"{name}.lazer_parameter_generation_report"),
-            name,
+            candidate,
         )
 
     if ready:
