@@ -7,6 +7,7 @@
         test-sdk-equivalence test-confidential-production \
         check-confidential-domain-registry \
         check-confidential-runtime-surface \
+        check-confidential-failure-semantics \
         check-confidential-parameter-readiness \
         check-confidential-production-readiness \
         run-confidential-lattice-estimator \
@@ -116,6 +117,10 @@ check-confidential-runtime-surface:
 	@echo "Checking confidential runtime surface manifest..."
 	@python3 scripts/check_confidential_runtime_surface.py
 
+check-confidential-failure-semantics:
+	@echo "Checking confidential failure-semantics coverage manifest..."
+	@python3 scripts/check_confidential_failure_semantics.py
+
 check-confidential-parameter-readiness:
 	@echo "Screening confidential transfer parameters..."
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
@@ -139,6 +144,8 @@ check-confidential-production-readiness:
 	@git diff --exit-code -- bench/data/confidential-parameter-screen.json
 	@echo "Checking strict confidential production-readiness gate..."
 	@python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json --require-production
+	@echo "Checking strict confidential failure-semantics gate..."
+	@python3 scripts/check_confidential_failure_semantics.py --require-production
 
 test-confidential-production: check-formalization build-cool ocaml haskell typescript
 	@echo "Generating confidential transcript vectors..."
@@ -149,6 +156,7 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@node scripts/generate_confidential_transaction_vectors.mjs
 	@$(MAKE) check-confidential-domain-registry
 	@$(MAKE) check-confidential-runtime-surface
+	@$(MAKE) check-confidential-failure-semantics
 	@$(MAKE) check-confidential-parameter-readiness
 	@echo "Checking confidential scaffold quarantine..."
 	@python3 scripts/check_confidential_scaffold_quarantine.py
@@ -246,6 +254,7 @@ help:
 	@echo "  test-confidential-production Run production-facing confidential-transfer gates"
 	@echo "  check-confidential-domain-registry Check confidential domain/tag registry"
 	@echo "  check-confidential-runtime-surface Check confidential CLI/SDK surface manifest"
+	@echo "  check-confidential-failure-semantics Check confidential failure semantics coverage"
 	@echo "  check-confidential-parameter-readiness Run soft confidential parameter honesty gate"
 	@echo "  check-confidential-production-readiness Run strict launch parameter gate"
 	@echo "  run-confidential-lattice-estimator Generate external lattice-estimator report collection"

@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "protocolSpec": {
+    "file": "plan/CONFIDENTIAL_TRANSFERS_PROTOCOL.md",
+    "requiredSnippets": [
+      "## Failure Semantics",
+      "Verification returns failure for:",
+      "No verifier path may silently coerce a malformed value into a valid one.",
+      "negative mutation tests for every failure class above"
+    ]
+  },
+  "failureClasses": [
+    {
+      "id": "unsupported_protocol_version_or_domain",
+      "status": "covered",
+      "specSnippets": [
+        "unsupported protocol version or domain",
+        "Unknown versions, unsupported domains, or mismatched network/asset IDs are"
+      ],
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "if (protocolVersion !== 1) {",
+            "export const transactionProtocolId = CT_TRANSACTION_PROTOCOL_ID;"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "expect(tx.transactionProtocolId).toBe(vectors.protocolId);",
+            "protocolVersion: context.protocolVersion + 1"
+          ]
+        },
+        {
+          "file": "tests/fixtures/confidential-domain-registry.json",
+          "snippets": [
+            "ISABELLA-CT-FS-v1",
+            "\"balance\": 1001",
+            "ISABELLA-CT-TX-v1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mismatched_public_context",
+      "status": "covered",
+      "specSnippets": [
+        "mismatched network, asset, root, or fee context"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "networkId: 'isabella-mainnet'",
+            "{ ...policy, assetId: policy.assetId + 1 }",
+            "{ ...feePolicy, publicFee: 0 }",
+            "root: { ...policy.root, depth: policy.root.depth + 1 }"
+          ]
+        },
+        {
+          "file": "tests/src/validate-ocaml.ts",
+          "snippets": [
+            "ct-verify-merkle-envelope OCaml rejects wrong verifier policy",
+            "ct-verify-merkle-envelope OCaml rejects mismatched fee policy"
+          ]
+        },
+        {
+          "file": "tests/src/validate-haskell.ts",
+          "snippets": [
+            "ct-verify-merkle-envelope Haskell rejects wrong verifier policy",
+            "ct-verify-merkle-envelope Haskell rejects mismatched fee policy"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "malformed_canonical_serialization",
+      "status": "covered",
+      "specSnippets": [
+        "malformed canonical serialization",
+        "Duplicate fields, non-canonical integer",
+        "unsupported proof shapes, or trailing bytes are"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "rejects malformed or non-canonical transaction context fields",
+            "rejects malformed or non-canonical wallet proof requests",
+            "Number.MAX_SAFE_INTEGER + 1"
+          ]
+        },
+        {
+          "file": "tests/src/validate-ocaml.ts",
+          "snippets": [
+            "nonCanonicalIntegerText",
+            "unsafeProtocolInteger",
+            "native non-canonical/out-of-range transaction encoding rejection"
+          ]
+        },
+        {
+          "file": "tests/src/validate-haskell.ts",
+          "snippets": [
+            "nonCanonicalIntegerText",
+            "unsafeProtocolInteger",
+            "native non-canonical/out-of-range transaction encoding rejection"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "expired_or_unknown_membership_root",
+      "status": "covered",
+      "specSnippets": [
+        "expired or unknown membership root",
+        "root and nullifier-set update are considered irreversible for wallet UX"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "acceptedRoots: []",
+            "acceptedRoots: request.acceptedRoots.filter"
+          ]
+        },
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "context.root must be inside acceptedRoots"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-proof-mutations.ts",
+          "snippets": [
+            "name: 'verifier root mismatch'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invalid_membership_path",
+      "status": "covered",
+      "specSnippets": [
+        "invalid membership path"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-proof-mutations.ts",
+          "snippets": [
+            "input member sibling",
+            "input member direction",
+            "input member index",
+            "input member extended path"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-merkle.test.ts",
+          "snippets": [
+            "rejects deterministic Merkle transaction proof mutations"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "duplicated_or_spent_nullifier",
+      "status": "covered",
+      "specSnippets": [
+        "duplicated or already-spent nullifier",
+        "A transaction is invalid if any revealed nullifier is already in the accepted"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "spentNullifiers: [request.context.nf1]",
+            "context: { ...request.context, nf2: request.context.nf1 }"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-proof-mutations.ts",
+          "snippets": [
+            "name: 'spent nullifier'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invalid_balance_proof",
+      "status": "covered",
+      "specSnippets": [
+        "invalid balance proof"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-proof-mutations.ts",
+          "snippets": [
+            "name: 'balance response'"
+          ]
+        },
+        {
+          "file": "tests/src/audit-confidential-transaction.ts",
+          "snippets": [
+            "forgedBalance",
+            "semanticLedgerStepStillAcceptsForgedTx"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invalid_range_proof_or_output_amount",
+      "status": "covered",
+      "specSnippets": [
+        "invalid range proof",
+        "output amount outside the selected range"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-proof-mutations.ts",
+          "snippets": [
+            "name: 'range response'",
+            "name: 'second range response'"
+          ]
+        },
+        {
+          "file": "tests/src/audit-confidential-transaction.ts",
+          "snippets": [
+            "rangeRejected",
+            "rangeTruncationRejected",
+            "ConfidentialRange.fsVerify"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invalid_nullifier_proof",
+      "status": "covered",
+      "specSnippets": [
+        "invalid nullifier proof"
+      ],
+      "evidence": [
+        {
+          "file": "tests/src/confidential-proof-mutations.ts",
+          "snippets": [
+            "name: 'nullifier response'",
+            "name: 'second nullifier response'"
+          ]
+        },
+        {
+          "file": "tests/src/audit-confidential-transaction.ts",
+          "snippets": [
+            "nullifierRejected",
+            "nullifierTruncationRejected",
+            "nullifierFsVerify"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "numeric_overflow_or_bounds",
+      "status": "covered",
+      "specSnippets": [
+        "numeric overflow or integer outside canonical bounds"
+      ],
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "assertSafeI64",
+            "Number.isSafeInteger"
+          ]
+        },
+        {
+          "file": "tests/src/validate-ocaml.ts",
+          "snippets": [
+            "unsafe input vector element",
+            "unsafe proof matrix integer",
+            "unsafe context vector integer"
+          ]
+        },
+        {
+          "file": "tests/src/validate-haskell.ts",
+          "snippets": [
+            "unsafe input vector element",
+            "unsafe proof matrix integer",
+            "unsafe context vector integer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unsupported_extension_field_public_surface",
+      "status": "covered",
+      "specSnippets": [
+        "unsupported extension field",
+        "No verifier path may silently coerce a malformed value into a valid one."
+      ],
+      "evidence": [
+        {
+          "file": "isabella.ts/src/index.ts",
+          "snippets": [
+            "assertExactObjectKeys",
+            "contains unsupported fields"
+          ]
+        },
+        {
+          "file": "tests/src/confidential-transaction.test.ts",
+          "snippets": [
+            "extension: 1",
+            "transactionEnvelopeDigest({ ...envelope, extension: 1 })",
+            "transactionWalletProofRequestDigest({"
+          ]
+        }
+      ]
+    }
+  ],
+  "productionLimitations": [
+    {
+      "id": "consensus_indexer_root_expiry_api",
+      "status": "open",
+      "evidence": [
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "consensus/indexer accepted-root API contracts have not adopted the depth-tagged runtime serialization",
+            "consensus/indexer APIs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proof_subobject_extension_field_rejection",
+      "status": "open",
+      "evidence": [
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "generated conformance for all exported Merkle transaction surfaces",
+            "broader native fuzz tests"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "side_channel_review",
+      "status": "open",
+      "evidence": [
+        {
+          "file": "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md",
+          "snippets": [
+            "side-channel review"
+          ]
+        }
+      ]
+    }
+  ],
+  "gateWiring": {
+    "Makefile": [
+      "scripts/check_confidential_failure_semantics.py"
+    ],
+    ".github/workflows/ci.yml": [
+      "scripts/check_confidential_failure_semantics.py"
+    ],
+    "plan/CONFIDENTIAL_TRANSFERS_PRODUCTION_READINESS.md": [
+      "confidential failure-semantics manifest"
+    ]
+  }
+}

@@ -172,6 +172,16 @@ describe('Confidential transaction context vectors', () => {
       root: { ...entry.context.root, depth: -1 },
     }))
       .toThrow();
+    expect(() => tx.transactionContextDigest({
+      ...entry.context,
+      extension: 1,
+    } as TransactionContext))
+      .toThrow();
+    expect(() => tx.transactionContextDigest({
+      ...entry.context,
+      root: { ...entry.context.root, extension: 1 },
+    } as TransactionContext))
+      .toThrow();
   });
 
   it('matches the TypeScript Merkle proof and envelope serialization APIs', async () => {
@@ -222,6 +232,8 @@ describe('Confidential transaction context vectors', () => {
       proof,
     })).not.toBe(envelopeVector.digest);
     expect(() => tx.transactionEnvelopeDigest({ ...envelope, contextDigest: proofVector.digest }))
+      .toThrow();
+    expect(() => tx.transactionEnvelopeDigest({ ...envelope, extension: 1 }))
       .toThrow();
   });
 
@@ -334,6 +346,18 @@ describe('Confidential transaction context vectors', () => {
       ...request,
       context: { ...request.context, nf2: request.context.nf1 },
     })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      extension: 1,
+    } as WalletProofRequest))
+      .toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.map((root, index) =>
+        index === 0 ? { ...root, extension: 1 } : root
+      ),
+    } as WalletProofRequest))
+      .toThrow();
   });
 
   it('verifies Merkle transaction envelopes only under the expected public context', async () => {
@@ -433,6 +457,23 @@ describe('Confidential transaction context vectors', () => {
       spent,
       envelope,
       { ...policy, assetId: policy.assetId + 1 }
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        context: { ...context, protocolVersion: context.protocolVersion + 1 },
+        contextDigest: tx.transactionContextDigest({
+          ...context,
+          protocolVersion: context.protocolVersion + 1,
+        }),
+      },
+      { ...policy, protocolVersion: policy.protocolVersion + 1 }
     )).toBe(false);
     expect(tx.fsVerifyMerkleEnvelope(
       params,

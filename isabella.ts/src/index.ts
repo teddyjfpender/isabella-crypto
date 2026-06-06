@@ -1068,7 +1068,24 @@ function encodeDigestVector(digests: MerkleDigest[], label: string): Buffer {
   ]);
 }
 
+function assertExactObjectKeys(value: unknown, keys: string[], label: string): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const allowed = new Set(keys);
+  const present = Object.keys(value);
+  const missing = keys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));
+  if (missing.length > 0) {
+    throw new Error(`${label} is missing required fields: ${missing.join(', ')}`);
+  }
+  const unsupported = present.filter((key) => !allowed.has(key));
+  if (unsupported.length > 0) {
+    throw new Error(`${label} contains unsupported fields: ${unsupported.join(', ')}`);
+  }
+}
+
 function encodeAcceptedRoot(root: MerkleAcceptedRoot, label: string): Buffer {
+  assertExactObjectKeys(root, ['digest', 'depth'], label);
   assertNonNegativeSafeI64(root.depth, `${label}.depth`);
   return Buffer.concat([
     encodeDigest(root.digest, `${label}.digest`),
@@ -1212,6 +1229,24 @@ function merkleHashNode(left: MerkleDigest, right: MerkleDigest): MerkleDigest {
 }
 
 function transactionContextPreimage(context: ConfidentialTransactionContext): Buffer {
+  assertExactObjectKeys(
+    context,
+    [
+      'protocolVersion',
+      'networkId',
+      'assetId',
+      'ledgerEpoch',
+      'root',
+      'publicFee',
+      'cIn1',
+      'cIn2',
+      'cOut1',
+      'cOut2',
+      'nf1',
+      'nf2',
+    ],
+    'context'
+  );
   assertNonNegativeSafeI64(context.protocolVersion, 'protocolVersion');
   assertNonNegativeSafeI64(context.assetId, 'assetId');
   assertNonNegativeSafeI64(context.ledgerEpoch, 'ledgerEpoch');
@@ -1359,6 +1394,7 @@ function transactionMerkleProofPreimage(proof: MerkleTransactionProof): Buffer {
 }
 
 function transactionEnvelopePreimage(envelope: ConfidentialTransactionEnvelope): Buffer {
+  assertExactObjectKeys(envelope, ['context', 'contextDigest', 'proof'], 'envelope');
   const contextDigest = sha3Hex(transactionContextPreimage(envelope.context));
   if (envelope.contextDigest !== contextDigest) {
     throw new Error('contextDigest does not match canonical transaction context');
@@ -1375,6 +1411,7 @@ function transactionEnvelopePreimage(envelope: ConfidentialTransactionEnvelope):
 function transactionWalletProofRequestPreimage(
   request: ConfidentialWalletProofRequest
 ): Buffer {
+  assertExactObjectKeys(request, ['context', 'acceptedRoots', 'spentNullifiers'], 'walletProofRequest');
   assertCanonicalAcceptedRootSet(request.acceptedRoots, 'acceptedRoots');
   assertCanonicalIntMatrixSet(request.spentNullifiers, 'spentNullifiers');
   const contextDigest = sha3Hex(transactionContextPreimage(request.context));
@@ -2517,6 +2554,9 @@ export namespace ConfidentialTransaction {
     try {
       const protocolVersion = policy.protocolVersion ?? 1;
       const publicFee = policy.publicFee ?? 0;
+      if (protocolVersion !== 1) {
+        return false;
+      }
       assertNonNegativeSafeI64(publicFee, 'policy.publicFee');
       return (
         context.protocolVersion === protocolVersion &&
@@ -2544,6 +2584,9 @@ export namespace ConfidentialTransaction {
         return false;
       }
       assertNonNegativeSafeI64(policy.protocolVersion, 'policy.protocolVersion');
+      if (policy.protocolVersion !== 1) {
+        return false;
+      }
       encodeAsciiString(policy.networkId, 'policy.networkId');
       assertNonNegativeSafeI64(policy.assetId, 'policy.assetId');
       assertNonNegativeSafeI64(policy.ledgerEpoch, 'policy.ledgerEpoch');

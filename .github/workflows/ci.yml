@@ -331,6 +331,9 @@ jobs:
       - name: Check confidential runtime surface
         run: python3 scripts/check_confidential_runtime_surface.py
 
+      - name: Check confidential failure semantics
+        run: python3 scripts/check_confidential_failure_semantics.py
+
       - name: Check confidential parameter screen artifact
         run: |
           python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
@@ -390,6 +393,7 @@ jobs:
           python3 scripts/check_confidential_parameter_readiness.py \
             --report bench/data/confidential-parameter-screen.json \
             --require-production
+          python3 scripts/check_confidential_failure_semantics.py --require-production
 
   # Optional: full LaZer-backed equivalence checks.
   # Run manually on a self-hosted runner that satisfies LaZer build requirements.
