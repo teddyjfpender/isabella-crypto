@@ -1774,7 +1774,7 @@ let prepare_ct_verify_with_usage command args =
 let prepare_ct_verify_scaffold args =
   prepare_ct_verify_with_usage "ct-verify-scaffold" args
 
-let prepare_ct_verify_merkle_with_root ?public_fee root_override args =
+let prepare_ct_verify_merkle_with_root ?public_fee ?root_depth root_override args =
   match args with
   | m_str :: n2_str :: q_str :: beta_str :: gamma_str :: k_str :: ck_str :: nk_str ::
     ledger_str :: spent_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
@@ -1802,8 +1802,20 @@ let prepare_ct_verify_merkle_with_root ?public_fee root_override args =
          | Some root -> root
          | None -> Confidential_transaction.merkle_ledger_root ledger
        in
+       let in1_depth =
+         List.length proof.Confidential_transaction.tx_merkle_in1_member.Confidential_merkle.merkle_siblings
+       in
+       let in2_depth =
+         List.length proof.Confidential_transaction.tx_merkle_in2_member.Confidential_merkle.merkle_siblings
+       in
+       let depth_ok =
+         match root_depth with
+         | None -> true
+         | Some depth -> in1_depth = depth && in2_depth = depth
+       in
        Ok
          (fun () ->
+           depth_ok &&
            match public_fee with
            | None ->
              Confidential_transaction.transaction_fs_verify_merkle
@@ -1907,7 +1919,7 @@ let cmd_ct_verify_merkle_envelope args =
                ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str;
                nf1_str; nf2_str] @ proof_args
             in
-            match prepare_ct_verify_merkle_with_root ~public_fee (Some root) merkle_args with
+            match prepare_ct_verify_merkle_with_root ~public_fee ~root_depth (Some root) merkle_args with
             | Ok verify ->
               output_result "transaction_fs_verify_merkle_envelope"
                 (if verify () then "true" else "false")

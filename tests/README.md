@@ -119,8 +119,9 @@ The harnesses are repair-aware:
   integers on the production transaction context, wallet-request, proof-digest,
   Merkle verifier, envelope-digest, and envelope-verifier commands, assert
   acceptance for a valid nonzero public-fee proof, and assert rejection for
-  stale digests, wrong policy, fee-policy mismatches, and context roots not
-  matched by the Merkle proof.
+  stale digests, wrong policy, root-depth policy mismatches, fee-policy
+  mismatches, and context roots or context root depths not matched by the
+  Merkle proof.
 
 The harnesses compare the Haskell and OCaml CLIs against the built
 TypeScript SDK artifact in `isabella.ts/dist/`.

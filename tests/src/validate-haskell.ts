@@ -1137,6 +1137,22 @@ const walletProofRequestRejectionCases = [
     },
   },
   {
+    name: 'context root depth missing from accepted window',
+    request: {
+      ...haskellWalletProofRequest,
+      acceptedRoots: haskellWalletProofRequest.acceptedRoots
+        .map((root: any) =>
+          root.digest === haskellWalletProofRequest.context.root.digest &&
+          root.depth === haskellWalletProofRequest.context.root.depth
+            ? { ...root, depth: root.depth + 1 }
+            : root
+        )
+        .sort((left: any, right: any) =>
+          `${left.digest}:${left.depth}`.localeCompare(`${right.digest}:${right.depth}`)
+        ),
+    },
+  },
+  {
     name: 'duplicate accepted roots',
     request: {
       ...haskellWalletProofRequest,
@@ -2003,6 +2019,51 @@ assert.equal(
   false,
   'ct-verify-merkle-envelope Haskell rejects mismatched fee policy'
 );
+assert.equal(
+  runHaskellEnvelope(
+    {
+      ...haskellEnvelopePolicy,
+      root: { ...haskellEnvelopePolicy.root, depth: haskellEnvelopePolicy.root.depth + 1 },
+    },
+    haskellEnvelopeContextDigest,
+    haskellEnvelopeContext,
+    ctMerkleProof
+  ),
+  false,
+  'ct-verify-merkle-envelope Haskell rejects wrong verifier root depth'
+);
+const haskellWrongDepthContext = {
+  ...haskellEnvelopeContext,
+  root: { ...haskellEnvelopeContext.root, depth: haskellEnvelopeContext.root.depth + 1 },
+};
+const haskellWrongDepthDigest = parseResult<string>(
+  runHaskell([
+    'ct-transaction-context',
+    haskellWrongDepthContext.protocolVersion.toString(),
+    haskellWrongDepthContext.networkId,
+    haskellWrongDepthContext.assetId.toString(),
+    haskellWrongDepthContext.ledgerEpoch.toString(),
+    haskellWrongDepthContext.root.digest,
+    haskellWrongDepthContext.root.depth.toString(),
+    haskellWrongDepthContext.publicFee.toString(),
+    JSON.stringify(haskellWrongDepthContext.cIn1),
+    JSON.stringify(haskellWrongDepthContext.cIn2),
+    JSON.stringify(haskellWrongDepthContext.cOut1),
+    JSON.stringify(haskellWrongDepthContext.cOut2),
+    JSON.stringify(haskellWrongDepthContext.nf1),
+    JSON.stringify(haskellWrongDepthContext.nf2),
+  ])
+);
+assert.equal(
+  runHaskellEnvelope(
+    { ...haskellEnvelopePolicy, root: haskellWrongDepthContext.root },
+    haskellWrongDepthDigest,
+    haskellWrongDepthContext,
+    ctMerkleProof
+  ),
+  false,
+  'ct-verify-merkle-envelope Haskell rejects context root depth not matched by the Merkle proof'
+);
 const haskellWrongRootContext = {
   ...haskellEnvelopeContext,
   root: {
@@ -2143,5 +2204,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation including root-depth mismatch rejection, and randomized sampler bound checks.'
 );

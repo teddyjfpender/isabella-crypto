@@ -671,8 +671,8 @@ prepareCtVerifyWithUsage command _ =
 prepareCtVerifyScaffold :: [String] -> Either String (() -> Bool)
 prepareCtVerifyScaffold = prepareCtVerifyWithUsage "ct-verify-scaffold"
 
-prepareCtVerifyMerkleWithRoot :: Maybe String -> Maybe Int -> [String] -> Either String (() -> Bool)
-prepareCtVerifyMerkleWithRoot rootOverride publicFeeOverride
+prepareCtVerifyMerkleWithRoot :: Maybe String -> Maybe Int -> Maybe Int -> [String] -> Either String (() -> Bool)
+prepareCtVerifyMerkleWithRoot rootOverride publicFeeOverride rootDepthOverride
     ( mStr : n2Str : qStr : betaStr : gammaStr : kStr : ckStr : nkStr
       : ledgerStr : spentStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
       : nf1Str : nf2Str : proofArgs
@@ -709,21 +709,31 @@ prepareCtVerifyMerkleWithRoot rootOverride publicFeeOverride
           , Right proof
           ) ->
             let root = maybe (ConfidentialTransaction.merkleLedgerRoot ledger) id rootOverride
+                in1Depth =
+                    length (ConfidentialTransaction.merkleMemberSiblings (ConfidentialTransaction.tx_merkle_in1_member proof))
+                in2Depth =
+                    length (ConfidentialTransaction.merkleMemberSiblings (ConfidentialTransaction.tx_merkle_in2_member proof))
+                depthOk =
+                    maybe
+                        True
+                        (\rootDepth -> in1Depth == rootDepth && in2Depth == rootDepth)
+                        rootDepthOverride
              in Right
                     (\() ->
-                        case publicFeeOverride of
-                            Nothing ->
-                                ConfidentialTransaction.transactionFsVerifyMerkle
-                                    params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof
-                            Just publicFee ->
-                                ConfidentialTransaction.transactionFsVerifyMerkleFee
-                                    params gamma k ck nk root spent publicFee cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
+                        depthOk
+                            && case publicFeeOverride of
+                                Nothing ->
+                                    ConfidentialTransaction.transactionFsVerifyMerkle
+                                        params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof
+                                Just publicFee ->
+                                    ConfidentialTransaction.transactionFsVerifyMerkleFee
+                                        params gamma k ck nk root spent publicFee cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
-prepareCtVerifyMerkleWithRoot _ _ _ =
+prepareCtVerifyMerkleWithRoot _ _ _ _ =
     Left ("Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 " ++ ctMerkleProofArgsUsage)
 
 prepareCtVerifyMerkle :: [String] -> Either String (() -> Bool)
-prepareCtVerifyMerkle = prepareCtVerifyMerkleWithRoot Nothing Nothing
+prepareCtVerifyMerkle = prepareCtVerifyMerkleWithRoot Nothing Nothing Nothing
 
 -- Command implementations
 
@@ -1941,7 +1951,7 @@ cmdCtVerifyMerkleEnvelope format
                             ++ proofArgs
                 if not policyOk
                     then outputBoolResult format "transaction_fs_verify_merkle_envelope = " False
-                    else case prepareCtVerifyMerkleWithRoot (Just rootDigest) (Just publicFee) merkleArgs of
+                    else case prepareCtVerifyMerkleWithRoot (Just rootDigest) (Just publicFee) (Just rootDepth) merkleArgs of
                         Right verify ->
                             outputBoolResult format "transaction_fs_verify_merkle_envelope = " (verify ())
                         Left err

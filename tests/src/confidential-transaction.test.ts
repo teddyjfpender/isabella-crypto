@@ -242,6 +242,14 @@ describe('Confidential transaction context vectors', () => {
       ...request,
       acceptedRoots: request.acceptedRoots.map((root, index) =>
         index === mutableAcceptedRootIndex
+          ? { ...root, depth: root.depth + 1 }
+          : root
+      ).sort((left, right) => rootKey(left).localeCompare(rootKey(right))),
+    })).not.toBe(requestVector.digest);
+    expect(tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.map((root, index) =>
+        index === mutableAcceptedRootIndex
           ? { ...root, digest: mutateDigest(root.digest) }
           : root
       ).sort((left, right) => rootKey(left).localeCompare(rootKey(right))),
@@ -271,6 +279,14 @@ describe('Confidential transaction context vectors', () => {
     expect(() => tx.transactionWalletProofRequestDigest({
       ...request,
       acceptedRoots: request.acceptedRoots.filter((root) => rootKey(root) !== rootKey(request.context.root)),
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.map((root) =>
+        rootKey(root) === rootKey(request.context.root)
+          ? { ...root, depth: root.depth + 1 }
+          : root
+      ).sort((left, right) => rootKey(left).localeCompare(rootKey(right))),
     })).toThrow();
     expect(() => tx.transactionWalletProofRequestDigest({
       ...request,
@@ -476,6 +492,34 @@ describe('Confidential transaction context vectors', () => {
         proof: { ...proof, in2Member: proof.in1Member },
       },
       policy
+    )).toBe(false);
+    const wrongDepthContext = {
+      ...context,
+      root: { ...context.root, depth: context.root.depth + 1 },
+    };
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      {
+        ...envelope,
+        context: wrongDepthContext,
+        contextDigest: tx.transactionContextDigest(wrongDepthContext),
+      },
+      { ...policy, root: wrongDepthContext.root }
+    )).toBe(false);
+    expect(tx.fsVerifyMerkleEnvelope(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      spent,
+      envelope,
+      { ...policy, root: { ...policy.root, depth: policy.root.depth + 1 } }
     )).toBe(false);
   });
 });

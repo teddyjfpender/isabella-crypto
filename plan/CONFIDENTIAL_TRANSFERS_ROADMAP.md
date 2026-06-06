@@ -159,8 +159,9 @@ benchmarks are independently checked.
   proof's Merkle membership fields instead of deriving membership from the
   supplied ledger. The SDK-equivalence validators exercise the TS and native
   envelope gates with native `ct-transaction-context` digests and native Merkle
-  transaction proofs, including stale-digest, wrong-policy, fee-policy
-  mismatch, context-root/proof-root mismatch, and the shared deterministic
+  transaction proofs, including stale-digest, wrong-policy, root-depth policy
+  mismatch, fee-policy mismatch, context-root/proof-root mismatch,
+  context-root-depth/proof-path-depth mismatch, and the shared deterministic
   proof-mutation matrix. `Confidential_Balance.thy` now defines public amount
   commitments and `fee_balance_commitment`; `Confidential_Transaction.thy`
   exposes `transaction_relation_fee` and `transaction_fs_verify_merkle_fee`.

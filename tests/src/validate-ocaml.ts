@@ -1034,6 +1034,22 @@ const walletProofRequestRejectionCases = [
     },
   },
   {
+    name: 'context root depth missing from accepted window',
+    request: {
+      ...walletProofRequest,
+      acceptedRoots: walletProofRequest.acceptedRoots
+        .map((root: any) =>
+          root.digest === walletProofRequest.context.root.digest &&
+          root.depth === walletProofRequest.context.root.depth
+            ? { ...root, depth: root.depth + 1 }
+            : root
+        )
+        .sort((left: any, right: any) =>
+          `${left.digest}:${left.depth}`.localeCompare(`${right.digest}:${right.depth}`)
+        ),
+    },
+  },
+  {
     name: 'duplicate accepted roots',
     request: {
       ...walletProofRequest,
@@ -1850,6 +1866,64 @@ assert.equal(
   false,
   'ct-verify-merkle-envelope OCaml rejects mismatched fee policy'
 );
+assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    { ...ocamlEnvelopePolicy, root: { ...ocamlEnvelopePolicy.root, depth: ocamlEnvelopePolicy.root.depth + 1 } },
+    ocamlEnvelopeContextDigest,
+    ocamlEnvelopeContext,
+    ctMerkleProof!
+  ),
+  false,
+  'ct-verify-merkle-envelope OCaml rejects wrong verifier root depth'
+);
+const ocamlWrongDepthContext = {
+  ...ocamlEnvelopeContext,
+  root: { ...ocamlEnvelopeContext.root, depth: ocamlEnvelopeContext.root.depth + 1 },
+};
+const ocamlWrongDepthDigest = ctTransactionContext(
+  ocamlWrongDepthContext.protocolVersion,
+  ocamlWrongDepthContext.networkId,
+  ocamlWrongDepthContext.assetId,
+  ocamlWrongDepthContext.ledgerEpoch,
+  ocamlWrongDepthContext.root,
+  ocamlWrongDepthContext.publicFee,
+  ocamlWrongDepthContext.cIn1,
+  ocamlWrongDepthContext.cIn2,
+  ocamlWrongDepthContext.cOut1,
+  ocamlWrongDepthContext.cOut2,
+  ocamlWrongDepthContext.nf1,
+  ocamlWrongDepthContext.nf2
+);
+assert.equal(
+  ctVerifyMerkleEnvelope(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    { ...ocamlEnvelopePolicy, root: ocamlWrongDepthContext.root },
+    ocamlWrongDepthDigest,
+    ocamlWrongDepthContext,
+    ctMerkleProof!
+  ),
+  false,
+  'ct-verify-merkle-envelope OCaml rejects context root depth not matched by the Merkle proof'
+);
 const ocamlWrongRootContext = {
   ...ocamlEnvelopeContext,
   root: {
@@ -2005,5 +2079,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation including root-depth mismatch rejection, and randomized sampler bound checks.'
 );
