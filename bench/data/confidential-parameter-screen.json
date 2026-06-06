@@ -23,7 +23,21 @@
         "error": "ModuleNotFoundError",
         "message": "No module named 'lwe_estimator'"
       }
-    ]
+    ],
+    "required_runtime_modules": [
+      {
+        "module": "sage.all",
+        "available": false,
+        "error": "ModuleNotFoundError",
+        "message": "No module named 'sage'"
+      }
+    ],
+    "runnable_api": {
+      "module": "estimator",
+      "symbol": "SIS",
+      "sage_symbol": "sage.all.oo"
+    },
+    "availability_reason": "estimator.SIS or sage.all.oo is not importable"
   },
   "warning": "This JSON is a deterministic parameter screening artifact. It is not a production security estimate and does not replace lattice-estimator, LaZer parameter generation, or implementation benchmarks.",
   "launch_readiness": {

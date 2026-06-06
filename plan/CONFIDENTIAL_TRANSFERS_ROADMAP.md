@@ -271,12 +271,14 @@ Selected baseline candidates:
 The local screen is not a production security estimate. The generated artifact
 now records the exact estimator import probe. On this machine the Python
 `estimator`, `lattice_estimator`, and `lwe_estimator` modules were not
-installed, so the external estimator gate is still open. It also records exact
-formal modulus requirements: for `ct_sis_note_mvp_v0`, the current modulus is
-`q = 8380417` (23 bits), while the proof-margin aggregate requires an 82-bit
-minimum modulus, dominated by the `sis_range_amount_residual_vs_honest` bound.
-That gap is surfaced as the machine-readable blocker
-`formal_minimum_q_bits_required:82`. The widened
+installed, and the required Sage runtime module `sage.all` was also absent, so
+the external estimator gate is still open. The probe treats the toolchain as
+runnable only when the exact runner API, `estimator.SIS` plus `sage.all.oo`, is
+importable. It also records exact formal modulus requirements: for
+`ct_sis_note_mvp_v0`, the current modulus is `q = 8380417` (23 bits), while the
+proof-margin aggregate requires an 82-bit minimum modulus, dominated by the
+`sis_range_amount_residual_vs_honest` bound. That gap is surfaced as the
+machine-readable blocker `formal_minimum_q_bits_required:82`. The widened
 `ct_sis_note_mvp_q83_v0` candidate keeps the same SIS-note dimensions and
 witness bounds but uses `q = 4835703278458516765933661`, the first screened
 prime above `2 * max_sis_bound + 2` for the current proof margins. It has no

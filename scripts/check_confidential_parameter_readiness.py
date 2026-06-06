@@ -82,35 +82,55 @@ def validate_estimator_probe(report: dict[str, Any], external_estimator_availabl
     elif selected is not None:
         fail("external_lattice_estimator_probe.selected_module must be null when unavailable")
 
-    attempts = require_list(
+    def validate_attempts(value: Any, label: str) -> set[str]:
+        attempts = require_list(value, label)
+        if not attempts:
+            fail(f"{label} must not be empty")
+        available_modules: set[str] = set()
+        for index, raw_attempt in enumerate(attempts):
+            attempt = require_object(raw_attempt, f"{label}[{index}]")
+            module = require_string(attempt.get("module"), f"{label}[{index}].module")
+            available = attempt.get("available")
+            if not isinstance(available, bool):
+                fail(f"{label}[{index}].available must be a boolean")
+            if available:
+                available_modules.add(module)
+                path = attempt.get("path")
+                if path is not None and not isinstance(path, str):
+                    fail(f"{label}[{index}].path must be a string or null")
+            else:
+                require_string(attempt.get("error"), f"{label}[{index}].error")
+                message = attempt.get("message")
+                if not isinstance(message, str):
+                    fail(f"{label}[{index}].message must be a string")
+        return available_modules
+
+    available_modules = validate_attempts(
         probe.get("attempted_modules"),
         "external_lattice_estimator_probe.attempted_modules",
     )
-    if not attempts:
-        fail("external_lattice_estimator_probe.attempted_modules must not be empty")
+    runtime_modules = validate_attempts(
+        probe.get("required_runtime_modules"),
+        "external_lattice_estimator_probe.required_runtime_modules",
+    )
+    api = require_object(probe.get("runnable_api"), "external_lattice_estimator_probe.runnable_api")
+    if api.get("module") != "estimator":
+        fail("external_lattice_estimator_probe.runnable_api.module must be estimator")
+    if api.get("symbol") != "SIS":
+        fail("external_lattice_estimator_probe.runnable_api.symbol must be SIS")
+    if api.get("sage_symbol") != "sage.all.oo":
+        fail("external_lattice_estimator_probe.runnable_api.sage_symbol must be sage.all.oo")
+    require_string(probe.get("availability_reason"), "external_lattice_estimator_probe.availability_reason")
 
-    saw_available = False
-    for index, raw_attempt in enumerate(attempts):
-        attempt = require_object(raw_attempt, f"external_lattice_estimator_probe.attempted_modules[{index}]")
-        module = require_string(attempt.get("module"), f"estimator attempt {index}.module")
-        available = attempt.get("available")
-        if not isinstance(available, bool):
-            fail(f"estimator attempt {module}.available must be a boolean")
-        if available:
-            saw_available = True
-            if selected != module:
-                fail(f"available estimator attempt {module} must match selected_module")
-            path = attempt.get("path")
-            if path is not None and not isinstance(path, str):
-                fail(f"estimator attempt {module}.path must be a string or null")
-        else:
-            require_string(attempt.get("error"), f"estimator attempt {module}.error")
-            message = attempt.get("message")
-            if not isinstance(message, str):
-                fail(f"estimator attempt {module}.message must be a string")
-
-    if external_estimator_available != saw_available:
-        fail("external_lattice_estimator_probe availability is inconsistent with attempts")
+    if external_estimator_available:
+        if selected != "estimator":
+            fail("external_lattice_estimator_probe.selected_module must be estimator")
+        if "estimator" not in available_modules:
+            fail("external_lattice_estimator_probe.available requires estimator module")
+        if "sage.all" not in runtime_modules:
+            fail("external_lattice_estimator_probe.available requires sage.all runtime module")
+    elif "estimator" in available_modules and "sage.all" in runtime_modules:
+        fail("external_lattice_estimator_probe is unavailable despite runnable estimator.SIS and sage.all.oo")
 
 
 def validate_command(value: Any, label: str) -> None:

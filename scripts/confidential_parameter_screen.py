@@ -337,37 +337,51 @@ def module_version(distribution: str) -> str | None:
         return None
 
 
-def external_estimator_probe() -> dict[str, Any]:
-    attempted = []
-    for module_name in ["estimator", "lattice_estimator", "lwe_estimator"]:
-        attempt: dict[str, Any] = {"module": module_name}
-        try:
-            module = importlib.import_module(module_name)
-        except Exception as exc:  # noqa: BLE001 - capture exact local import failure as evidence.
-            attempt["available"] = False
-            attempt["error"] = type(exc).__name__
-            attempt["message"] = str(exc)
-            attempted.append(attempt)
-            continue
+def import_attempt(module_name: str) -> dict[str, Any]:
+    attempt: dict[str, Any] = {"module": module_name}
+    try:
+        module = importlib.import_module(module_name)
+    except Exception as exc:  # noqa: BLE001 - capture exact local import failure as evidence.
+        attempt["available"] = False
+        attempt["error"] = type(exc).__name__
+        attempt["message"] = str(exc)
+        return attempt
 
-        attempt["available"] = True
-        attempt["path"] = getattr(module, "__file__", None)
-        attempt["version"] = (
-            getattr(module, "__version__", None)
-            or module_version(module_name)
-            or module_version("lattice-estimator")
-        )
-        attempted.append(attempt)
-        return {
-            "available": True,
-            "selected_module": module_name,
-            "attempted_modules": attempted,
-        }
+    attempt["available"] = True
+    attempt["path"] = getattr(module, "__file__", None)
+    attempt["version"] = (
+        getattr(module, "__version__", None)
+        or module_version(module_name)
+        or module_version("lattice-estimator")
+    )
+    return attempt
+
+
+def external_estimator_probe() -> dict[str, Any]:
+    attempted = [import_attempt(module_name) for module_name in ["estimator", "lattice_estimator", "lwe_estimator"]]
+    required_runtime_modules = [import_attempt("sage.all")]
+    estimator_attempt = next(
+        attempt for attempt in attempted if attempt["module"] == "estimator"
+    )
+    runnable = bool(estimator_attempt["available"]) and all(
+        bool(attempt["available"]) for attempt in required_runtime_modules
+    )
 
     return {
-        "available": False,
-        "selected_module": None,
+        "available": runnable,
+        "selected_module": "estimator" if runnable else None,
         "attempted_modules": attempted,
+        "required_runtime_modules": required_runtime_modules,
+        "runnable_api": {
+            "module": "estimator",
+            "symbol": "SIS",
+            "sage_symbol": "sage.all.oo",
+        },
+        "availability_reason": (
+            "estimator.SIS and sage.all.oo are importable"
+            if runnable
+            else "estimator.SIS or sage.all.oo is not importable"
+        ),
     }
 
 
