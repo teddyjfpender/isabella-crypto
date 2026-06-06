@@ -57,6 +57,7 @@ import {
   parseCliResult,
   runCli,
 } from './isabella-cli.ts';
+import { merkleTransactionProofMutations } from './confidential-proof-mutations.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1400,23 +1401,76 @@ assert.equal(
   false,
   'ct-verify-merkle-envelope OCaml rejects context roots not matched by the Merkle proof'
 );
-assert.equal(
-  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
-    ctParamsExpected,
-    ctParamsCase.gamma,
-    ctOut1Bits.length,
-    ctCk,
-    ctNk,
-    ctSpent,
-    {
-      ...ocamlEnvelope,
-      proof: { ...ctMerkleProof!, in2Member: ctMerkleProof!.in1Member },
-    },
-    ocamlEnvelopePolicy
-  ),
-  false,
-  'ct-merkle-envelope rejects mutated Merkle proof components'
-);
+for (const mutation of merkleTransactionProofMutations(
+  ctMerkleProof!,
+  ctSpent,
+  ocamlEnvelopeContext.root,
+  ctNf1
+)) {
+  const mutatedContext =
+    mutation.root === ocamlEnvelopeContext.root
+      ? ocamlEnvelopeContext
+      : { ...ocamlEnvelopeContext, root: mutation.root };
+  const mutatedPolicy =
+    mutation.root === ocamlEnvelopePolicy.root
+      ? ocamlEnvelopePolicy
+      : { ...ocamlEnvelopePolicy, root: mutation.root };
+  const mutatedContextDigest =
+    mutatedContext === ocamlEnvelopeContext
+      ? ocamlEnvelopeContextDigest
+      : ctTransactionContext(
+          mutatedContext.protocolVersion,
+          mutatedContext.networkId,
+          mutatedContext.assetId,
+          mutatedContext.ledgerEpoch,
+          mutatedContext.root,
+          mutatedContext.publicFee,
+          mutatedContext.cIn1,
+          mutatedContext.cIn2,
+          mutatedContext.cOut1,
+          mutatedContext.cOut2,
+          mutatedContext.nf1,
+          mutatedContext.nf2
+        );
+  assert.equal(
+    sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+      ctParamsExpected,
+      ctParamsCase.gamma,
+      ctOut1Bits.length,
+      ctCk,
+      ctNk,
+      mutation.spent,
+      {
+        context: mutatedContext,
+        contextDigest: mutatedContextDigest,
+        proof: mutation.proof,
+      },
+      mutatedPolicy
+    ),
+    false,
+    `ct-merkle-envelope rejects mutated proof case ${mutation.name}`
+  );
+  assert.equal(
+    ctVerifyMerkleEnvelope(
+      ctParamsCase.m,
+      ctParamsCase.n2,
+      ctParamsCase.q,
+      ctParamsCase.beta,
+      ctParamsCase.gamma,
+      ctOut1Bits.length,
+      ctCk,
+      ctNk,
+      ctLedger,
+      mutation.spent,
+      mutatedPolicy,
+      mutatedContextDigest,
+      mutatedContext,
+      mutation.proof
+    ),
+    false,
+    `ct-verify-merkle-envelope OCaml rejects mutated proof case ${mutation.name}`
+  );
+}
 logProgress('validate-ocaml: Merkle transaction CLI parity passed');
 
 console.log('validate-ocaml: confidential transaction proof verification passed');
@@ -1452,5 +1506,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on 80 deterministic shared-surface cases plus randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on 80 deterministic shared-surface cases plus native Merkle envelope mutation and randomized sampler bound checks.'
 );

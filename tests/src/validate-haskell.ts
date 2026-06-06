@@ -14,6 +14,7 @@ import {
   nullifierProofShape,
   rangeProofShape,
 } from './isabella-cli.ts';
+import { merkleTransactionProofMutations } from './confidential-proof-mutations.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1278,18 +1279,6 @@ assert.equal(
   transactionEnvelopeVector.digest,
   'ct-merkle-envelope-digest vector'
 );
-const listedCtMerkleProof = ctMerkleProof as {
-  in1Nullifier: unknown;
-  in2Nullifier: unknown;
-  balance: unknown;
-  out1Range: unknown;
-  out2Range: unknown;
-};
-const listedCtMerkleIn1Nullifier = listNullifierProof(listedCtMerkleProof.in1Nullifier);
-const listedCtMerkleIn2Nullifier = listNullifierProof(listedCtMerkleProof.in2Nullifier);
-const listedCtMerkleBalance = listBalanceProof(listedCtMerkleProof.balance);
-const listedCtMerkleOut1Range = listRangeProof(listedCtMerkleProof.out1Range);
-const listedCtMerkleOut2Range = listRangeProof(listedCtMerkleProof.out2Range);
 assert.equal(
   parseResult<boolean>(
     runHaskell([
@@ -1310,28 +1299,7 @@ assert.equal(
       JSON.stringify(ctCOut2),
       JSON.stringify(ctNf1),
       JSON.stringify(ctNf2),
-      JSON.stringify(listedCtMerkleIn1Nullifier.aCommits),
-      JSON.stringify(listedCtMerkleIn1Nullifier.aNullifiers),
-      JSON.stringify(listedCtMerkleIn1Nullifier.zMsgs),
-      JSON.stringify(listedCtMerkleIn1Nullifier.zRands),
-      JSON.stringify(listedCtMerkleIn2Nullifier.aCommits),
-      JSON.stringify(listedCtMerkleIn2Nullifier.aNullifiers),
-      JSON.stringify(listedCtMerkleIn2Nullifier.zMsgs),
-      JSON.stringify(listedCtMerkleIn2Nullifier.zRands),
-      JSON.stringify(listedCtMerkleBalance.as),
-      JSON.stringify(listedCtMerkleBalance.zs),
-      JSON.stringify(listedCtMerkleOut1Range.bits),
-      JSON.stringify(listedCtMerkleOut1Range.comps),
-      JSON.stringify(listedCtMerkleOut1Range.amountsA),
-      JSON.stringify(listedCtMerkleOut1Range.amountsZ),
-      JSON.stringify(listedCtMerkleOut1Range.pairAss),
-      JSON.stringify(listedCtMerkleOut1Range.pairZss),
-      JSON.stringify(listedCtMerkleOut2Range.bits),
-      JSON.stringify(listedCtMerkleOut2Range.comps),
-      JSON.stringify(listedCtMerkleOut2Range.amountsA),
-      JSON.stringify(listedCtMerkleOut2Range.amountsZ),
-      JSON.stringify(listedCtMerkleOut2Range.pairAss),
-      JSON.stringify(listedCtMerkleOut2Range.pairZss),
+      ...ctMerkleProofDigestArgs(ctMerkleProof!),
     ])
   ),
   true,
@@ -1390,7 +1358,8 @@ const runHaskellEnvelope = (
   policy: typeof haskellEnvelopePolicy,
   contextDigest: string,
   context: typeof haskellEnvelopeContext,
-  proof: typeof ctMerkleProof
+  proof: typeof ctMerkleProof,
+  spentOverride = ctSpent
 ) =>
   parseResult<boolean>(
     runHaskell([
@@ -1405,7 +1374,7 @@ const runHaskellEnvelope = (
         ctCk,
         ctNk,
         ctLedger,
-        ctSpent,
+        spentOverride,
         policy,
         contextDigest,
         context,
@@ -1567,23 +1536,70 @@ assert.equal(
   false,
   'ct-verify-merkle-envelope Haskell rejects context roots not matched by the Merkle proof'
 );
-assert.equal(
-  sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
-    ctParamsExpected,
-    ctParamsCase.gamma,
-    ctOut1Bits.length,
-    ctCk,
-    ctNk,
-    ctSpent,
-    {
-      ...haskellEnvelope,
-      proof: { ...ctMerkleProof!, in2Member: ctMerkleProof!.in1Member },
-    },
-    haskellEnvelopePolicy
-  ),
-  false,
-  'ct-merkle-envelope rejects mutated Merkle proof components'
-);
+for (const mutation of merkleTransactionProofMutations(
+  ctMerkleProof!,
+  ctSpent,
+  haskellEnvelopeContext.root,
+  ctNf1
+)) {
+  const mutatedContext =
+    mutation.root === haskellEnvelopeContext.root
+      ? haskellEnvelopeContext
+      : { ...haskellEnvelopeContext, root: mutation.root };
+  const mutatedPolicy =
+    mutation.root === haskellEnvelopePolicy.root
+      ? haskellEnvelopePolicy
+      : { ...haskellEnvelopePolicy, root: mutation.root };
+  const mutatedContextDigest =
+    mutatedContext === haskellEnvelopeContext
+      ? haskellEnvelopeContextDigest
+      : parseResult<string>(
+          runHaskell([
+            'ct-transaction-context',
+            mutatedContext.protocolVersion.toString(),
+            mutatedContext.networkId,
+            mutatedContext.assetId.toString(),
+            mutatedContext.ledgerEpoch.toString(),
+            mutatedContext.root,
+            mutatedContext.publicFee.toString(),
+            JSON.stringify(mutatedContext.cIn1),
+            JSON.stringify(mutatedContext.cIn2),
+            JSON.stringify(mutatedContext.cOut1),
+            JSON.stringify(mutatedContext.cOut2),
+            JSON.stringify(mutatedContext.nf1),
+            JSON.stringify(mutatedContext.nf2),
+          ])
+        );
+  assert.equal(
+    sdk.ConfidentialTransaction.fsVerifyMerkleEnvelope(
+      ctParamsExpected,
+      ctParamsCase.gamma,
+      ctOut1Bits.length,
+      ctCk,
+      ctNk,
+      mutation.spent,
+      {
+        context: mutatedContext,
+        contextDigest: mutatedContextDigest,
+        proof: mutation.proof,
+      },
+      mutatedPolicy
+    ),
+    false,
+    `ct-merkle-envelope rejects mutated proof case ${mutation.name}`
+  );
+  assert.equal(
+    runHaskellEnvelope(
+      mutatedPolicy,
+      mutatedContextDigest,
+      mutatedContext,
+      mutation.proof,
+      mutation.spent
+    ),
+    false,
+    `ct-verify-merkle-envelope Haskell rejects mutated proof case ${mutation.name}`
+  );
+}
 
 const ctIn1RangeProof = sdk.ConfidentialRange.fsProve(
   ctParamsExpected,
@@ -1615,5 +1631,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on 80 deterministic shared-surface cases plus randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on 80 deterministic shared-surface cases plus native Merkle envelope mutation and randomized sampler bound checks.'
 );

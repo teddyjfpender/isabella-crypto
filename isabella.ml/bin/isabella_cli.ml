@@ -244,6 +244,9 @@ let parse_ct_merkle_membership_proof index_str root siblings_str directions_str 
 let ct_merkle_proof_digest_usage =
   "Usage: ct-merkle-proof-digest IN1_INDEX IN1_ROOT IN1_SIBLINGS IN1_DIRECTIONS IN2_INDEX IN2_ROOT IN2_SIBLINGS IN2_DIRECTIONS IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
+let ct_merkle_proof_args_usage =
+  String.sub ct_merkle_proof_digest_usage 29 (String.length ct_merkle_proof_digest_usage - 29)
+
 let parse_ct_merkle_proof_digest_args args =
   match args with
   | [in1_index_str; in1_root; in1_siblings_str; in1_directions_str;
@@ -1289,7 +1292,7 @@ let cmd_ct_merkle_envelope_digest args =
         with Invalid_argument msg -> output_error msg)
      | _ -> output_error "Expected context digest, context fields, and Merkle proof fields")
   | _ ->
-    output_error ("Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ String.sub ct_merkle_proof_digest_usage 29 (String.length ct_merkle_proof_digest_usage - 29))
+    output_error ("Usage: ct-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ ct_merkle_proof_args_usage)
 
 (** {1 Confidential Transaction Commands} *)
 
@@ -1697,7 +1700,9 @@ let prepare_ct_verify_scaffold args =
 
 let prepare_ct_verify_merkle_with_root root_override args =
   match args with
-  | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str; in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str; balance_as_str; balance_zs_str; out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str; out1_pair_as_str; out1_pair_zs_str; out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str; out2_pair_as_str; out2_pair_zs_str] ->
+  | m_str :: n2_str :: q_str :: beta_str :: gamma_str :: k_str :: ck_str :: nk_str ::
+    ledger_str :: spent_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
+    nf1_str :: nf2_str :: proof_args ->
     (match
        make_cb_params m_str n2_str q_str beta_str,
        parse_int gamma_str,
@@ -1712,68 +1717,34 @@ let prepare_ct_verify_merkle_with_root root_override args =
        parse_vec c_out2_str,
        parse_vec nf1_str,
        parse_vec nf2_str,
-       parse_mat in1_a_commits_str,
-       parse_mat in1_a_nullifiers_str,
-       parse_mat in1_z_msgs_str,
-       parse_mat in1_z_rands_str,
-       parse_mat in2_a_commits_str,
-       parse_mat in2_a_nullifiers_str,
-       parse_mat in2_z_msgs_str,
-       parse_mat in2_z_rands_str,
-       parse_mat balance_as_str,
-       parse_mat balance_zs_str,
-       parse_mat out1_bits_str,
-       parse_mat out1_comps_str,
-       parse_mat out1_amount_a_str,
-       parse_mat out1_amount_z_str,
-       parse_cube out1_pair_as_str,
-       parse_cube out1_pair_zs_str,
-       parse_mat out2_bits_str,
-       parse_mat out2_comps_str,
-       parse_mat out2_amount_a_str,
-       parse_mat out2_amount_z_str,
-       parse_cube out2_pair_as_str,
-       parse_cube out2_pair_zs_str with
-     | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent, Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2, Some in1_a_commits, Some in1_a_nullifiers, Some in1_z_msgs, Some in1_z_rands, Some in2_a_commits, Some in2_a_nullifiers, Some in2_z_msgs, Some in2_z_rands, Some balance_as, Some balance_zs, Some out1_bits, Some out1_comps, Some out1_amount_a, Some out1_amount_z, Some out1_pair_as, Some out1_pair_zs, Some out2_bits, Some out2_comps, Some out2_amount_a, Some out2_amount_z, Some out2_pair_as, Some out2_pair_zs ->
+       parse_ct_merkle_proof_digest_args proof_args with
+     | Some params, Some gamma, Some k, Some ck, Some nk, Some ledger, Some spent,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
+       Ok proof ->
        let root =
          match root_override with
          | Some root -> root
          | None -> Confidential_transaction.merkle_ledger_root ledger
        in
-       (match
-          Confidential_transaction.merkle_membership_prove ledger c_in1,
-          Confidential_transaction.merkle_membership_prove ledger c_in2 with
-        | Some in1_member, Some in2_member ->
-          let proof =
-            Confidential_transaction.make_merkle_transaction_proof
-              in1_member
-              in2_member
-              (Confidential_transaction.make_nullifier_proof in1_a_commits in1_a_nullifiers in1_z_msgs in1_z_rands)
-              (Confidential_transaction.make_nullifier_proof in2_a_commits in2_a_nullifiers in2_z_msgs in2_z_rands)
-              (Confidential_balance.make_balance_proof balance_as balance_zs)
-              (Confidential_range.make_range_proof out1_bits out1_comps out1_amount_a out1_amount_z out1_pair_as out1_pair_zs)
-              (Confidential_range.make_range_proof out2_bits out2_comps out2_amount_a out2_amount_z out2_pair_as out2_pair_zs)
-          in
-          Ok
-            (fun () ->
-              Confidential_transaction.transaction_fs_verify_merkle
-                params
-                gamma
-                k
-                ck
-                nk
-                root
-                spent
-                c_in1
-                c_in2
-                c_out1
-                c_out2
-                nf1
-                nf2
-                proof)
-        | _ -> Error "Expected Merkle membership proofs for both input commitments in the supplied ledger")
+       Ok
+         (fun () ->
+           Confidential_transaction.transaction_fs_verify_merkle
+             params
+             gamma
+             k
+             ck
+             nk
+             root
+             spent
+             c_in1
+             c_in2
+             c_out1
+             c_out2
+             nf1
+             nf2
+             proof)
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
-  | _ -> Error "Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+  | _ -> Error ("Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 " ^ ct_merkle_proof_args_usage)
 
 let prepare_ct_verify_merkle args =
   prepare_ct_verify_merkle_with_root None args

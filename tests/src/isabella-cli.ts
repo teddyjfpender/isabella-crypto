@@ -1652,7 +1652,7 @@ export function ctMerkleEnvelopeDigest(
   return parseCliResult<{ result: string }>(output).result;
 }
 
-export function ctVerifyMerkleArgs(
+function ctVerifyScaffoldArgs(
   m: number,
   n2: number,
   q: number,
@@ -1692,6 +1692,46 @@ export function ctVerifyMerkleArgs(
   ];
 }
 
+export function ctVerifyMerkleArgs(
+  m: number,
+  n2: number,
+  q: number,
+  beta: number,
+  gamma: number,
+  k: number,
+  ck: number[][],
+  nk: number[][],
+  ledger: number[][],
+  spent: number[][],
+  cIn1: number[],
+  cIn2: number[],
+  cOut1: number[],
+  cOut2: number[],
+  nf1: number[],
+  nf2: number[],
+  proof: MerkleTransactionProof
+): string[] {
+  return [
+    m.toString(),
+    n2.toString(),
+    q.toString(),
+    beta.toString(),
+    gamma.toString(),
+    k.toString(),
+    JSON.stringify(ck),
+    JSON.stringify(nk),
+    JSON.stringify(ledger),
+    JSON.stringify(spent),
+    JSON.stringify(cIn1),
+    JSON.stringify(cIn2),
+    JSON.stringify(cOut1),
+    JSON.stringify(cOut2),
+    JSON.stringify(nf1),
+    JSON.stringify(nf2),
+    ...ctMerkleProofDigestArgs(proof),
+  ];
+}
+
 function ctVerifyWithCommand(
   command: string,
   m: number,
@@ -1714,7 +1754,7 @@ function ctVerifyWithCommand(
 ): boolean {
   const output = runCli([
     command,
-    ...ctVerifyMerkleArgs(
+    ...ctVerifyScaffoldArgs(
       m,
       n2,
       q,
@@ -1799,26 +1839,29 @@ export function ctVerifyMerkle(
   nf2: number[],
   proof: MerkleTransactionProof
 ): boolean {
-  return ctVerifyWithCommand(
+  const output = runCli([
     'ct-verify-merkle',
-    m,
-    n2,
-    q,
-    beta,
-    gamma,
-    k,
-    ck,
-    nk,
-    ledger,
-    spent,
-    cIn1,
-    cIn2,
-    cOut1,
-    cOut2,
-    nf1,
-    nf2,
-    proof
-  );
+    ...ctVerifyMerkleArgs(
+      m,
+      n2,
+      q,
+      beta,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    ),
+  ]);
+  return parseCliBool(output);
 }
 
 export function ctVerifyMerkleEnvelopeArgs(
@@ -1867,25 +1910,7 @@ export function ctVerifyMerkleEnvelopeArgs(
     JSON.stringify(context.cOut2),
     JSON.stringify(context.nf1),
     JSON.stringify(context.nf2),
-    ...ctVerifyMerkleArgs(
-      m,
-      n2,
-      q,
-      beta,
-      gamma,
-      k,
-      ck,
-      nk,
-      ledger,
-      spent,
-      context.cIn1,
-      context.cIn2,
-      context.cOut1,
-      context.cOut2,
-      context.nf1,
-      context.nf2,
-      proof
-    ).slice(16),
+    ...ctMerkleProofDigestArgs(proof),
   ];
 }
 

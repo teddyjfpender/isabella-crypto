@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { buildMerkleTransactionFixture } from './confidential-fixtures.ts';
+import { merkleTransactionProofMutations } from './confidential-proof-mutations.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -217,20 +218,6 @@ describe('Confidential Merkle hash vectors', () => {
       nf2,
       proof,
     } = await buildMerkleTransactionFixture();
-    const flipHex = (digest: string) => `${digest[0] === '0' ? '1' : '0'}${digest.slice(1)}`;
-    const mutateListProof = <T extends Record<string, unknown>>(
-      target: T,
-      field: keyof T,
-      rowIndex = 0
-    ): T => ({
-      ...target,
-      [field]: (target[field] as number[][]).map((row, index) =>
-        index === rowIndex ? [row[0] + 1, ...row.slice(1)] : row
-      ),
-    });
-    const mutateRangeProof = (target: typeof proof.out1Range) => mutateListProof(target, 'amountZs');
-    const mutateNullifierProof = (target: typeof proof.in1Nullifier) => mutateListProof(target, 'zMsgs');
-    const mutateBalanceProof = (target: typeof proof.balance) => mutateListProof(target, 'zs');
     const verify = (candidate: typeof proof, candidateSpent = spent, candidateRoot = root) =>
       sdk.ConfidentialTransaction.fsVerifyMerkle(
         params,
@@ -248,44 +235,10 @@ describe('Confidential Merkle hash vectors', () => {
         nf2,
         candidate
       );
-    const mutations: Array<[string, typeof proof, number[][]?, string?]> = [
-      ['input member root', { ...proof, in1Member: { ...proof.in1Member, root: flipHex(proof.in1Member.root) } }],
-      ['input member sibling', {
-        ...proof,
-        in1Member: {
-          ...proof.in1Member,
-          siblings: [flipHex(proof.in1Member.siblings[0]), ...proof.in1Member.siblings.slice(1)],
-        },
-      }],
-      ['input member direction', {
-        ...proof,
-        in1Member: {
-          ...proof.in1Member,
-          directions: [!proof.in1Member.directions[0], ...proof.in1Member.directions.slice(1)],
-        },
-      }],
-      ['duplicate input member', { ...proof, in2Member: proof.in1Member }],
-      ['spent nullifier', proof, [nf1]],
-      ['nullifier response', { ...proof, in1Nullifier: mutateNullifierProof(proof.in1Nullifier) }],
-      ['balance response', { ...proof, balance: mutateBalanceProof(proof.balance) }],
-      ['range response', { ...proof, out1Range: mutateRangeProof(proof.out1Range) }],
-      ['swapped nullifier proofs', {
-        ...proof,
-        in1Nullifier: proof.in2Nullifier,
-        in2Nullifier: proof.in1Nullifier,
-      }],
-      ['swapped output ranges', {
-        ...proof,
-        out1Range: proof.out2Range,
-        out2Range: proof.out1Range,
-      }],
-      ['verifier root mismatch', proof, spent, flipHex(root)],
-    ];
-
-    for (const [name, candidate, candidateSpent, candidateRoot] of mutations) {
-      const accepted = verify(candidate, candidateSpent, candidateRoot);
+    for (const mutation of merkleTransactionProofMutations(proof, spent, root, nf1)) {
+      const accepted = verify(mutation.proof, mutation.spent, mutation.root);
       if (accepted) {
-        throw new Error(`accepted mutated Merkle transaction proof: ${name}`);
+        throw new Error(`accepted mutated Merkle transaction proof: ${mutation.name}`);
       }
       expect(accepted).toBe(false);
     }

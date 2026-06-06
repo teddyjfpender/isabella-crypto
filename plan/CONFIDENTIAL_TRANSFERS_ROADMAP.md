@@ -98,11 +98,14 @@ benchmarks are independently checked.
   SDK-equivalence validators check those digests against the pinned vectors.
   TypeScript exposes `fsVerifyMerkleEnvelope`, and OCaml/Haskell expose a
   matching `ct-verify-merkle-envelope` command, so callers can verify the
-  canonical context digest, expected network/asset/root policy, and Merkle
-  transaction proof as one step. The SDK-equivalence validators exercise the TS
-  and native envelope gates with native `ct-transaction-context` digests and
-  native Merkle transaction proofs, including stale-digest, wrong-policy,
-  nonzero-fee, context-root/proof-root mismatch, and mutated-proof rejection.
+  canonical context digest, expected network/asset/root policy, and explicit
+  Merkle transaction proof as one step. The native verifier commands parse the
+  proof's Merkle membership fields instead of deriving membership from the
+  supplied ledger. The SDK-equivalence validators exercise the TS and native
+  envelope gates with native `ct-transaction-context` digests and native Merkle
+  transaction proofs, including stale-digest, wrong-policy, nonzero-fee,
+  context-root/proof-root mismatch, and the shared deterministic proof-mutation
+  matrix.
   The envelope path intentionally rejects nonzero public fees until the balance
   relation is extended to account for fees.
 - OCaml and Haskell expose explicit `ct-prove-scaffold`,
@@ -211,10 +214,11 @@ Important validation caveats:
 
 - `audit-confidential` now runs the 128-round semantic transaction/tampering
   fixture by default.
-- `tests/src/confidential-merkle.test.ts` now runs a deterministic Merkle
-  transaction mutation matrix covering root/path changes, spent nullifiers,
-  nullifier responses, balance responses, range responses, and swapped proof
-  components.
+- `tests/src/confidential-merkle.test.ts` and the OCaml/Haskell
+  SDK-equivalence validators now run the same deterministic Merkle transaction
+  mutation matrix through TypeScript and native `ct-verify-merkle-envelope`.
+  The matrix covers root/path changes, spent nullifiers, nullifier responses,
+  balance responses, range responses, and swapped proof components.
 - `tests/src/confidential-transaction.test.ts` pins the canonical public
   transaction context preimage/digest, TypeScript canonical Merkle-proof
   preimage/digest, and TypeScript canonical envelope preimage/digest. It
@@ -224,7 +228,8 @@ Important validation caveats:
   envelope verifier rejects stale context digests, wrong network/asset policy,
   nonzero fees, and swapped proof components. OCaml/Haskell SDK-equivalence
   validation now checks native proof/envelope digest parity against the pinned
-  vectors; wallet/consensus serialization remains open.
+  vectors and verifies explicit Merkle proof rejection through native envelope
+  commands; wallet/consensus serialization remains open.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
   acceptance/rejection against native context digests and Merkle proofs through

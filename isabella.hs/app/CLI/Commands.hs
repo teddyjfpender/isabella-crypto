@@ -389,6 +389,9 @@ ctMerkleProofDigestUsage :: String
 ctMerkleProofDigestUsage =
     "Usage: ct-merkle-proof-digest IN1_INDEX IN1_ROOT IN1_SIBLINGS IN1_DIRECTIONS IN2_INDEX IN2_ROOT IN2_SIBLINGS IN2_DIRECTIONS IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
+ctMerkleProofArgsUsage :: String
+ctMerkleProofArgsUsage = drop (length ("Usage: ct-merkle-proof-digest " :: String)) ctMerkleProofDigestUsage
+
 parseCtMerkleProofDigestArgs :: [String] -> Either String ConfidentialTransaction.MerkleTransactionProof
 parseCtMerkleProofDigestArgs
     [ in1IndexStr, in1Root, in1SiblingsStr, in1DirectionsStr
@@ -627,7 +630,11 @@ prepareCtVerifyScaffold :: [String] -> Either String (() -> Bool)
 prepareCtVerifyScaffold = prepareCtVerifyWithUsage "ct-verify-scaffold"
 
 prepareCtVerifyMerkleWithRoot :: Maybe String -> [String] -> Either String (() -> Bool)
-prepareCtVerifyMerkleWithRoot rootOverride [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
+prepareCtVerifyMerkleWithRoot rootOverride
+    ( mStr : n2Str : qStr : betaStr : gammaStr : kStr : ckStr : nkStr
+      : ledgerStr : spentStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
+      : nf1Str : nf2Str : proofArgs
+    ) =
     case
         ( parseCbParams mStr n2Str qStr betaStr
         , parseInt gammaStr
@@ -642,53 +649,31 @@ prepareCtVerifyMerkleWithRoot rootOverride [mStr, n2Str, qStr, betaStr, gammaStr
         , parseVec cOut2Str
         , parseVec nf1Str
         , parseVec nf2Str
-        , parseMat in1ACommitsStr
-        , parseMat in1ANullifiersStr
-        , parseMat in1ZMsgsStr
-        , parseMat in1ZRandsStr
-        , parseMat in2ACommitsStr
-        , parseMat in2ANullifiersStr
-        , parseMat in2ZMsgsStr
-        , parseMat in2ZRandsStr
-        , parseMat balanceAStr
-        , parseMat balanceZsStr
-        , parseMat out1BitsStr
-        , parseMat out1CompsStr
-        , parseMat out1AmountAStr
-        , parseMat out1AmountZStr
-        , parseCube out1PairAsStr
-        , parseCube out1PairZsStr
-        , parseMat out2BitsStr
-        , parseMat out2CompsStr
-        , parseMat out2AmountAStr
-        , parseMat out2AmountZStr
-        , parseCube out2PairAsStr
-        , parseCube out2PairZsStr
+        , parseCtMerkleProofDigestArgs proofArgs
         ) of
-        (Just params, Just gamma, Just k, Just ck, Just nk, Just ledger, Just spent, Just cIn1, Just cIn2, Just cOut1, Just cOut2, Just nf1, Just nf2, Just in1ACommits, Just in1ANullifiers, Just in1ZMsgs, Just in1ZRands, Just in2ACommits, Just in2ANullifiers, Just in2ZMsgs, Just in2ZRands, Just balanceAs, Just balanceZs, Just out1Bits, Just out1Comps, Just out1AmountA, Just out1AmountZ, Just out1PairAs, Just out1PairZs, Just out2Bits, Just out2Comps, Just out2AmountA, Just out2AmountZ, Just out2PairAs, Just out2PairZs) ->
+        ( Just params
+          , Just gamma
+          , Just k
+          , Just ck
+          , Just nk
+          , Just ledger
+          , Just spent
+          , Just cIn1
+          , Just cIn2
+          , Just cOut1
+          , Just cOut2
+          , Just nf1
+          , Just nf2
+          , Right proof
+          ) ->
             let root = maybe (ConfidentialTransaction.merkleLedgerRoot ledger) id rootOverride
-             in case
-                    ( ConfidentialTransaction.merkleMembershipProve ledger cIn1
-                    , ConfidentialTransaction.merkleMembershipProve ledger cIn2
-                    ) of
-                    (Just in1Member, Just in2Member) ->
-                        let proof =
-                                ConfidentialTransaction.makeMerkleTransactionProof
-                                    in1Member
-                                    in2Member
-                                    (ConfidentialTransaction.makeNullifierProof in1ACommits in1ANullifiers in1ZMsgs in1ZRands)
-                                    (ConfidentialTransaction.makeNullifierProof in2ACommits in2ANullifiers in2ZMsgs in2ZRands)
-                                    (ConfidentialBalance.makeBalanceProof balanceAs balanceZs)
-                                    (ConfidentialRange.makeRangeProof out1Bits out1Comps out1AmountA out1AmountZ out1PairAs out1PairZs)
-                                    (ConfidentialRange.makeRangeProof out2Bits out2Comps out2AmountA out2AmountZ out2PairAs out2PairZs)
-                         in Right
-                                (\() ->
-                                    ConfidentialTransaction.transactionFsVerifyMerkle
-                                        params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
-                    _ -> Left "Expected Merkle membership proofs for both input commitments in the supplied ledger"
+             in Right
+                    (\() ->
+                        ConfidentialTransaction.transactionFsVerifyMerkle
+                            params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
 prepareCtVerifyMerkleWithRoot _ _ =
-    Left "Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+    Left ("Usage: ct-verify-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 " ++ ctMerkleProofArgsUsage)
 
 prepareCtVerifyMerkle :: [String] -> Either String (() -> Bool)
 prepareCtVerifyMerkle = prepareCtVerifyMerkleWithRoot Nothing
