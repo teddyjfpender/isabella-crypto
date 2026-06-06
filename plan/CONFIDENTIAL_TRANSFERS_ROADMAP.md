@@ -105,6 +105,12 @@ benchmarks are independently checked.
   nonzero-fee, context-root/proof-root mismatch, and mutated-proof rejection.
   The envelope path intentionally rejects nonzero public fees until the balance
   relation is extended to account for fees.
+- OCaml and Haskell expose explicit `ct-prove-scaffold`,
+  `ct-verify-scaffold`, and `ct-verify-bench-scaffold` aliases for the
+  algebraic ledger path. `scripts/check_confidential_scaffold_quarantine.py`
+  is wired into CI and `make test-confidential-production`; it rejects
+  ambiguous legacy scaffold command names in production-facing validation while
+  the deprecated aliases remain available for compatibility.
 
 ## Remaining Security Work
 
@@ -119,8 +125,8 @@ The formalization still needs these before production:
    sampling/distribution bounds, and Fiat-Shamir-with-aborts analysis.
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.
-5. Finish the Merkle-default migration in consensus/product callers, retire or
-   quarantine the remaining algebraic scaffold compatibility APIs, replace the
+5. Finish the Merkle-default migration in consensus/product callers, retire the
+   remaining algebraic scaffold compatibility APIs and deprecated aliases, replace the
    hand-maintained native envelope command wrappers with generated or
    vector-locked surfaces, broaden native transaction-level negative/fuzz
    conformance for Merkle proofs, and extend transaction membership soundness

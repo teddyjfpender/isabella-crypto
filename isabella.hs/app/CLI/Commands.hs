@@ -80,11 +80,14 @@ runCommand format cmd args = case cmd of
     "ct-member-verify" -> cmdCtMemberVerify format args
     "ct-ledger-step-verify" -> cmdCtLedgerStepVerify format args
     "ct-prove" -> cmdCtProve format args
+    "ct-prove-scaffold" -> cmdCtProveScaffold format args
     "ct-prove-merkle" -> cmdCtProveMerkle format args
     "ct-verify" -> cmdCtVerify format args
+    "ct-verify-scaffold" -> cmdCtVerifyScaffold format args
     "ct-verify-merkle" -> cmdCtVerifyMerkle format args
     "ct-verify-merkle-envelope" -> cmdCtVerifyMerkleEnvelope format args
     "ct-verify-bench" -> cmdCtVerifyBench format args
+    "ct-verify-bench-scaffold" -> cmdCtVerifyBenchScaffold format args
     _ -> putStrLn $ "Unknown command: " ++ cmd ++ "\nUse --help for usage."
 
 -- Parse helpers
@@ -541,8 +544,20 @@ prepareCrVerify [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, cAmountStr, 
 prepareCrVerify _ =
     Left "Usage: cr-verify M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
 
-prepareCtVerify :: [String] -> Either String (() -> Bool)
-prepareCtVerify [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
+ctVerifyUsage :: String -> String
+ctVerifyUsage command =
+    "Usage: " ++ command ++ " M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+ctProveUsage :: String -> String
+ctProveUsage command =
+    "Usage: " ++ command ++ " M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
+
+ctVerifyBenchUsage :: String -> String
+ctVerifyBenchUsage command =
+    "Usage: " ++ command ++ " ITERATIONS WARMUP M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+prepareCtVerifyWithUsage :: String -> [String] -> Either String (() -> Bool)
+prepareCtVerifyWithUsage command [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
     case
         ( parseCbParams mStr n2Str qStr betaStr
         , parseInt gammaStr
@@ -602,8 +617,14 @@ prepareCtVerify [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledge
                                         params gamma k ck nk root spent cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof)
                     _ -> Left "Expected membership proofs for both input commitments in the supplied ledger"
         _ -> Left "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields"
-prepareCtVerify _ =
-    Left "Usage: ct-verify M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+prepareCtVerifyWithUsage command _ =
+    Left (ctVerifyUsage command)
+
+prepareCtVerify :: [String] -> Either String (() -> Bool)
+prepareCtVerify = prepareCtVerifyWithUsage "ct-verify"
+
+prepareCtVerifyScaffold :: [String] -> Either String (() -> Bool)
+prepareCtVerifyScaffold = prepareCtVerifyWithUsage "ct-verify-scaffold"
 
 prepareCtVerifyMerkleWithRoot :: Maybe String -> [String] -> Either String (() -> Bool)
 prepareCtVerifyMerkleWithRoot rootOverride [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1ACommitsStr, in1ANullifiersStr, in1ZMsgsStr, in1ZRandsStr, in2ACommitsStr, in2ANullifiersStr, in2ZMsgsStr, in2ZRandsStr, balanceAStr, balanceZsStr, out1BitsStr, out1CompsStr, out1AmountAStr, out1AmountZStr, out1PairAsStr, out1PairZsStr, out2BitsStr, out2CompsStr, out2AmountAStr, out2AmountZStr, out2PairAsStr, out2PairZsStr] =
@@ -1540,8 +1561,8 @@ cmdCtLedgerStepVerify format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr,
 cmdCtLedgerStepVerify format _ =
     outputUsage format "Usage: ct-ledger-step-verify M N2 Q BETA G K CK NK NOTE_COMMITMENTS NOTE_BITS NOTE_COMPS NOTE_AMOUNT_AS NOTE_AMOUNT_ZS NOTE_PAIR_AS NOTE_PAIR_ZS SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_A OUT1_AMOUNT_Z OUT1_PAIR_AS OUT1_PAIR_ZS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_A OUT2_AMOUNT_Z OUT2_PAIR_AS OUT2_PAIR_ZS"
 
-cmdCtProve :: OutputFormat -> [String] -> IO ()
-cmdCtProve format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1AmountStr, in1RandStr, in2AmountStr, in2RandStr, out1AmountStr, out1RandStr, out2AmountStr, out2RandStr, out1BitsStr, out1BitRandsStr, out1CompsStr, out1CompRandsStr, out2BitsStr, out2BitRandsStr, out2CompsStr, out2CompRandsStr, yIn1MsgsStr, yIn1RandsStr, yIn2MsgsStr, yIn2RandsStr, yBalanceStr, yOut1AmountsStr, yOut1PairssStr, yOut2AmountsStr, yOut2PairssStr] =
+cmdCtProveWithUsage :: String -> OutputFormat -> [String] -> IO ()
+cmdCtProveWithUsage command format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1AmountStr, in1RandStr, in2AmountStr, in2RandStr, out1AmountStr, out1RandStr, out2AmountStr, out2RandStr, out1BitsStr, out1BitRandsStr, out1CompsStr, out1CompRandsStr, out2BitsStr, out2BitRandsStr, out2CompsStr, out2CompRandsStr, yIn1MsgsStr, yIn1RandsStr, yIn2MsgsStr, yIn2RandsStr, yBalanceStr, yOut1AmountsStr, yOut1PairssStr, yOut2AmountsStr, yOut2PairssStr] =
     case
         ( parseCbParams mStr n2Str qStr betaStr
         , parseInt gammaStr
@@ -1615,8 +1636,14 @@ cmdCtProve format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, led
                                 Json -> putStrLn "null"
                 _ -> outputError format "Bit/complement counts must match their randomness matrices"
         _ -> outputError format "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors"
-cmdCtProve format _ =
-    outputUsage format "Usage: ct-prove M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
+cmdCtProveWithUsage command format _ =
+    outputUsage format (ctProveUsage command)
+
+cmdCtProve :: OutputFormat -> [String] -> IO ()
+cmdCtProve = cmdCtProveWithUsage "ct-prove"
+
+cmdCtProveScaffold :: OutputFormat -> [String] -> IO ()
+cmdCtProveScaffold = cmdCtProveWithUsage "ct-prove-scaffold"
 
 cmdCtProveMerkle :: OutputFormat -> [String] -> IO ()
 cmdCtProveMerkle format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, nkStr, ledgerStr, spentStr, cIn1Str, cIn2Str, cOut1Str, cOut2Str, nf1Str, nf2Str, in1AmountStr, in1RandStr, in2AmountStr, in2RandStr, out1AmountStr, out1RandStr, out2AmountStr, out2RandStr, out1BitsStr, out1BitRandsStr, out1CompsStr, out1CompRandsStr, out2BitsStr, out2BitRandsStr, out2CompsStr, out2CompRandsStr, yIn1MsgsStr, yIn1RandsStr, yIn2MsgsStr, yIn2RandsStr, yBalanceStr, yOut1AmountsStr, yOut1PairssStr, yOut2AmountsStr, yOut2PairssStr] =
@@ -1699,6 +1726,14 @@ cmdCtProveMerkle format _ =
 cmdCtVerify :: OutputFormat -> [String] -> IO ()
 cmdCtVerify format args =
     case prepareCtVerify args of
+        Right verify -> outputBoolResult format "transaction_fs_verify = " (verify ())
+        Left err
+            | take 5 err == "Usage" -> outputUsage format err
+            | otherwise -> outputError format err
+
+cmdCtVerifyScaffold :: OutputFormat -> [String] -> IO ()
+cmdCtVerifyScaffold format args =
+    case prepareCtVerifyScaffold args of
         Right verify -> outputBoolResult format "transaction_fs_verify = " (verify ())
         Left err
             | take 5 err == "Usage" -> outputUsage format err
@@ -1807,17 +1842,23 @@ cmdCtVerifyMerkleEnvelope format
 cmdCtVerifyMerkleEnvelope format _ =
     outputUsage format "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
-cmdCtVerifyBench :: OutputFormat -> [String] -> IO ()
-cmdCtVerifyBench format (iterationsStr:warmupStr:rest) =
+cmdCtVerifyBenchWithUsage :: String -> ([String] -> Either String (() -> Bool)) -> OutputFormat -> [String] -> IO ()
+cmdCtVerifyBenchWithUsage command prepare format (iterationsStr:warmupStr:rest) =
     case (parseInt iterationsStr, parseInt warmupStr) of
         (Just iterations, Just warmup)
             | iterations > 0 && warmup >= 0 ->
-                case prepareCtVerify rest of
+                case prepare rest of
                     Right verify ->
                         benchmarkBool warmup iterations verify >>= outputBenchStats format "transaction_fs_verify_bench"
                     Left err
-                        | take 5 err == "Usage" -> outputUsage format ("Usage: ct-verify-bench ITERATIONS WARMUP " ++ drop 6 err)
+                        | take 5 err == "Usage" -> outputUsage format (ctVerifyBenchUsage command)
                         | otherwise -> outputError format err
         _ -> outputError format "Expected positive ITERATIONS and non-negative WARMUP"
-cmdCtVerifyBench format _ =
-    outputUsage format "Usage: ct-verify-bench ITERATIONS WARMUP M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+cmdCtVerifyBenchWithUsage command _ format _ =
+    outputUsage format (ctVerifyBenchUsage command)
+
+cmdCtVerifyBench :: OutputFormat -> [String] -> IO ()
+cmdCtVerifyBench = cmdCtVerifyBenchWithUsage "ct-verify-bench" prepareCtVerify
+
+cmdCtVerifyBenchScaffold :: OutputFormat -> [String] -> IO ()
+cmdCtVerifyBenchScaffold = cmdCtVerifyBenchWithUsage "ct-verify-bench-scaffold" prepareCtVerifyScaffold

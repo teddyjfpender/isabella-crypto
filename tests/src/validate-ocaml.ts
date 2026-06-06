@@ -33,10 +33,9 @@ import {
   ctNullifierCanonicalChallenge,
   ctNullifierProve,
   ctNullifierVerify,
-  ctProve,
   ctProveMerkle,
   ctTransactionContext,
-  ctVerify,
+  ctVerifyScaffold,
   ctVerifyMerkle,
   ctVerifyMerkleEnvelope,
   crAmountCommitment,
@@ -966,7 +965,30 @@ assert.equal(
     ctProof!
   ),
   true,
-  'ct-verify shared surface'
+  'transaction scaffold shared surface'
+);
+assert.equal(
+  ctVerifyScaffold(
+    ctParamsCase.m,
+    ctParamsCase.n2,
+    ctParamsCase.q,
+    ctParamsCase.beta,
+    ctParamsCase.gamma,
+    ctOut1Bits.length,
+    ctCk,
+    ctNk,
+    ctLedger,
+    ctSpent,
+    ctCIn1,
+    ctCIn2,
+    ctCOut1,
+    ctCOut2,
+    ctNf1,
+    ctNf2,
+    ctProof!
+  ),
+  true,
+  'ct-verify-scaffold OCaml CLI accepts SDK proofs'
 );
 logProgress('validate-ocaml: transaction verification passed');
 

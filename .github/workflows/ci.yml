@@ -323,6 +323,7 @@ jobs:
           python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
           git diff --exit-code -- bench/data/confidential-parameter-screen.json
           python3 scripts/check_confidential_parameter_readiness.py --report bench/data/confidential-parameter-screen.json
+          python3 scripts/check_confidential_scaffold_quarantine.py
 
       - name: Run confidential balance benchmark budget gates
         run: |

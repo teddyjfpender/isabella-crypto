@@ -1426,7 +1426,16 @@ let cmd_ct_member_verify args =
      | _ -> output_error "Expected params, a ledger matrix, and commitment vector")
   | _ -> output_error "Usage: ct-member-verify M N2 Q BETA \"[[c1],[c2],...]\" \"[c]\""
 
-let cmd_ct_prove args =
+let ct_prove_usage command =
+  Printf.sprintf "Usage: %s M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS" command
+
+let ct_verify_usage command =
+  Printf.sprintf "Usage: %s M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS" command
+
+let ct_verify_bench_usage command =
+  Printf.sprintf "Usage: %s ITERATIONS WARMUP M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS" command
+
+let cmd_ct_prove_with_usage command args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_amount_str; in1_rand_str; in2_amount_str; in2_rand_str; out1_amount_str; out1_rand_str; out2_amount_str; out2_rand_str; out1_bits_str; out1_bit_rands_str; out1_comps_str; out1_comp_rands_str; out2_bits_str; out2_bit_rands_str; out2_comps_str; out2_comp_rands_str; y_in1_msgs_str; y_in1_rands_str; y_in2_msgs_str; y_in2_rands_str; y_balance_str; y_out1_amounts_str; y_out1_pairss_str; y_out2_amounts_str; y_out2_pairss_str] ->
     (match
@@ -1510,7 +1519,13 @@ let cmd_ct_prove args =
               | Json -> print_endline "null"))
         | _ -> output_error "Bit, complement, and nullifier-mask counts must match their randomness matrices")
      | _ -> output_error "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors")
-  | _ -> output_error "Usage: ct-prove M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
+  | _ -> output_error (ct_prove_usage command)
+
+let cmd_ct_prove args =
+  cmd_ct_prove_with_usage "ct-prove" args
+
+let cmd_ct_prove_scaffold args =
+  cmd_ct_prove_with_usage "ct-prove-scaffold" args
 
 let cmd_ct_prove_merkle args =
   match args with
@@ -1598,7 +1613,7 @@ let cmd_ct_prove_merkle args =
      | _ -> output_error "Expected params, keys, ledger, commitments, openings, bit decompositions, and mask vectors")
   | _ -> output_error "Usage: ct-prove-merkle M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_AMOUNT IN1_RAND IN2_AMOUNT IN2_RAND OUT1_AMOUNT OUT1_RAND OUT2_AMOUNT OUT2_RAND OUT1_BITS OUT1_BIT_RANDS OUT1_COMPS OUT1_COMP_RANDS OUT2_BITS OUT2_BIT_RANDS OUT2_COMPS OUT2_COMP_RANDS Y1_MSGS Y1_RANDS Y2_MSGS Y2_RANDS YBALS YOUT1_AMOUNTS YOUT1_PAIRSS YOUT2_AMOUNTS YOUT2_PAIRSS"
 
-let prepare_ct_verify args =
+let prepare_ct_verify_with_usage command args =
   match args with
   | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; nk_str; ledger_str; spent_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str; in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str; in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str; balance_as_str; balance_zs_str; out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str; out1_pair_as_str; out1_pair_zs_str; out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str; out2_pair_as_str; out2_pair_zs_str] ->
     (match
@@ -1672,7 +1687,13 @@ let prepare_ct_verify args =
                 proof)
         | _ -> Error "Expected membership proofs for both input commitments in the supplied ledger")
      | _ -> Error "Expected params, keys, ledger, commitments, nullifiers, and transaction-proof fields")
-  | _ -> Error "Usage: ct-verify M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+  | _ -> Error (ct_verify_usage command)
+
+let prepare_ct_verify args =
+  prepare_ct_verify_with_usage "ct-verify" args
+
+let prepare_ct_verify_scaffold args =
+  prepare_ct_verify_with_usage "ct-verify-scaffold" args
 
 let prepare_ct_verify_merkle_with_root root_override args =
   match args with
@@ -1762,6 +1783,11 @@ let cmd_ct_verify args =
   | Ok verify -> output_result "transaction_fs_verify" (if verify () then "true" else "false")
   | Error msg -> output_error msg
 
+let cmd_ct_verify_scaffold args =
+  match prepare_ct_verify_scaffold args with
+  | Ok verify -> output_result "transaction_fs_verify" (if verify () then "true" else "false")
+  | Error msg -> output_error msg
+
 let cmd_ct_verify_merkle args =
   match prepare_ct_verify_merkle args with
   | Ok verify -> output_result "transaction_fs_verify_merkle" (if verify () then "true" else "false")
@@ -1828,16 +1854,24 @@ let cmd_ct_verify_merkle_envelope args =
   | _ ->
     output_error "Usage: ct-verify-merkle-envelope M N2 Q BETA G K CK NK LEDGER SPENT EXPECTED_VERSION EXPECTED_NETWORK EXPECTED_ASSET EXPECTED_EPOCH EXPECTED_ROOT EXPECTED_FEE CONTEXT_DIGEST VERSION NETWORK ASSET EPOCH ROOT FEE C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
 
-let cmd_ct_verify_bench args =
+let cmd_ct_verify_bench_with_usage command prepare args =
   match args with
   | iterations_str :: warmup_str :: rest ->
     (match parse_int iterations_str, parse_int warmup_str with
      | Some iterations, Some warmup when iterations > 0 && warmup >= 0 ->
-       (match prepare_ct_verify rest with
+       (match prepare rest with
         | Ok verify -> output_bench_stats "transaction_fs_verify_bench" (benchmark_bool warmup iterations verify)
+        | Error msg when String.length msg >= 5 && String.sub msg 0 5 = "Usage" ->
+          output_error (ct_verify_bench_usage command)
         | Error msg -> output_error msg)
      | _ -> output_error "Expected positive ITERATIONS and non-negative WARMUP")
-  | _ -> output_error "Usage: ct-verify-bench ITERATIONS WARMUP M N2 Q BETA G K CK NK LEDGER SPENT C1 C2 C3 C4 NF1 NF2 IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+  | _ -> output_error (ct_verify_bench_usage command)
+
+let cmd_ct_verify_bench args =
+  cmd_ct_verify_bench_with_usage "ct-verify-bench" prepare_ct_verify args
+
+let cmd_ct_verify_bench_scaffold args =
+  cmd_ct_verify_bench_with_usage "ct-verify-bench-scaffold" prepare_ct_verify_scaffold args
 
 let cmd_ct_ledger_step_verify args =
   match args with
@@ -2124,12 +2158,13 @@ let show_help () =
   print_endline "  ct-member-prove M N2 Q BETA LEDGER C   Build explicit ledger membership proof";
   print_endline "  ct-member-verify M N2 Q BETA LEDGER C  Verify explicit ledger membership proof";
   print_endline "  ct-ledger-step-verify ... Verify semantic ledger-step validity from verified input notes";
-  print_endline "  ct-prove ...  Build deterministic confidential-transaction proof";
+  print_endline "  ct-prove-scaffold ...  Build scaffold confidential-transaction proof over the algebraic ledger hash";
   print_endline "  ct-prove-merkle ...  Build deterministic confidential-transaction proof with Merkle membership";
-  print_endline "  ct-verify ... Verify deterministic confidential-transaction proof";
+  print_endline "  ct-verify-scaffold ... Verify scaffold confidential-transaction proof over the algebraic ledger hash";
   print_endline "  ct-verify-merkle ... Verify deterministic confidential-transaction proof with Merkle membership";
   print_endline "  ct-verify-merkle-envelope ... Verify context digest, expected policy, and Merkle transaction proof";
-  print_endline "  ct-verify-bench I W ... Benchmark deterministic confidential-transaction verification natively";
+  print_endline "  ct-verify-bench-scaffold I W ... Benchmark scaffold confidential-transaction verification natively";
+  print_endline "  ct-prove / ct-verify / ct-verify-bench are deprecated scaffold compatibility aliases";
   print_endline "";
   print_endline "Examples:";
   print_endline "  isabella_cli mod-centered 7 5";
@@ -2224,11 +2259,14 @@ let run_command cmd args =
   | "ct-member-verify" -> cmd_ct_member_verify args
   | "ct-ledger-step-verify" -> cmd_ct_ledger_step_verify args
   | "ct-prove" -> cmd_ct_prove args
+  | "ct-prove-scaffold" -> cmd_ct_prove_scaffold args
   | "ct-prove-merkle" -> cmd_ct_prove_merkle args
   | "ct-verify" -> cmd_ct_verify args
+  | "ct-verify-scaffold" -> cmd_ct_verify_scaffold args
   | "ct-verify-merkle" -> cmd_ct_verify_merkle args
   | "ct-verify-merkle-envelope" -> cmd_ct_verify_merkle_envelope args
   | "ct-verify-bench" -> cmd_ct_verify_bench args
+  | "ct-verify-bench-scaffold" -> cmd_ct_verify_bench_scaffold args
   | _ -> output_error (Printf.sprintf "Unknown command: %s. Use --help for usage." cmd)
 
 let () =

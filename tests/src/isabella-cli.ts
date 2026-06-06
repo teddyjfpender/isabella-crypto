@@ -1340,7 +1340,7 @@ export function ctTransactionContext(
   return parseCliResult<{ result: string }>(output).result;
 }
 
-export function ctProve(
+export function ctProveScaffold(
   m: number,
   n2: number,
   q: number,
@@ -1384,7 +1384,7 @@ export function ctProve(
   yOut2Pairs: number[][][]
 ): TransactionProof | null {
   const output = runCli([
-    'ct-prove',
+    'ct-prove-scaffold',
     m.toString(),
     n2.toString(),
     q.toString(),
@@ -1429,6 +1429,8 @@ export function ctProve(
   ]);
   return output === 'null' ? null : parseCliResult<TransactionProof>(output);
 }
+
+export const ctProve = ctProveScaffold;
 
 export function ctProveMerkle(
   m: number,
@@ -1735,7 +1737,7 @@ function ctVerifyWithCommand(
   return parseCliBool(output);
 }
 
-export function ctVerify(
+export function ctVerifyScaffold(
   m: number,
   n2: number,
   q: number,
@@ -1755,7 +1757,7 @@ export function ctVerify(
   proof: TransactionProof
 ): boolean {
   return ctVerifyWithCommand(
-    'ct-verify',
+    'ct-verify-scaffold',
     m,
     n2,
     q,
@@ -1775,6 +1777,8 @@ export function ctVerify(
     proof
   );
 }
+
+export const ctVerify = ctVerifyScaffold;
 
 export function ctVerifyMerkle(
   m: number,

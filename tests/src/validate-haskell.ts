@@ -1057,7 +1057,7 @@ assert.equal(
     ctProof!
   ),
   true,
-  'ct-verify shared surface'
+  'transaction scaffold shared surface'
 );
 
 console.log('validate-haskell: confidential transaction proof verification passed');
@@ -1075,7 +1075,7 @@ const listedCtBalance = listBalanceProof(listedCtProof.balance);
 const listedCtOut1Range = listRangeProof(listedCtProof.out1Range);
 const listedCtOut2Range = listRangeProof(listedCtProof.out2Range);
 const ctCliAcceptsSdkProof = tryParseResult<boolean>([
-      'ct-verify',
+      'ct-verify-scaffold',
       ctParamsCase.m.toString(),
       ctParamsCase.n2.toString(),
       ctParamsCase.q.toString(),
@@ -1115,7 +1115,7 @@ const ctCliAcceptsSdkProof = tryParseResult<boolean>([
       JSON.stringify(listedCtOut2Range.pairAss),
       JSON.stringify(listedCtOut2Range.pairZss),
     ]);
-assert.equal(ctCliAcceptsSdkProof, true, 'ct-verify Haskell CLI accepts SDK proofs');
+assert.equal(ctCliAcceptsSdkProof, true, 'ct-verify-scaffold Haskell CLI accepts SDK proofs');
 
 const ctMerkleRoot = sdk.ConfidentialTransaction.merkleLedgerRoot(ctLedger);
 const ctMerkleProof = sdk.ConfidentialTransaction.fsProveMerkle(

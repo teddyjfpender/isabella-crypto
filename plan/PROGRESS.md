@@ -109,7 +109,7 @@
 | `ZK/Repeated_FS.thy` | 🔄 | 128-round domain-separated transcript challenge policy; runtime backends use canonical SHA3-256 counter-mode vectors; HOL still needs Fiat-Shamir security-model connection |
 | `ZK/Confidential_Balance.thy` | 🔄 | SIS-note balance proof slice with domain-separated FS challenges, completeness, exact binary response-bound lemma, concrete one-round binary extractor facts (`balance_sigma_extract`, widened extracted-response bound, canonical-statement algebraic opening), and one-round simulated-commitment verifier facts; full FS extraction, distributional HVZK, and rejection analysis remain open, while the full `Canon_ZK` session now validates under the timed build profile |
 | `ZK/Confidential_Range.thy` | 🔄 | Bit/complement range proof slice with in-range theorem, completeness, exact binary response-bound lemmas, concrete one-round range amount/pair extractor facts with widened bounds and canonical-statement algebraic opening, and one-round simulator verifier facts |
-| `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link including explicit widened-bound `bounded_opening_collision_yields_sis`, exact nullifier response-bound lemma, concrete one-round nullifier extractor facts (`nullifier_sigma_extract`, widened extracted-response bound, canonical-statement commitment/nullifier algebraic opening), and one-round nullifier simulator verifier facts; stable semantic APIs now default to the Merkle-backed transaction verifier with same-path membership soundness, native CLI parity, vector-pinned public transaction-context/proof/envelope digests, and TS plus OCaml/Haskell envelope verification covered by native digest/proof conformance gates, but scaffold compatibility APIs remain |
+| `ZK/Confidential_Transaction.thy` | 🔄 | Nullifiers, semantic ledger step, extractor assumptions, HVZK assumptions, SIS collision link including explicit widened-bound `bounded_opening_collision_yields_sis`, exact nullifier response-bound lemma, concrete one-round nullifier extractor facts (`nullifier_sigma_extract`, widened extracted-response bound, canonical-statement commitment/nullifier algebraic opening), and one-round nullifier simulator verifier facts; stable semantic APIs now default to the Merkle-backed transaction verifier with same-path membership soundness, native CLI parity, vector-pinned public transaction-context/proof/envelope digests, and TS plus OCaml/Haskell envelope verification covered by native digest/proof conformance gates; scaffold compatibility APIs remain but native scaffold CLI aliases are explicit and production-facing validation rejects ambiguous legacy scaffold command names |
 | `ZK/Authenticated_Merkle.thy` | 🔄 | Cryptographic Merkle/hash target model with canonical encodings and same-path soundness under collision resistance; TypeScript/OCaml/Haskell Merkle leaf/node/root/path and transaction prove/verify APIs are vector/parity-tested |
 | `ZK/Authenticated_Ledger.thy` | 🔄 | Authenticated membership scaffold; ledger hash explicitly marked non-production |
 | `ZK/RejectionSampling.thy` | ⬜ | Distribution closeness and abort analysis |
@@ -117,8 +117,9 @@
 
 **Blockers**: Fiat-Shamir security-model connection, concrete
 extractors/simulators, external lattice-estimator pass, full-protocol
-realistic benchmarks, and making the cryptographic Merkle/hash verifier the
-default transaction ledger path. See
+realistic benchmarks, retiring scaffold compatibility APIs and deprecated
+aliases, and forcing consensus/product callers onto the cryptographic
+Merkle/hash verifier. See
 `plan/CONFIDENTIAL_TRANSFERS_ROADMAP.md`.
 
 Protocol/product status is tracked in
