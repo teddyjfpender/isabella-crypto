@@ -2,6 +2,7 @@ import {
   listBalanceProof,
   listNullifierProof,
   listRangeProof,
+  type MerkleMembershipProof,
   type MerkleTransactionProof,
 } from './isabella-cli.ts';
 
@@ -27,6 +28,35 @@ function mutateMatrixField<T extends Record<string, unknown>>(
     [field]: matrix.map((row, index) =>
       index === rowIndex ? [row[0] + 1, ...row.slice(1)] : row
     ),
+  };
+}
+
+function mutateMembershipSibling(proof: MerkleMembershipProof): MerkleMembershipProof {
+  return {
+    ...proof,
+    siblings: [flipHexDigest(proof.siblings[0]), ...proof.siblings.slice(1)],
+  };
+}
+
+function mutateMembershipDirection(proof: MerkleMembershipProof): MerkleMembershipProof {
+  return {
+    ...proof,
+    directions: [!proof.directions[0], ...proof.directions.slice(1)],
+  };
+}
+
+function mutateMembershipIndex(proof: MerkleMembershipProof): MerkleMembershipProof {
+  return {
+    ...proof,
+    index: proof.index + 1,
+  };
+}
+
+function extendMembershipPath(proof: MerkleMembershipProof): MerkleMembershipProof {
+  return {
+    ...proof,
+    siblings: [...proof.siblings, proof.root],
+    directions: [...proof.directions, false],
   };
 }
 
@@ -62,25 +92,55 @@ export function merkleTransactionProofMutations(
     },
     {
       name: 'input member sibling',
-      proof: {
-        ...proof,
-        in1Member: {
-          ...proof.in1Member,
-          siblings: [flipHexDigest(proof.in1Member.siblings[0]), ...proof.in1Member.siblings.slice(1)],
-        },
-      },
+      proof: { ...proof, in1Member: mutateMembershipSibling(proof.in1Member) },
       spent,
       root,
     },
     {
       name: 'input member direction',
-      proof: {
-        ...proof,
-        in1Member: {
-          ...proof.in1Member,
-          directions: [!proof.in1Member.directions[0], ...proof.in1Member.directions.slice(1)],
-        },
-      },
+      proof: { ...proof, in1Member: mutateMembershipDirection(proof.in1Member) },
+      spent,
+      root,
+    },
+    {
+      name: 'input member index',
+      proof: { ...proof, in1Member: mutateMembershipIndex(proof.in1Member) },
+      spent,
+      root,
+    },
+    {
+      name: 'input member extended path',
+      proof: { ...proof, in1Member: extendMembershipPath(proof.in1Member) },
+      spent,
+      root,
+    },
+    {
+      name: 'second input member root',
+      proof: { ...proof, in2Member: { ...proof.in2Member, root: flipHexDigest(proof.in2Member.root) } },
+      spent,
+      root,
+    },
+    {
+      name: 'second input member sibling',
+      proof: { ...proof, in2Member: mutateMembershipSibling(proof.in2Member) },
+      spent,
+      root,
+    },
+    {
+      name: 'second input member direction',
+      proof: { ...proof, in2Member: mutateMembershipDirection(proof.in2Member) },
+      spent,
+      root,
+    },
+    {
+      name: 'second input member index',
+      proof: { ...proof, in2Member: mutateMembershipIndex(proof.in2Member) },
+      spent,
+      root,
+    },
+    {
+      name: 'second input member extended path',
+      proof: { ...proof, in2Member: extendMembershipPath(proof.in2Member) },
       spent,
       root,
     },
@@ -103,6 +163,12 @@ export function merkleTransactionProofMutations(
       root,
     },
     {
+      name: 'second nullifier response',
+      proof: { ...proof, in2Nullifier: mutateNullifierProof(proof.in2Nullifier) },
+      spent,
+      root,
+    },
+    {
       name: 'balance response',
       proof: { ...proof, balance: mutateBalanceProof(proof.balance) },
       spent,
@@ -111,6 +177,12 @@ export function merkleTransactionProofMutations(
     {
       name: 'range response',
       proof: { ...proof, out1Range: mutateRangeProof(proof.out1Range) },
+      spent,
+      root,
+    },
+    {
+      name: 'second range response',
+      proof: { ...proof, out2Range: mutateRangeProof(proof.out2Range) },
       spent,
       root,
     },

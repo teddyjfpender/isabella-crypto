@@ -123,7 +123,10 @@ The harnesses are repair-aware:
   acceptance for a valid nonzero public-fee proof, and assert rejection for
   stale digests, wrong policy, root-depth policy mismatches, fee-policy
   mismatches, and context roots or context root depths not matched by the
-  Merkle proof.
+  Merkle proof. The shared Merkle mutation matrix covers both input membership
+  roots/siblings/directions/indices, extended membership paths, spent nullifier
+  snapshots, both nullifier proofs, both range proofs, the balance proof,
+  swapped proof components, and verifier-root mismatches.
 
 The harnesses compare the Haskell and OCaml CLIs against the built
 TypeScript SDK artifact in `isabella.ts/dist/`.

@@ -2204,5 +2204,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation including root-depth mismatch rejection, and randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
 );

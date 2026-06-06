@@ -153,7 +153,7 @@ describe('Confidential Merkle hash vectors', () => {
       k,
       ck,
       nk,
-      root,
+      root.digest,
       spent,
       cIn1,
       cIn2,
@@ -185,7 +185,7 @@ describe('Confidential Merkle hash vectors', () => {
       k,
       ck,
       nk,
-      root,
+      root.digest,
       spent,
       cIn1,
       cIn2,
@@ -218,7 +218,7 @@ describe('Confidential Merkle hash vectors', () => {
       nf2,
       proof,
     } = await buildMerkleTransactionFixture();
-    const verify = (candidate: typeof proof, candidateSpent = spent, candidateRoot = root) =>
+    const verify = (candidate: typeof proof, candidateSpent = spent, candidateRoot = root.digest) =>
       sdk.ConfidentialTransaction.fsVerifyMerkle(
         params,
         gamma,
@@ -235,7 +235,10 @@ describe('Confidential Merkle hash vectors', () => {
         nf2,
         candidate
       );
-    for (const mutation of merkleTransactionProofMutations(proof, spent, root, nf1)) {
+    const mutations = merkleTransactionProofMutations(proof, spent, root.digest, nf1);
+    expect(mutations.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(mutations.map((mutation) => mutation.name)).size).toBe(mutations.length);
+    for (const mutation of mutations) {
       const accepted = verify(mutation.proof, mutation.spent, mutation.root);
       if (accepted) {
         throw new Error(`accepted mutated Merkle transaction proof: ${mutation.name}`);

@@ -2079,5 +2079,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, Merkle envelope mutation including root-depth mismatch rejection, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
 );

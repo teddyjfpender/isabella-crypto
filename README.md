@@ -753,9 +753,11 @@ Current status and roadmap:
   TypeScript/OCaml/Haskell Merkle APIs for leaf/node/root/path checks plus a
   separate Merkle-backed transaction verifier path. Native OCaml/Haskell CLI
   conformance now covers Merkle transaction proving and verification against
-  the TypeScript SDK. The stable semantic ledger-step API now defaults to the
-  Merkle-backed verifier; scaffold ledger-step calls remain available only as
-  explicit compatibility APIs until they are retired.
+  the TypeScript SDK, including the shared mutation matrix for membership
+  indices/paths, nullifier/range/balance proofs, spent snapshots, swapped
+  components, and verifier-root mismatches. The stable semantic ledger-step API
+  now defaults to the Merkle-backed verifier; scaffold ledger-step calls remain
+  available only as explicit compatibility APIs until they are retired.
 - The transaction vector fixture also pins wallet proof request bytes for the
   SIS-note MVP: canonical context digest, depth-tagged accepted-root window, and
   spent-nullifier snapshot. TypeScript, OCaml, and Haskell expose matching

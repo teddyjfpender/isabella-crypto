@@ -165,7 +165,11 @@ benchmarks are independently checked.
   transaction proofs, including stale-digest, wrong-policy, root-depth policy
   mismatch, fee-policy mismatch, context-root/proof-root mismatch,
   context-root-depth/proof-path-depth mismatch, and the shared deterministic
-  proof-mutation matrix. `Confidential_Balance.thy` now defines public amount
+  proof-mutation matrix. The matrix now covers both input membership
+  roots/siblings/directions/indices, extended membership paths, spent nullifier
+  snapshots, both nullifier proofs, both range proofs, the balance proof,
+  swapped proof components, and verifier-root mismatches.
+  `Confidential_Balance.thy` now defines public amount
   commitments and `fee_balance_commitment`; `Confidential_Transaction.thy`
   exposes `transaction_relation_fee` and `transaction_fs_verify_merkle_fee`.
   TypeScript exposes `fsProveMerkleWithFee` / `fsVerifyMerkleWithFee`, and the
@@ -321,8 +325,10 @@ Important validation caveats:
 - `tests/src/confidential-merkle.test.ts` and the OCaml/Haskell
   SDK-equivalence validators now run the same deterministic Merkle transaction
   mutation matrix through TypeScript and native `ct-verify-merkle-envelope`.
-  The matrix covers root/path changes, spent nullifiers, nullifier responses,
-  balance responses, range responses, and swapped proof components.
+  The matrix covers both input membership roots/siblings/directions/indices,
+  extended membership paths, spent nullifiers, both nullifier responses, the
+  balance response, both range responses, swapped proof components, and
+  verifier-root mismatches.
 - `tests/src/confidential-transaction.test.ts` pins the canonical public
   transaction context preimage/digest, TypeScript canonical Merkle-proof
   preimage/digest, TypeScript canonical envelope preimage/digest, and
