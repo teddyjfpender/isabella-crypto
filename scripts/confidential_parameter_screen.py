@@ -36,6 +36,8 @@ class Candidate:
 
 
 PARAMETER_FIELDS = ("n1", "n2", "m", "q", "beta", "gamma", "range_bits", "fs_rounds")
+TYPESCRIPT_SAFE_INTEGER_LIMIT = 2**53 - 1
+SIGNED_64_BIT_LIMIT = 2**63 - 1
 
 
 def log2(x: float) -> float:
@@ -229,6 +231,50 @@ def external_lattice_estimator_request(candidate: Candidate, margins: dict[str, 
     }
 
 
+def runtime_integer_compatibility(candidate: Candidate, margins: dict[str, Any]) -> dict[str, Any]:
+    checked_values = {
+        "q": candidate.q,
+        "beta": candidate.beta,
+        "gamma": candidate.gamma,
+    }
+    if margins.get("applicable", False):
+        for name, value in margins.get("extracted_response_bounds", {}).items():
+            checked_values[f"extracted_response_bound:{name}"] = int(value)
+        for name, value in margins.get("sis_comparison_bounds", {}).items():
+            checked_values[f"sis_comparison_bound:{name}"] = int(value)
+
+    limits = {
+        "typescript_number_safe_integer": TYPESCRIPT_SAFE_INTEGER_LIMIT,
+        "signed_64_bit_encoding": SIGNED_64_BIT_LIMIT,
+    }
+    blocking_values = {
+        limit_name: [
+            name
+            for name, value in checked_values.items()
+            if value > limit
+        ]
+        for limit_name, limit in limits.items()
+    }
+    compatible = all(not names for names in blocking_values.values())
+
+    return {
+        "compatible": compatible,
+        "runtime_model": (
+            "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit "
+            "canonical integer encodings and TypeScript number arithmetic"
+        ),
+        "limits": limits,
+        "checked_values": checked_values,
+        "blocking_values": blocking_values,
+        "required_for_compatibility": [] if compatible else [
+            "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
+            "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields",
+            "regenerated transcript, transaction, Merkle, proof-digest, and backend parity vectors",
+            "benchmarks for the selected widened-modulus/runtime representation",
+        ],
+    }
+
+
 def screen(candidate: Candidate) -> dict[str, Any]:
     total_dim = candidate.n1 + candidate.n2
     syndrome_bits = candidate.m * log2(candidate.q)
@@ -245,6 +291,7 @@ def screen(candidate: Candidate) -> dict[str, Any]:
         "fiat_shamir_soundness_bits": candidate.fs_rounds,
         "formal_proof_margins": margins,
         "external_lattice_estimator_request": external_lattice_estimator_request(candidate, margins),
+        "runtime_integer_compatibility": runtime_integer_compatibility(candidate, margins),
         "screening_status": "screen_only",
     }
 
@@ -263,6 +310,15 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
 
     if "lazer_parameter_generation_report" not in screened:
         blockers.append("lazer_parameter_generation_report_missing")
+
+    runtime = screened.get("runtime_integer_compatibility", {})
+    if not isinstance(runtime, dict) or not runtime.get("compatible", False):
+        blockers.append("runtime_integer_model_incompatible")
+        blocking_values = runtime.get("blocking_values", {}) if isinstance(runtime, dict) else {}
+        if isinstance(blocking_values, dict):
+            for limit_name, values in blocking_values.items():
+                if isinstance(limit_name, str) and isinstance(values, list) and values:
+                    blockers.append(f"runtime_integer_model_exceeds:{limit_name}")
 
     target_security_bits = screened.get("target_security_bits")
     estimator_report = screened.get("external_lattice_estimator_report")

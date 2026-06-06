@@ -257,6 +257,43 @@
         "status": "blocked_by_formal_modulus",
         "notes": "Pass this SIS instance to lattice-estimator with norm=+Infinity only after the formal response/SIS bound is below (q - 1) / 2."
       },
+      "runtime_integer_compatibility": {
+        "compatible": false,
+        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit canonical integer encodings and TypeScript number arithmetic",
+        "limits": {
+          "typescript_number_safe_integer": 9007199254740991,
+          "signed_64_bit_encoding": 9223372036854775807
+        },
+        "checked_values": {
+          "q": 8380417,
+          "beta": 65536,
+          "gamma": 16777216,
+          "extracted_response_bound:balance": 33816576,
+          "extracted_response_bound:range_amount": 1208925819614629208260608,
+          "extracted_response_bound:range_pair": 33685504,
+          "extracted_response_bound:nullifier": 33619968,
+          "sis_comparison_bound:balance_zero_opening_vs_honest": 34078720,
+          "sis_comparison_bound:range_amount_residual_vs_honest": 2417851639229258382966784,
+          "sis_comparison_bound:range_pair_residual_vs_honest": 33816576,
+          "sis_comparison_bound:nullifier_opening_vs_honest": 33685504
+        },
+        "blocking_values": {
+          "typescript_number_safe_integer": [
+            "extracted_response_bound:range_amount",
+            "sis_comparison_bound:range_amount_residual_vs_honest"
+          ],
+          "signed_64_bit_encoding": [
+            "extracted_response_bound:range_amount",
+            "sis_comparison_bound:range_amount_residual_vs_honest"
+          ]
+        },
+        "required_for_compatibility": [
+          "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
+          "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields",
+          "regenerated transcript, transaction, Merkle, proof-digest, and backend parity vectors",
+          "benchmarks for the selected widened-modulus/runtime representation"
+        ]
+      },
       "screening_status": "screen_only",
       "production_readiness": {
         "ready": false,
@@ -265,6 +302,9 @@
           "external_lattice_estimator_unavailable",
           "external_lattice_estimator_report_missing",
           "lazer_parameter_generation_report_missing",
+          "runtime_integer_model_incompatible",
+          "runtime_integer_model_exceeds:typescript_number_safe_integer",
+          "runtime_integer_model_exceeds:signed_64_bit_encoding",
           "formal_proof_margin_modulus_failures:balance_extracted_response,range_amount_extracted_response,range_pair_extracted_response,nullifier_extracted_opening,sis_balance_zero_opening_vs_honest,sis_range_amount_residual_vs_honest,sis_range_pair_residual_vs_honest,sis_nullifier_opening_vs_honest",
           "formal_minimum_q_bits_required:82",
           "sis_bound_checks_failed:balance_extracted_response,range_amount_extracted_response,range_pair_extracted_response,nullifier_extracted_opening,sis_balance_zero_opening_vs_honest,sis_range_amount_residual_vs_honest,sis_range_pair_residual_vs_honest,sis_nullifier_opening_vs_honest"
@@ -460,6 +500,45 @@
         "status": "ready_for_external_estimator",
         "notes": "Pass this SIS instance to lattice-estimator with norm=+Infinity only after the formal response/SIS bound is below (q - 1) / 2."
       },
+      "runtime_integer_compatibility": {
+        "compatible": false,
+        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit canonical integer encodings and TypeScript number arithmetic",
+        "limits": {
+          "typescript_number_safe_integer": 9007199254740991,
+          "signed_64_bit_encoding": 9223372036854775807
+        },
+        "checked_values": {
+          "q": 4835703278458516765933661,
+          "beta": 65536,
+          "gamma": 16777216,
+          "extracted_response_bound:balance": 33816576,
+          "extracted_response_bound:range_amount": 1208925819614629208260608,
+          "extracted_response_bound:range_pair": 33685504,
+          "extracted_response_bound:nullifier": 33619968,
+          "sis_comparison_bound:balance_zero_opening_vs_honest": 34078720,
+          "sis_comparison_bound:range_amount_residual_vs_honest": 2417851639229258382966784,
+          "sis_comparison_bound:range_pair_residual_vs_honest": 33816576,
+          "sis_comparison_bound:nullifier_opening_vs_honest": 33685504
+        },
+        "blocking_values": {
+          "typescript_number_safe_integer": [
+            "q",
+            "extracted_response_bound:range_amount",
+            "sis_comparison_bound:range_amount_residual_vs_honest"
+          ],
+          "signed_64_bit_encoding": [
+            "q",
+            "extracted_response_bound:range_amount",
+            "sis_comparison_bound:range_amount_residual_vs_honest"
+          ]
+        },
+        "required_for_compatibility": [
+          "BigInt or multiprecision arithmetic across TypeScript, OCaml, and Haskell proof paths",
+          "canonical bignum serialization replacing signed-64-bit proof/transcript integer fields",
+          "regenerated transcript, transaction, Merkle, proof-digest, and backend parity vectors",
+          "benchmarks for the selected widened-modulus/runtime representation"
+        ]
+      },
       "screening_status": "screen_only",
       "production_readiness": {
         "ready": false,
@@ -467,7 +546,10 @@
           "screening_status_is_not_production_candidate",
           "external_lattice_estimator_unavailable",
           "external_lattice_estimator_report_missing",
-          "lazer_parameter_generation_report_missing"
+          "lazer_parameter_generation_report_missing",
+          "runtime_integer_model_incompatible",
+          "runtime_integer_model_exceeds:typescript_number_safe_integer",
+          "runtime_integer_model_exceeds:signed_64_bit_encoding"
         ]
       }
     },
@@ -509,6 +591,24 @@
           "TransferValid",
           "NoiseBoundValid"
         ]
+      },
+      "runtime_integer_compatibility": {
+        "compatible": true,
+        "runtime_model": "current OCaml/Haskell/TypeScript reference runtime with signed-64-bit canonical integer encodings and TypeScript number arithmetic",
+        "limits": {
+          "typescript_number_safe_integer": 9007199254740991,
+          "signed_64_bit_encoding": 9223372036854775807
+        },
+        "checked_values": {
+          "q": 8380417,
+          "beta": 65536,
+          "gamma": 16777216
+        },
+        "blocking_values": {
+          "typescript_number_safe_integer": [],
+          "signed_64_bit_encoding": []
+        },
+        "required_for_compatibility": []
       },
       "screening_status": "screen_only",
       "production_readiness": {

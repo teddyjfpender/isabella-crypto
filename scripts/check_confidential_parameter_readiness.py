@@ -377,6 +377,74 @@ def validate_formal_modulus_requirements(
         fail(f"{candidate_id}.minimum_modulus_requirement.blocking_checks must match failed modulus checks")
 
 
+def validate_runtime_integer_compatibility(candidate: dict[str, Any]) -> bool:
+    candidate_id = candidate_name(candidate)
+    runtime = require_object(
+        candidate.get("runtime_integer_compatibility"),
+        f"{candidate_id}.runtime_integer_compatibility",
+    )
+    compatible = runtime.get("compatible")
+    if not isinstance(compatible, bool):
+        fail(f"{candidate_id}.runtime_integer_compatibility.compatible must be a boolean")
+    require_string(runtime.get("runtime_model"), f"{candidate_id}.runtime_integer_compatibility.runtime_model")
+    limits = require_object(
+        runtime.get("limits"),
+        f"{candidate_id}.runtime_integer_compatibility.limits",
+    )
+    expected_limits = {
+        "typescript_number_safe_integer": 2**53 - 1,
+        "signed_64_bit_encoding": 2**63 - 1,
+    }
+    if limits != expected_limits:
+        fail(f"{candidate_id}.runtime_integer_compatibility.limits must match current runtime limits")
+
+    checked_values = require_object(
+        runtime.get("checked_values"),
+        f"{candidate_id}.runtime_integer_compatibility.checked_values",
+    )
+    for name, value in checked_values.items():
+        if not isinstance(name, str) or not name:
+            fail(f"{candidate_id}.runtime_integer_compatibility.checked_values keys must be non-empty strings")
+        require_positive_int(value, f"{candidate_id}.runtime_integer_compatibility.checked_values.{name}")
+
+    blocking_values = require_object(
+        runtime.get("blocking_values"),
+        f"{candidate_id}.runtime_integer_compatibility.blocking_values",
+    )
+    expected_blocking: dict[str, list[str]] = {}
+    for limit_name, limit in expected_limits.items():
+        raw_values = require_list(
+            blocking_values.get(limit_name),
+            f"{candidate_id}.runtime_integer_compatibility.blocking_values.{limit_name}",
+        )
+        if not all(isinstance(value, str) and value for value in raw_values):
+            fail(f"{candidate_id}.runtime_integer_compatibility.blocking_values.{limit_name} must contain strings")
+        expected_values = [
+            name
+            for name, value in checked_values.items()
+            if isinstance(value, int) and value > limit
+        ]
+        expected_blocking[limit_name] = expected_values
+        if raw_values != expected_values:
+            fail(f"{candidate_id}.runtime_integer_compatibility.blocking_values.{limit_name} is inconsistent")
+
+    expected_compatible = all(not values for values in expected_blocking.values())
+    if compatible != expected_compatible:
+        fail(f"{candidate_id}.runtime_integer_compatibility.compatible is inconsistent with blocking_values")
+
+    required = require_list(
+        runtime.get("required_for_compatibility"),
+        f"{candidate_id}.runtime_integer_compatibility.required_for_compatibility",
+    )
+    if compatible:
+        if required:
+            fail(f"{candidate_id}.runtime_integer_compatibility.required_for_compatibility must be empty when compatible")
+    elif not all(isinstance(item, str) and item for item in required):
+        fail(f"{candidate_id}.runtime_integer_compatibility.required_for_compatibility must contain strings")
+
+    return compatible
+
+
 def validate_external_estimator_request(candidate: dict[str, Any], margins: dict[str, Any]) -> None:
     candidate_id = candidate_name(candidate)
     request = require_object(
@@ -517,6 +585,7 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
     if margins.get("applicable", False):
         validate_formal_modulus_requirements(candidate, margins, warnings)
     validate_external_estimator_request(candidate, margins)
+    runtime_compatible = validate_runtime_integer_compatibility(candidate)
 
     estimator_report = candidate.get("external_lattice_estimator_report")
     if estimator_report is not None:
@@ -535,6 +604,8 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
     if ready:
         if candidate.get("screening_status") != "production_candidate":
             fail(f"{name} is ready without screening_status=production_candidate")
+        if not runtime_compatible:
+            fail(f"{name} is ready despite runtime integer incompatibility")
         if not external_estimator_available:
             fail(f"{name} is ready while external_lattice_estimator_available=false")
         if estimator_report is None:
@@ -555,6 +626,22 @@ def validate_candidate(candidate: dict[str, Any], external_estimator_available: 
             fail(f"{name} is ready with failed SIS modulus checks: {failed}")
     elif not blockers:
         fail(f"{name} is not ready but has no blockers")
+    elif not runtime_compatible:
+        if "runtime_integer_model_incompatible" not in blockers:
+            fail(f"{name} is runtime-incompatible but lacks runtime_integer_model_incompatible blocker")
+        runtime = require_object(
+            candidate.get("runtime_integer_compatibility"),
+            f"{name}.runtime_integer_compatibility",
+        )
+        blocking_values = require_object(
+            runtime.get("blocking_values"),
+            f"{name}.runtime_integer_compatibility.blocking_values",
+        )
+        for limit_name, values in blocking_values.items():
+            if isinstance(limit_name, str) and isinstance(values, list) and values:
+                expected = f"runtime_integer_model_exceeds:{limit_name}"
+                if expected not in blockers:
+                    fail(f"{name} is runtime-incompatible but lacks {expected} blocker")
 
     return ready
 

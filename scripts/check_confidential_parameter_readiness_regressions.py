@@ -98,6 +98,8 @@ def main() -> None:
             raise SystemExit("widened SIS candidate must be ready_for_external_estimator")
         if estimator_ready_candidate["formal_proof_margins"]["warnings"]:
             raise SystemExit("widened SIS candidate must pass formal proof-margin modulus checks")
+        if estimator_ready_candidate["runtime_integer_compatibility"]["compatible"]:
+            raise SystemExit("widened SIS candidate must remain runtime-incompatible until bignum support lands")
 
         blocked_estimator = copy.deepcopy(base_report)
         blocked_estimator["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
@@ -205,6 +207,28 @@ def main() -> None:
         expect_checker_failure(
             mismatched_ready_status_path,
             "external_lattice_estimator_request.status must be ready_for_external_estimator",
+        )
+
+        dishonest_runtime_compatible = copy.deepcopy(base_report)
+        dishonest_runtime_compatible["candidates"][1]["runtime_integer_compatibility"]["compatible"] = True
+        dishonest_runtime_path = tmpdir / "dishonest-runtime-compatible.json"
+        write_report(dishonest_runtime_path, dishonest_runtime_compatible)
+        expect_checker_failure(
+            dishonest_runtime_path,
+            "runtime_integer_compatibility.compatible is inconsistent",
+        )
+
+        missing_runtime_blockers = copy.deepcopy(base_report)
+        missing_runtime_blockers["candidates"][1]["production_readiness"]["blockers"] = [
+            blocker
+            for blocker in missing_runtime_blockers["candidates"][1]["production_readiness"]["blockers"]
+            if not blocker.startswith("runtime_integer_model_")
+        ]
+        missing_runtime_blockers_path = tmpdir / "missing-runtime-blockers.json"
+        write_report(missing_runtime_blockers_path, missing_runtime_blockers)
+        expect_checker_failure(
+            missing_runtime_blockers_path,
+            "lacks runtime_integer_model_incompatible blocker",
         )
 
     print(json.dumps({"gate": "confidential-parameter-readiness-regressions", "status": "passed"}))

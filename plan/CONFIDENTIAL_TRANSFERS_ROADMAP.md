@@ -285,6 +285,16 @@ prime above `2 * max_sis_bound + 2` for the current proof margins. It has no
 formal modulus warnings, but it is still blocked until external
 lattice-estimator and LaZer parameter-generation reports are attached.
 
+The parameter screen also records runtime integer compatibility against the
+current TypeScript-number arithmetic and signed-64-bit canonical integer
+encoding. Both SIS-note candidates are blocked by this check: the 64-bit range
+proof response/SIS bounds exceed both `Number.MAX_SAFE_INTEGER` and signed
+64-bit encodings, and the q83 candidate additionally exceeds those limits at
+the modulus itself. Production for these parameters therefore needs BigInt or
+multiprecision proof arithmetic across TypeScript, OCaml, and Haskell, plus a
+canonical bignum serialization and regenerated parity vectors. External
+estimator evidence alone is not enough to mark the candidate launchable.
+
 The same artifact now records exact SIS requests. The legacy MVP request is:
 `SIS.Parameters(n=1024, m=1025, q=8380417, length_bound=2417851639229258382966784,
 norm=infinity)`. The selected length bound comes from
