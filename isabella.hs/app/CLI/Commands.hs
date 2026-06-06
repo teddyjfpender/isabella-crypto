@@ -11,7 +11,10 @@ import qualified Canon.Confidential_sampling as ConfidentialSampling
 import qualified Canon.Confidential_transaction as ConfidentialTransaction
 import qualified Canon.Dilithium as Dilithium
 import qualified Canon.Listvec as Listvec
+import qualified Canon.ZK.Internal.RepeatedFS as RepeatedFS
 import qualified Canon.Zq as Zq
+import Data.Bits ((.&.))
+import Data.Char (ord)
 import Data.List (intercalate, sort)
 import GHC.Clock (getMonotonicTimeNSec)
 import Text.Read (readMaybe)
@@ -55,6 +58,11 @@ runCommand format cmd args = case cmd of
     "cb-sigma-verify" -> cmdCbSigmaVerify format args
     "cb-prove" -> cmdCbProve format args
     "cb-verify" -> cmdCbVerify format args
+    "ct-balance-bigint-rand-commit" -> cmdCtBalanceBigintRandCommit format args
+    "ct-balance-bigint-fs-fields" -> cmdCtBalanceBigintFsFields format args
+    "ct-balance-bigint-fs-challenges" -> cmdCtBalanceBigintFsChallenges format args
+    "ct-balance-bigint-prove" -> cmdCtBalanceBigintProve format args
+    "ct-balance-bigint-verify" -> cmdCtBalanceBigintVerify format args
     "cr-amount-commitment" -> cmdCrAmountCommitment format args
     "cr-prove" -> cmdCrProve format args
     "cr-verify" -> cmdCrVerify format args
@@ -128,6 +136,12 @@ parseCanonicalInteger :: String -> Maybe Integer
 parseCanonicalInteger s = do
     value <- readMaybe s
     if show (value :: Integer) == s then Just value else Nothing
+
+parseCanonicalIntegerVec :: String -> Maybe [Integer]
+parseCanonicalIntegerVec = parseCanonicalRead
+
+parseCanonicalIntegerMat :: String -> Maybe [[Integer]]
+parseCanonicalIntegerMat = parseCanonicalRead
 
 parseCanonicalVec :: String -> Maybe [Int]
 parseCanonicalVec s = do
@@ -222,6 +236,15 @@ jsonVec = ("[" ++) . (++ "]") . intercalate "," . map show
 
 jsonMat :: [[Int]] -> String
 jsonMat = ("[" ++) . (++ "]") . intercalate "," . map jsonVec
+
+jsonInteger :: Integer -> String
+jsonInteger = jsonString . show
+
+jsonIntegerVec :: [Integer] -> String
+jsonIntegerVec = ("[" ++) . (++ "]") . intercalate "," . map jsonInteger
+
+jsonIntegerMat :: [[Integer]] -> String
+jsonIntegerMat = ("[" ++) . (++ "]") . intercalate "," . map jsonIntegerVec
 
 jsonCube :: [[[Int]]] -> String
 jsonCube = ("[" ++) . (++ "]") . intercalate "," . map jsonMat
@@ -402,6 +425,176 @@ jsonCbProof proof =
         [ ("as", jsonMat (ConfidentialBalance.balance_as proof))
         , ("zs", jsonMat (ConfidentialBalance.balance_zs proof))
         ]
+
+data BigCbParams = BigCbParams
+  { bigCbN1 :: Int
+  , bigCbN2 :: Int
+  , bigCbM :: Int
+  , bigCbQ :: Integer
+  , bigCbBeta :: Integer
+  }
+
+data BigCbProof = BigCbProof
+  { bigCbAs :: [[Integer]]
+  , bigCbZs :: [[Integer]]
+  }
+
+jsonBigCbProof :: BigCbProof -> String
+jsonBigCbProof proof =
+    jsonObject
+        [ ("as", jsonIntegerMat (bigCbAs proof))
+        , ("zs", jsonIntegerMat (bigCbZs proof))
+        ]
+
+bigCbFsDomain :: Int
+bigCbFsDomain = 1001
+
+bigCbFsRounds :: Int
+bigCbFsRounds = 128
+
+bigCbTranscriptDst :: String
+bigCbTranscriptDst = "ISABELLA-CT-FS-v1"
+
+parseBigCbParams :: String -> String -> String -> String -> Maybe BigCbParams
+parseBigCbParams mStr n2Str qStr betaStr =
+    case (parseCanonicalInt mStr, parseCanonicalInt n2Str, parseCanonicalInteger qStr, parseCanonicalInteger betaStr) of
+        (Just m, Just n2, Just q, Just beta) ->
+            Just (BigCbParams 1 n2 m q beta)
+        _ -> Nothing
+
+validBigCbParams :: BigCbParams -> Bool
+validBigCbParams params =
+    bigCbN1 params == 1 &&
+    bigCbN2 params > 0 &&
+    bigCbM params > 0 &&
+    bigCbQ params > 1 &&
+    bigCbBeta params > 0
+
+validBigVec :: Int -> [Integer] -> Bool
+validBigVec expected xs = length xs == expected
+
+validBigCommitKey :: BigCbParams -> [[Integer]] -> Bool
+validBigCommitKey params ck =
+    validBigCbParams params &&
+    length ck == bigCbM params &&
+    all (validBigVec (bigCbN1 params + bigCbN2 params)) ck
+
+bigRandCommitKey :: BigCbParams -> [[Integer]] -> [[Integer]]
+bigRandCommitKey params = map (drop (bigCbN1 params))
+
+bigMod :: Integer -> Integer -> Integer
+bigMod value modulus =
+    let reduced = value `mod` modulus
+     in if reduced < 0 then reduced + modulus else reduced
+
+bigVecMod :: [Integer] -> Integer -> [Integer]
+bigVecMod xs modulus = map (`bigMod` modulus) xs
+
+bigVecAdd :: [Integer] -> [Integer] -> [Integer]
+bigVecAdd = zipWith (+)
+
+bigScalarMult :: Integer -> [Integer] -> [Integer]
+bigScalarMult scalar = map (scalar *)
+
+bigMatVecMult :: [[Integer]] -> [Integer] -> [Integer]
+bigMatVecMult matrix vector =
+    [sum (zipWith (*) row vector) | row <- matrix]
+
+bigMatVecMultMod :: [[Integer]] -> [Integer] -> Integer -> [Integer]
+bigMatVecMultMod matrix vector modulus =
+    bigVecMod (bigMatVecMult matrix vector) modulus
+
+bigRandCommit :: BigCbParams -> [[Integer]] -> [Integer] -> [Integer]
+bigRandCommit params ck r =
+    bigMatVecMultMod (bigRandCommitKey params ck) r (bigCbQ params)
+
+bigAllBounded :: [Integer] -> Integer -> Bool
+bigAllBounded xs bound = bound >= 0 && all ((<= bound) . abs) xs
+
+validBigWitness :: BigCbParams -> [Integer] -> Bool
+validBigWitness params r =
+    validBigCbParams params &&
+    validBigVec (bigCbN2 params) r &&
+    bigAllBounded r (4 * bigCbBeta params)
+
+validBigMask :: BigCbParams -> Integer -> [Integer] -> Bool
+validBigMask params gamma y =
+    validBigCbParams params &&
+    validBigVec (bigCbN2 params) y &&
+    bigAllBounded y gamma
+
+validBigResponse :: BigCbParams -> Integer -> Int -> [Integer] -> Bool
+validBigResponse params gamma challenge z =
+    (challenge == 0 || challenge == 1) &&
+    validBigCbParams params &&
+    validBigVec (bigCbN2 params) z &&
+    bigAllBounded z (gamma + toInteger challenge * 4 * bigCbBeta params)
+
+bigBalanceRelation :: BigCbParams -> [[Integer]] -> [Integer] -> [Integer] -> Bool
+bigBalanceRelation params ck c r =
+    validBigCommitKey params ck &&
+    validBigVec (bigCbM params) c &&
+    validBigWitness params r &&
+    bigRandCommit params ck r == c
+
+bigSigmaRespond :: [Integer] -> [Integer] -> Int -> [Integer]
+bigSigmaRespond r y challenge =
+    bigVecAdd y (bigScalarMult (toInteger challenge) r)
+
+bigFsTranscriptBytes :: Int -> Int -> [Integer] -> [Int]
+bigFsTranscriptBytes domain roundIndex fields =
+    map ord bigCbTranscriptDst ++
+    bignumLengthLeBytes domain ++
+    bignumLengthLeBytes roundIndex ++
+    bignumLengthLeBytes (length fields) ++
+    concatMap encodeBignumInteger fields
+
+bigBinaryFsChallenge :: Int -> [Integer] -> Int -> Int
+bigBinaryFsChallenge domain fields roundIndex =
+    case RepeatedFS.sha3_256 (map fromIntegral (bigFsTranscriptBytes domain roundIndex fields)) of
+        firstByte : _ -> fromIntegral (firstByte .&. 1)
+        [] -> error "sha3_256 produced no output"
+
+bigFsFields :: [[Integer]] -> [Integer] -> [[Integer]] -> [Integer]
+bigFsFields ck c as_ =
+    [sum (concat ck), sum c, sum (concat as_)]
+
+bigFsChallenges :: [[Integer]] -> [Integer] -> [[Integer]] -> Int -> [Int]
+bigFsChallenges ck c as_ rounds =
+    let fields = bigFsFields ck c as_
+     in [bigBinaryFsChallenge bigCbFsDomain fields roundIndex | roundIndex <- [0 .. rounds - 1]]
+
+bigSigmaVerify :: BigCbParams -> Integer -> [[Integer]] -> [Integer] -> [Integer] -> Int -> [Integer] -> Bool
+bigSigmaVerify params gamma ck c a challenge z =
+    validBigCommitKey params ck &&
+    validBigVec (bigCbM params) c &&
+    validBigVec (bigCbM params) a &&
+    validBigResponse params gamma challenge z &&
+    bigRandCommit params ck z ==
+        bigVecMod (bigVecAdd a (bigScalarMult (toInteger challenge) c)) (bigCbQ params)
+
+bigFsProve :: BigCbParams -> Integer -> [[Integer]] -> [Integer] -> [Integer] -> [[Integer]] -> Maybe BigCbProof
+bigFsProve params gamma ck c r ys =
+    let as_ = map (bigRandCommit params ck) ys
+        challenges = bigFsChallenges ck c as_ bigCbFsRounds
+        zs = zipWith (bigSigmaRespond r) ys challenges
+     in if length ys == bigCbFsRounds &&
+           bigBalanceRelation params ck c r &&
+           all (validBigMask params gamma) ys &&
+           and (zipWith (validBigResponse params gamma) challenges zs)
+        then Just (BigCbProof as_ zs)
+        else Nothing
+
+bigFsVerify :: BigCbParams -> Integer -> [[Integer]] -> [Integer] -> BigCbProof -> Bool
+bigFsVerify params gamma ck c proof =
+    let as_ = bigCbAs proof
+        zs = bigCbZs proof
+        challenges = bigFsChallenges ck c as_ bigCbFsRounds
+     in validBigCbParams params &&
+        validBigCommitKey params ck &&
+        length as_ == bigCbFsRounds &&
+        length zs == bigCbFsRounds &&
+        and (zipWith3 (bigSigmaVerify params gamma ck c) as_ challenges zs)
 
 jsonCrProof :: ConfidentialRange.RangeProof -> String
 jsonCrProof proof =
@@ -1170,6 +1363,90 @@ cmdCbVerify format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, cStr, asStr, zs
         _ -> outputError format "Expected params, gamma, commitment key matrix, commitment vector, announcement matrix, and response matrix"
 cmdCbVerify format _ =
     outputUsage format "Usage: cb-verify M N2 Q BETA GAMMA \"[[row1],[row2]]\" \"[c]\" \"[[a1],[a2],...]\" \"[[z1],[z2],...]\""
+
+cmdCtBalanceBigintRandCommit :: OutputFormat -> [String] -> IO ()
+cmdCtBalanceBigintRandCommit format [mStr, n2Str, qStr, betaStr, ckStr, rStr] =
+    case (parseBigCbParams mStr n2Str qStr betaStr, parseCanonicalIntegerMat ckStr, parseCanonicalIntegerVec rStr) of
+        (Just params, Just ck, Just r)
+            | validBigCommitKey params ck && validBigVec (bigCbN2 params) r ->
+                case format of
+                    Human -> putStrLn $ "ct_balance_bigint_rand_commit = " ++ show (bigRandCommit params ck r)
+                    Json -> putStrLn $ "{\"result\":" ++ jsonIntegerVec (bigRandCommit params ck r) ++ "}"
+        _ -> outputError format "Expected params (M N2 Q BETA), BigInt commitment key matrix, and witness vector"
+cmdCtBalanceBigintRandCommit format _ =
+    outputUsage format "Usage: ct-balance-bigint-rand-commit M N2 Q BETA \"[[row1],[row2]]\" \"[r]\""
+
+cmdCtBalanceBigintFsFields :: OutputFormat -> [String] -> IO ()
+cmdCtBalanceBigintFsFields format [ckStr, cStr, asStr] =
+    case (parseCanonicalIntegerMat ckStr, parseCanonicalIntegerVec cStr, parseCanonicalIntegerMat asStr) of
+        (Just ck, Just c, Just as_) ->
+            case format of
+                Human -> putStrLn $ "ct_balance_bigint_fs_fields = " ++ show (bigFsFields ck c as_)
+                Json -> putStrLn $ "{\"result\":" ++ jsonIntegerVec (bigFsFields ck c as_) ++ "}"
+        _ -> outputError format "Expected BigInt commitment key matrix, commitment vector, and announcement matrix"
+cmdCtBalanceBigintFsFields format _ =
+    outputUsage format "Usage: ct-balance-bigint-fs-fields \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\""
+
+cmdCtBalanceBigintFsChallenges :: OutputFormat -> [String] -> IO ()
+cmdCtBalanceBigintFsChallenges format [mStr, n2Str, qStr, betaStr, ckStr, cStr, asStr, roundsStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerMat asStr
+        , parseCanonicalInt roundsStr
+        )
+    of
+        (Just params, Just ck, Just c, Just as_, Just rounds)
+            | validBigCbParams params && validBigCommitKey params ck && validBigVec (bigCbM params) c && rounds >= 0 ->
+                outputVecResult format "ct_balance_bigint_fs_challenges = "
+                    (bigFsChallenges ck c as_ rounds)
+        _ -> outputError format "Expected params, BigInt commitment key matrix, commitment vector, announcement matrix, and round count"
+cmdCtBalanceBigintFsChallenges format _ =
+    outputUsage format "Usage: ct-balance-bigint-fs-challenges M N2 Q BETA \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\" ROUNDS"
+
+cmdCtBalanceBigintProve :: OutputFormat -> [String] -> IO ()
+cmdCtBalanceBigintProve format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, cStr, rStr, ysStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInteger gammaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerVec rStr
+        , parseCanonicalIntegerMat ysStr
+        )
+    of
+        (Just params, Just gamma, Just ck, Just c, Just r, Just ys) ->
+            case bigFsProve params gamma ck c r ys of
+                Just proof ->
+                    case format of
+                        Human -> putStrLn $ "ct_balance_bigint_proof = " ++ show (bigCbAs proof, bigCbZs proof)
+                        Json -> putStrLn $ "{\"result\":" ++ jsonBigCbProof proof ++ "}"
+                Nothing ->
+                    case format of
+                        Human -> putStrLn "ct_balance_bigint_proof = null"
+                        Json -> putStrLn "{\"result\":null}"
+        _ -> outputError format "Expected params, gamma, BigInt commitment key matrix, commitment vector, witness vector, and mask matrix"
+cmdCtBalanceBigintProve format _ =
+    outputUsage format "Usage: ct-balance-bigint-prove M N2 Q BETA GAMMA \"[[ck]]\" \"[c]\" \"[r]\" \"[[y1],[y2],...]\""
+
+cmdCtBalanceBigintVerify :: OutputFormat -> [String] -> IO ()
+cmdCtBalanceBigintVerify format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, cStr, asStr, zsStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInteger gammaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cStr
+        , parseCanonicalIntegerMat asStr
+        , parseCanonicalIntegerMat zsStr
+        )
+    of
+        (Just params, Just gamma, Just ck, Just c, Just as_, Just zs) ->
+            outputBoolResult format "ct_balance_bigint_verify = "
+                (bigFsVerify params gamma ck c (BigCbProof as_ zs))
+        _ -> outputError format "Expected params, gamma, BigInt commitment key matrix, commitment vector, announcement matrix, and response matrix"
+cmdCtBalanceBigintVerify format _ =
+    outputUsage format "Usage: ct-balance-bigint-verify M N2 Q BETA GAMMA \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\" \"[[z1],[z2],...]\""
 
 cmdCrAmountCommitment :: OutputFormat -> [String] -> IO ()
 cmdCrAmountCommitment format [mStr, n2Str, qStr, betaStr, ckStr, cAmountStr, cBitsStr] =

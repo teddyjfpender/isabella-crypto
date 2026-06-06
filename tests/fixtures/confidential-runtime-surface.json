@@ -30,6 +30,13 @@
       "ct-verify-merkle",
       "ct-verify-merkle-envelope"
     ],
+    "haskellPreviewCommands": [
+      "ct-balance-bigint-rand-commit",
+      "ct-balance-bigint-fs-fields",
+      "ct-balance-bigint-fs-challenges",
+      "ct-balance-bigint-prove",
+      "ct-balance-bigint-verify"
+    ],
     "scaffoldCommands": [
       "ct-member-prove",
       "ct-member-verify",
@@ -195,6 +202,11 @@
       "ct-merkle-member-verify",
       "ct-bignum-encode",
       "ct-bignum-vector-encode",
+      "ct-balance-bigint-rand-commit",
+      "ct-balance-bigint-fs-fields",
+      "ct-balance-bigint-fs-challenges",
+      "ct-balance-bigint-prove",
+      "ct-balance-bigint-verify",
       "ct-transaction-context",
       "ct-wallet-proof-request-digest",
       "ct-sample-opening",

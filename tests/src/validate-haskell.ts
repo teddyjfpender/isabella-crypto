@@ -29,11 +29,13 @@ const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
   ? path.resolve(process.env.ISABELLA_TS_ENTRY)
   : path.join(projectRoot, 'isabella.ts', 'dist', 'index.mjs');
 const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
+const bigintBalanceVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-balance-vectors.json');
 const ghcFallbackBinary = path.join('/tmp', `isabella-hs-validate-cli-${process.pid}`);
 const ghcFallbackBuildDir = path.join('/tmp', `isabella-hs-validate-build-${process.pid}`);
 let cachedHaskellCli: string | null | undefined;
 
 type JsonEnvelope<T> = { result: T } | { error: string };
+type BigintBalanceProofJson = { as: string[][]; zs: string[][] };
 
 function ensureFileExists(filePath: string, hint: string): void {
   if (!fs.existsSync(filePath)) {
@@ -118,6 +120,14 @@ const unsafeProtocolInteger = '9007199254740992';
 
 function unsafeFirstInteger(value: string): string {
   return value.replace(/-?\d+/, unsafeProtocolInteger);
+}
+
+function integerVecText(values: string[]): string {
+  return `[${values.join(',')}]`;
+}
+
+function integerMatText(rows: string[][]): string {
+  return `[${rows.map(integerVecText).join(',')}]`;
 }
 
 function findBuiltHaskellCli(root: string): string | null {
@@ -273,6 +283,111 @@ for (const entry of bignumVectors.vectorCases) {
 for (const decimal of bignumVectors.rejectedDecimals) {
   expectHaskellCommandRejected(['ct-bignum-encode', decimal], `ct-bignum-encode Haskell rejects ${decimal}`);
 }
+
+const bigintBalanceVectors = JSON.parse(fs.readFileSync(bigintBalanceVectorsPath, 'utf8')) as {
+  status: string;
+  params: { m: number; n2: number; q: string; beta: string; gamma: string };
+  transcript: { fields: string[]; firstRounds: Array<{ round: number; challenge: number }> };
+  case: {
+    name: string;
+    commitmentKey: string[][];
+    witness: string[];
+    commitment: string[];
+    masks: string[][];
+    proof: BigintBalanceProofJson;
+  };
+};
+
+const bigParamsArgs = [
+  bigintBalanceVectors.params.m.toString(),
+  bigintBalanceVectors.params.n2.toString(),
+  bigintBalanceVectors.params.q,
+  bigintBalanceVectors.params.beta,
+];
+const bigGamma = bigintBalanceVectors.params.gamma;
+const bigCommitmentKey = integerMatText(bigintBalanceVectors.case.commitmentKey);
+const bigCommitment = integerVecText(bigintBalanceVectors.case.commitment);
+const bigWitness = integerVecText(bigintBalanceVectors.case.witness);
+const bigMasks = integerMatText(bigintBalanceVectors.case.masks);
+const bigProofAs = integerMatText(bigintBalanceVectors.case.proof.as);
+const bigProofZs = integerMatText(bigintBalanceVectors.case.proof.zs);
+
+assert.equal(bigintBalanceVectors.status, 'typescript-reference-with-haskell-preview-parity');
+assert.deepEqual(
+  parseResult<string[]>(runHaskell([
+    'ct-balance-bigint-rand-commit',
+    ...bigParamsArgs,
+    bigCommitmentKey,
+    bigWitness,
+  ])),
+  bigintBalanceVectors.case.commitment,
+  `ct-balance-bigint-rand-commit Haskell/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.deepEqual(
+  parseResult<string[]>(runHaskell([
+    'ct-balance-bigint-fs-fields',
+    bigCommitmentKey,
+    bigCommitment,
+    bigProofAs,
+  ])),
+  bigintBalanceVectors.transcript.fields,
+  `ct-balance-bigint-fs-fields Haskell/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.deepEqual(
+  parseResult<number[]>(runHaskell([
+    'ct-balance-bigint-fs-challenges',
+    ...bigParamsArgs,
+    bigCommitmentKey,
+    bigCommitment,
+    bigProofAs,
+    bigintBalanceVectors.transcript.firstRounds.length.toString(),
+  ])),
+  bigintBalanceVectors.transcript.firstRounds.map((entry) => entry.challenge),
+  `ct-balance-bigint-fs-challenges Haskell/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.equal(
+  parseResult<boolean>(runHaskell([
+    'ct-balance-bigint-verify',
+    ...bigParamsArgs,
+    bigGamma,
+    bigCommitmentKey,
+    bigCommitment,
+    bigProofAs,
+    bigProofZs,
+  ])),
+  true,
+  `ct-balance-bigint-verify Haskell accepts ${bigintBalanceVectors.case.name}`
+);
+assert.deepEqual(
+  parseResult<BigintBalanceProofJson>(runHaskell([
+    'ct-balance-bigint-prove',
+    ...bigParamsArgs,
+    bigGamma,
+    bigCommitmentKey,
+    bigCommitment,
+    bigWitness,
+    bigMasks,
+  ])),
+  bigintBalanceVectors.case.proof,
+  `ct-balance-bigint-prove Haskell/fixture parity for ${bigintBalanceVectors.case.name}`
+);
+assert.equal(
+  parseResult<boolean>(runHaskell([
+    'ct-balance-bigint-verify',
+    ...bigParamsArgs,
+    bigGamma,
+    bigCommitmentKey,
+    integerVecText([
+      (BigInt(bigintBalanceVectors.case.commitment[0]) + 1n).toString(),
+      ...bigintBalanceVectors.case.commitment.slice(1),
+    ]),
+    bigProofAs,
+    bigProofZs,
+  ])),
+  false,
+  `ct-balance-bigint-verify Haskell rejects tampered q83 commitment for ${bigintBalanceVectors.case.name}`
+);
+console.log('validate-haskell: confidential BigInt balance q83 preview surface passed');
 
 const modCenteredCases = [
   { x: 7, q: 5 },

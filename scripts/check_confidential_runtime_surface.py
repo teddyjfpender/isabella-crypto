@@ -104,6 +104,10 @@ def check_native_cli(manifest: dict[str, Any]) -> dict[str, int]:
         native.get("productionCommands"),
         "nativeCli.productionCommands",
     )
+    haskell_preview_commands = require_string_list(
+        native.get("haskellPreviewCommands", []),
+        "nativeCli.haskellPreviewCommands",
+    )
     scaffold_commands = require_string_list(
         native.get("scaffoldCommands"),
         "nativeCli.scaffoldCommands",
@@ -123,11 +127,22 @@ def check_native_cli(manifest: dict[str, Any]) -> dict[str, int]:
         if retired_present:
             fail(f"{path.relative_to(ROOT)} reintroduces retired scaffold commands: {retired_present}")
 
-    for command in required_commands:
+    haskell_commands = quoted_commands(haskell_path)
+    missing_haskell_preview = sorted(
+        command for command in haskell_preview_commands if command not in haskell_commands
+    )
+    if missing_haskell_preview:
+        fail(
+            f"{haskell_path.relative_to(ROOT)} is missing Haskell preview confidential commands: "
+            f"{missing_haskell_preview}"
+        )
+
+    for command in required_commands + haskell_preview_commands:
         require_snippet(help_path, command, "Haskell CLI help command")
 
     return {
         "production_commands": len(production_commands),
+        "haskell_preview_commands": len(haskell_preview_commands),
         "scaffold_commands": len(scaffold_commands),
         "retired_commands": len(retired_commands),
     }

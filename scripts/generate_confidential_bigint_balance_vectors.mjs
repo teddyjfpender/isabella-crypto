@@ -61,10 +61,10 @@ const rounds = sdk.ConfidentialBalanceBigInt
 const fixture = {
   version: 1,
   algorithm: 'SHA3-256-counter-mode-low-bit',
-  status: 'typescript-reference-only',
+  status: 'typescript-reference-with-haskell-preview-parity',
   notes: [
     'This fixture exercises q83-scale confidential-balance arithmetic in the TypeScript BigInt reference path.',
-    'OCaml and Haskell multiprecision proof parity remains a launch-readiness blocker.'
+    'Haskell preview commands verify this fixture with Integer arithmetic; OCaml multiprecision proof parity and full launch integration remain blockers.'
   ],
   params: {
     m: params.m,

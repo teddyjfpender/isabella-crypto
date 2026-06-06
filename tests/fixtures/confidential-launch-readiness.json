@@ -102,7 +102,7 @@
       "id": "runtime_bignum_representation",
       "category": "implementation_boundary",
       "status": "open",
-      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec, and TypeScript has a q83 BigInt balance reference path, but OCaml/Haskell proof parity plus every proof API and transaction/runtime integer field still need multiprecision integration before launch.",
+      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number proof arithmetic and signed-64-bit public transaction/runtime integer representation. Fiat-Shamir transcript fields now consume the canonical bignum codec, and TypeScript has a q83 BigInt balance reference path with Haskell Integer preview parity, but OCaml proof parity plus every proof API and transaction/runtime integer field still need multiprecision integration before launch.",
       "acceptanceGate": "Move every production proof API, proof arithmetic path, and transaction/runtime integer field that can carry widened parameter values to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
       "evidence": [
         {
@@ -116,9 +116,9 @@
         {
           "file": "tests/fixtures/confidential-bigint-balance-vectors.json",
           "snippets": [
-            "typescript-reference-only",
+            "typescript-reference-with-haskell-preview-parity",
             "q83-balance-basic",
-            "OCaml and Haskell multiprecision proof parity remains a launch-readiness blocker"
+            "Haskell preview commands verify this fixture with Integer arithmetic"
           ]
         },
         {
