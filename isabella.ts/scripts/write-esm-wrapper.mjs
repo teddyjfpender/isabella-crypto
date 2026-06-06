@@ -9,7 +9,7 @@ const outputFile = path.join(distDir, 'index.mjs');
 
 const wrapper = `import canon from './index.js';
 
-export const { Zq, Vec, Mat, Dilithium, ConfidentialBalance, ConfidentialRange, ConfidentialMerkle, ConfidentialTransaction, runtime } = canon;
+export const { Zq, Vec, Mat, Dilithium, ConfidentialSampling, ConfidentialBalance, ConfidentialRange, ConfidentialMerkle, ConfidentialTransaction, runtime } = canon;
 export default canon;
 `;
 

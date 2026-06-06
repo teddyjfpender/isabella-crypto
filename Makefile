@@ -113,6 +113,8 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@python3 scripts/confidential_parameter_screen.py --out bench/data/confidential-parameter-screen.json
 	@echo "Running confidential transcript vector tests..."
 	@cd tests && bun test confidential-transcript
+	@echo "Running confidential CSPRNG sampling tests..."
+	@cd tests && bun test confidential-sampling
 	@echo "Running confidential Merkle vector tests..."
 	@cd tests && bun test confidential-merkle
 	@echo "Running confidential transaction context vector tests..."

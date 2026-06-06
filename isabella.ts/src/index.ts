@@ -11,7 +11,7 @@
  * Isabelle-exported OCaml Canon modules only.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 
 // Load the js_of_ocaml runtime (sets globalThis.Isabella)
 // This import is handled by the runtime loader
@@ -954,6 +954,27 @@ function assertNonNegativeSafeI64(value: number, label: string): void {
   }
 }
 
+function assertSafeArrayLength(value: number, label: string): void {
+  assertNonNegativeSafeI64(value, label);
+  if (value > 1_000_000) {
+    throw new RangeError(`${label} is too large to allocate safely`);
+  }
+}
+
+function sampleCenteredInt(bound: number, label: string): number {
+  assertNonNegativeSafeI64(bound, label);
+  const width = 2 * bound + 1;
+  if (!Number.isSafeInteger(width) || width > 2 ** 48) {
+    throw new RangeError(`${label} is too large for unbiased Node.js randomInt sampling`);
+  }
+  return randomInt(width) - bound;
+}
+
+function sampleCenteredVector(length: number, bound: number, label: string): IntVec {
+  assertSafeArrayLength(length, `${label}.length`);
+  return Array.from({ length }, (_, index) => sampleCenteredInt(bound, `${label}[${index}]`));
+}
+
 function encodeI64LE(value: number, label: string): Buffer {
   assertSafeI64(value, label);
   const out = Buffer.alloc(8);
@@ -1633,6 +1654,52 @@ export namespace Dilithium {
 }
 
 /**
+ * CSPRNG-backed sampling helpers for confidential-transfer masks.
+ *
+ * These helpers use Node.js `crypto.randomInt` for unbiased centered integer
+ * sampling. They are runtime conveniences for mask generation; callers still
+ * pass the sampled masks into the checked proof APIs.
+ */
+export namespace ConfidentialSampling {
+  /**
+   * Sample uniformly from the centered interval [-bound, bound].
+   */
+  export function boundedInt(bound: number): number {
+    return sampleCenteredInt(bound, 'bound');
+  }
+
+  /**
+   * Sample an integer vector with every coordinate in [-bound, bound].
+   */
+  export function intVector(length: number, bound: number): IntVec {
+    return sampleCenteredVector(length, bound, 'vector');
+  }
+
+  /**
+   * Sample a commitment-opening-shaped mask.
+   */
+  export function opening(msgLength: number, randLength: number, bound: number): CommitOpening {
+    return {
+      msg: sampleCenteredVector(msgLength, bound, 'opening.msg'),
+      rand: sampleCenteredVector(randLength, bound, 'opening.rand'),
+    };
+  }
+
+  /**
+   * Sample repeated commitment-opening-shaped masks.
+   */
+  export function openings(
+    count: number,
+    msgLength: number,
+    randLength: number,
+    bound: number
+  ): CommitOpening[] {
+    assertSafeArrayLength(count, 'openings.length');
+    return Array.from({ length: count }, () => opening(msgLength, randLength, bound));
+  }
+}
+
+/**
  * Confidential-balance proof helpers over SIS commitments.
  *
  * This is the first privacy slice toward confidential token transfers:
@@ -1831,6 +1898,25 @@ export namespace ConfidentialBalance {
 
   export function fsRounds(): number {
     return Isabella.cbFsRounds();
+  }
+
+  /**
+   * Sample a CSPRNG-backed balance proof mask.
+   */
+  export function sampleMask(params: ScalarCommitParams, gamma: number): IntVec {
+    return ConfidentialSampling.intVector(params.n2, gamma);
+  }
+
+  /**
+   * Sample one CSPRNG-backed balance proof mask per Fiat-Shamir round.
+   */
+  export function sampleMasks(
+    params: ScalarCommitParams,
+    gamma: number,
+    rounds: number = fsRounds()
+  ): IntMatrix {
+    assertSafeArrayLength(rounds, 'rounds');
+    return Array.from({ length: rounds }, () => sampleMask(params, gamma));
   }
 
   export function fsChallenges(
@@ -2297,6 +2383,24 @@ export namespace ConfidentialTransaction {
     return normalizeNullifierProof(
       Isabella.ctNullifierFsProve(params, gamma, ck, nk, c, nf, opening, ys)
     );
+  }
+
+  /**
+   * Sample a CSPRNG-backed nullifier proof mask opening.
+   */
+  export function sampleNullifierMask(params: ScalarCommitParams, gamma: number): CommitOpening {
+    return ConfidentialSampling.opening(params.n1, params.n2, gamma);
+  }
+
+  /**
+   * Sample one CSPRNG-backed nullifier proof mask opening per Fiat-Shamir round.
+   */
+  export function sampleNullifierMasks(
+    params: ScalarCommitParams,
+    gamma: number,
+    rounds: number = ConfidentialBalance.fsRounds()
+  ): CommitOpening[] {
+    return ConfidentialSampling.openings(rounds, params.n1, params.n2, gamma);
   }
 
   export function nullifierFsVerify(
