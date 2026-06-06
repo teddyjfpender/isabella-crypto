@@ -916,6 +916,91 @@ assert.equal(
   transactionWalletProofRequestVector.digest,
   'ct-wallet-proof-request-digest vector'
 );
+function ctWalletProofRequestDigestArgs(request: any): string[] {
+  const context = request.context;
+  return [
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root,
+    context.publicFee.toString(),
+    JSON.stringify(context.cIn1),
+    JSON.stringify(context.cIn2),
+    JSON.stringify(context.cOut1),
+    JSON.stringify(context.cOut2),
+    JSON.stringify(context.nf1),
+    JSON.stringify(context.nf2),
+    JSON.stringify(request.acceptedRoots),
+    JSON.stringify(request.spentNullifiers),
+  ];
+}
+function expectOcamlWalletProofRequestRejected(request: any, label: string): void {
+  const output = runCli(['ct-wallet-proof-request-digest', ...ctWalletProofRequestDigestArgs(request)]);
+  const parsed = parseCliResult<{ error?: string; result?: string }>(output);
+  assert.equal(typeof parsed.error, 'string', label);
+}
+const walletProofRequest = transactionWalletProofRequestVector.request;
+const reversedAcceptedRoots = walletProofRequest.acceptedRoots.slice().reverse();
+const reversedSpentNullifiers = walletProofRequest.spentNullifiers.slice().reverse();
+const walletProofRequestRejectionCases = [
+  {
+    name: 'empty accepted root window',
+    request: { ...walletProofRequest, acceptedRoots: [] },
+  },
+  {
+    name: 'context root missing from accepted window',
+    request: {
+      ...walletProofRequest,
+      acceptedRoots: walletProofRequest.acceptedRoots.filter(
+        (root: string) => root !== walletProofRequest.context.root
+      ),
+    },
+  },
+  {
+    name: 'duplicate accepted roots',
+    request: {
+      ...walletProofRequest,
+      acceptedRoots: [walletProofRequest.context.root, walletProofRequest.context.root],
+    },
+  },
+  ...(reversedAcceptedRoots.join('|') === walletProofRequest.acceptedRoots.join('|')
+    ? []
+    : [{
+        name: 'unsorted accepted roots',
+        request: { ...walletProofRequest, acceptedRoots: reversedAcceptedRoots },
+      }]),
+  ...(reversedSpentNullifiers.length < 2
+    ? []
+    : [{
+        name: 'unsorted spent nullifiers',
+        request: { ...walletProofRequest, spentNullifiers: reversedSpentNullifiers },
+      }]),
+  {
+    name: 'duplicate spent nullifiers',
+    request: {
+      ...walletProofRequest,
+      spentNullifiers: [
+        walletProofRequest.spentNullifiers[0],
+        walletProofRequest.spentNullifiers[0],
+      ],
+    },
+  },
+  {
+    name: 'requested nullifier already spent',
+    request: { ...walletProofRequest, spentNullifiers: [walletProofRequest.context.nf1] },
+  },
+  {
+    name: 'duplicate requested nullifiers',
+    request: {
+      ...walletProofRequest,
+      context: { ...walletProofRequest.context, nf2: walletProofRequest.context.nf1 },
+    },
+  },
+];
+for (const { name, request } of walletProofRequestRejectionCases) {
+  expectOcamlWalletProofRequestRejected(request, `ct-wallet-proof-request-digest OCaml rejects ${name}`);
+}
 logProgress('validate-ocaml: cryptographic Merkle shared surface passed');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
@@ -1523,5 +1608,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest parity, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native wallet-request digest/rejection parity, Merkle envelope mutation, and randomized sampler bound checks.'
 );

@@ -1361,22 +1361,24 @@ cmdCtWalletProofRequestDigest
           , Just acceptedRoots
           , Just spentNullifiers
           ) ->
-            outputStringResult format "ct_wallet_proof_request_digest = " $
-                ConfidentialTransaction.transactionWalletProofRequestDigest
-                    protocolVersion
-                    networkId
-                    assetId
-                    ledgerEpoch
-                    rootDigest
-                    publicFee
-                    cIn1
-                    cIn2
-                    cOut1
-                    cOut2
-                    nf1
-                    nf2
-                    acceptedRoots
-                    spentNullifiers
+            let digest =
+                    ConfidentialTransaction.transactionWalletProofRequestDigest
+                        protocolVersion
+                        networkId
+                        assetId
+                        ledgerEpoch
+                        rootDigest
+                        publicFee
+                        cIn1
+                        cIn2
+                        cOut1
+                        cOut2
+                        nf1
+                        nf2
+                        acceptedRoots
+                        spentNullifiers
+             in (evaluate digest >>= outputStringResult format "ct_wallet_proof_request_digest = ")
+                    `catch` handleSampleError format
         _ -> outputError format "Expected wallet proof request context, accepted roots, and spent nullifiers"
 cmdCtWalletProofRequestDigest format _ =
     outputUsage format "Usage: ct-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS SPENT_NULLIFIERS"

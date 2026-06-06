@@ -1025,6 +1025,101 @@ assert.equal(
   transactionWalletProofRequestVector.digest,
   'ct-wallet-proof-request-digest vector'
 );
+function ctWalletProofRequestDigestArgs(request: any): string[] {
+  const context = request.context;
+  return [
+    'ct-wallet-proof-request-digest',
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root,
+    context.publicFee.toString(),
+    JSON.stringify(context.cIn1),
+    JSON.stringify(context.cIn2),
+    JSON.stringify(context.cOut1),
+    JSON.stringify(context.cOut2),
+    JSON.stringify(context.nf1),
+    JSON.stringify(context.nf2),
+    JSON.stringify(request.acceptedRoots),
+    JSON.stringify(request.spentNullifiers),
+  ];
+}
+function expectHaskellWalletProofRequestRejected(request: any, label: string): void {
+  assert.equal(tryParseJson<{ result: string }>(ctWalletProofRequestDigestArgs(request)), null, label);
+}
+const reversedAcceptedRoots = haskellWalletProofRequest.acceptedRoots.slice().reverse();
+const reversedSpentNullifiers = haskellWalletProofRequest.spentNullifiers.slice().reverse();
+const walletProofRequestRejectionCases = [
+  {
+    name: 'empty accepted root window',
+    request: { ...haskellWalletProofRequest, acceptedRoots: [] },
+  },
+  {
+    name: 'context root missing from accepted window',
+    request: {
+      ...haskellWalletProofRequest,
+      acceptedRoots: haskellWalletProofRequest.acceptedRoots.filter(
+        (root: string) => root !== haskellWalletProofRequest.context.root
+      ),
+    },
+  },
+  {
+    name: 'duplicate accepted roots',
+    request: {
+      ...haskellWalletProofRequest,
+      acceptedRoots: [
+        haskellWalletProofRequest.context.root,
+        haskellWalletProofRequest.context.root,
+      ],
+    },
+  },
+  ...(reversedAcceptedRoots.join('|') === haskellWalletProofRequest.acceptedRoots.join('|')
+    ? []
+    : [{
+        name: 'unsorted accepted roots',
+        request: { ...haskellWalletProofRequest, acceptedRoots: reversedAcceptedRoots },
+      }]),
+  ...(reversedSpentNullifiers.length < 2
+    ? []
+    : [{
+        name: 'unsorted spent nullifiers',
+        request: { ...haskellWalletProofRequest, spentNullifiers: reversedSpentNullifiers },
+      }]),
+  {
+    name: 'duplicate spent nullifiers',
+    request: {
+      ...haskellWalletProofRequest,
+      spentNullifiers: [
+        haskellWalletProofRequest.spentNullifiers[0],
+        haskellWalletProofRequest.spentNullifiers[0],
+      ],
+    },
+  },
+  {
+    name: 'requested nullifier already spent',
+    request: {
+      ...haskellWalletProofRequest,
+      spentNullifiers: [haskellWalletProofRequest.context.nf1],
+    },
+  },
+  {
+    name: 'duplicate requested nullifiers',
+    request: {
+      ...haskellWalletProofRequest,
+      context: {
+        ...haskellWalletProofRequest.context,
+        nf2: haskellWalletProofRequest.context.nf1,
+      },
+    },
+  },
+];
+for (const { name, request } of walletProofRequestRejectionCases) {
+  expectHaskellWalletProofRequestRejected(
+    request,
+    `ct-wallet-proof-request-digest Haskell rejects ${name}`
+  );
+}
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValid, 'function', 'Merkle semantic step export');
 assert.equal(typeof sdk.ConfidentialTransaction.semanticStepValidMerkle, 'function', 'Merkle semantic step explicit export');
 assert.equal(typeof sdk.ConfidentialTransaction.ledgerStepValid, 'function', 'Merkle ledger-step export');
@@ -1663,5 +1758,5 @@ assert.ok(ctIn2RangeProof);
 console.log('validate-haskell: confidential transaction shared surface passed');
 
 console.log(
-  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest parity, Merkle envelope mutation, and randomized sampler bound checks.'
+  'Validated Haskell CLI and SDK surfaces on deterministic shared-surface cases plus native wallet-request digest/rejection parity, Merkle envelope mutation, and randomized sampler bound checks.'
 );
