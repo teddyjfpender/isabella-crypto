@@ -83,6 +83,12 @@ benchmarks are independently checked.
   balance, range residual, and nullifier proofs. They deliberately do not prove
   the ROM/forking lemma that obtains such forks from the deterministic SHA3
   Fiat-Shamir verifier.
+- Balance, range, and nullifier proofs now also have concrete scheduled
+  simulators. The scheduled simulator lemmas prove that programmed binary
+  challenge schedules and valid simulated responses verify for the generated
+  announcements. This is the algebraic simulator core only; it does not prove
+  distributional HVZK, rejection-sampling bounds, or Fiat-Shamir
+  programmability.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
@@ -162,8 +168,9 @@ The formalization still needs these before production:
    extraction model with a ROM/forking theorem, then replace the remaining
    extractor-correctness assumptions with full proof-object soundness for
    balance, range, and nullifier proofs.
-3. Instantiate simulator assumptions with concrete simulators, rejection
-   sampling/distribution bounds, and Fiat-Shamir-with-aborts analysis.
+3. Lift the scheduled simulators to FS-level HVZK with programmable transcript
+   assumptions or theorems, rejection-sampling/distribution bounds, and
+   Fiat-Shamir-with-aborts analysis.
 4. Tie balance soundness to SIS binding under the exact widened bounds used by
    aggregate randomness and responses.
 5. Finish the Merkle-default migration in consensus/product callers, retire the

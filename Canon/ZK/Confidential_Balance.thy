@@ -818,6 +818,19 @@ definition balance_sigma_sim_commit ::
   "balance_sigma_sim_commit p ck c e z =
     vec_mod (vec_sub (rand_commit p ck z) (scalar_mult e c)) (cp_q p)"
 
+definition balance_scheduled_sim_as ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow>
+   commitment list" where
+  "balance_scheduled_sim_as p ck c es zs =
+    map2 (balance_sigma_sim_commit p ck c) es zs"
+
+definition balance_scheduled_simulate ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow>
+   balance_proof" where
+  "balance_scheduled_simulate p ck c es zs =
+    \<lparr> balance_as = balance_scheduled_sim_as p ck c es zs,
+      balance_zs = zs \<rparr>"
+
 lemma balance_sigma_sim_commit_valid:
   assumes params_ok: "valid_scalar_commit_params p"
       and key_ok: "valid_commit_key p ck"
@@ -882,6 +895,67 @@ proof -
   show ?thesis
     unfolding balance_sigma_verify_def
     using params_ok key_ok a_valid challenge_ok z_ok sim_eq
+    by simp
+qed
+
+lemma balance_scheduled_sim_as_nth:
+  assumes len_eq: "length es = length zs"
+      and i_lt: "i < length es"
+  shows "balance_scheduled_sim_as p ck c es zs ! i =
+         balance_sigma_sim_commit p ck c (es ! i) (zs ! i)"
+  using assms
+  unfolding balance_scheduled_sim_as_def
+  by simp
+
+lemma balance_scheduled_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_valid: "valid_commitment p c"
+      and es_len: "length es = balance_fs_rounds"
+      and zs_len: "length zs = balance_fs_rounds"
+      and challenges_ok:
+        "\<forall>i < balance_fs_rounds. valid_balance_challenge p (es ! i)"
+      and responses_ok:
+        "\<forall>i < balance_fs_rounds. valid_balance_response p gamma (es ! i) (zs ! i)"
+  shows "balance_scheduled_verify p gamma ck c
+           (balance_as (balance_scheduled_simulate p ck c es zs))
+           es
+           (balance_zs (balance_scheduled_simulate p ck c es zs))"
+proof -
+  have len_eq: "length es = length zs"
+    using es_len zs_len by simp
+  have as_len:
+    "length (balance_scheduled_sim_as p ck c es zs) = balance_fs_rounds"
+    using es_len zs_len
+    unfolding balance_scheduled_sim_as_def
+    by simp
+  have sigma_ok:
+    "\<forall>i < balance_fs_rounds.
+      balance_sigma_verify p gamma ck c
+        (balance_scheduled_sim_as p ck c es zs ! i)
+        (es ! i)
+        (zs ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < balance_fs_rounds"
+    have i_lt_es: "i < length es"
+      using i_lt es_len by simp
+    have a_def:
+      "balance_scheduled_sim_as p ck c es zs ! i =
+       balance_sigma_sim_commit p ck c (es ! i) (zs ! i)"
+      using balance_scheduled_sim_as_nth[OF len_eq i_lt_es] .
+    show "balance_sigma_verify p gamma ck c
+            (balance_scheduled_sim_as p ck c es zs ! i)
+            (es ! i)
+            (zs ! i)"
+      using balance_sigma_simulate_verify[
+        OF params_ok key_ok c_valid challenges_ok[rule_format, OF i_lt]
+           responses_ok[rule_format, OF i_lt] a_def]
+      .
+  qed
+  show ?thesis
+    unfolding balance_scheduled_simulate_def balance_scheduled_verify_def
+    using es_len zs_len as_len sigma_ok
     by simp
 qed
 

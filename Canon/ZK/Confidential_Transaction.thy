@@ -218,6 +218,27 @@ definition nullifier_sigma_sim_nullifier ::
   "nullifier_sigma_sim_nullifier p nk nf e z =
     vec_mod (vec_sub (nullifier p nk z) (scalar_mult e nf)) (cp_q p)"
 
+definition nullifier_scheduled_sim_a_commits ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int list \<Rightarrow>
+   commit_opening list \<Rightarrow> commitment list" where
+  "nullifier_scheduled_sim_a_commits p ck c es zs =
+    map2 (nullifier_sigma_sim_commit p ck c) es zs"
+
+definition nullifier_scheduled_sim_a_nullifiers ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int list \<Rightarrow>
+   commit_opening list \<Rightarrow> commitment list" where
+  "nullifier_scheduled_sim_a_nullifiers p nk nf es zs =
+    map2 (nullifier_sigma_sim_nullifier p nk nf) es zs"
+
+definition nullifier_scheduled_simulate ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+   commitment \<Rightarrow> int list \<Rightarrow> commit_opening list \<Rightarrow> nullifier_proof" where
+  "nullifier_scheduled_simulate p ck nk c nf es zs =
+    \<lparr> nullifier_a_commits = nullifier_scheduled_sim_a_commits p ck c es zs,
+      nullifier_a_nullifiers = nullifier_scheduled_sim_a_nullifiers p nk nf es zs,
+      nullifier_z_msgs = map open_msg zs,
+      nullifier_z_rands = map open_rand zs \<rparr>"
+
 definition nullifier_sigma_extract ::
   "int \<Rightarrow> commit_opening \<Rightarrow> int \<Rightarrow> commit_opening \<Rightarrow> commit_opening option" where
   "nullifier_sigma_extract e1 z1 e2 z2 =
@@ -1257,6 +1278,124 @@ proof -
     unfolding nullifier_sigma_verify_def
     using params_ok key_ok nf_key_ok c_valid nf_valid a_commit_valid a_nullifier_valid
           challenge_ok z_ok commit_eq nullifier_eq
+    by simp
+qed
+
+lemma nullifier_scheduled_sim_a_commits_nth:
+  assumes len_eq: "length es = length zs"
+      and i_lt: "i < length es"
+  shows "nullifier_scheduled_sim_a_commits p ck c es zs ! i =
+         nullifier_sigma_sim_commit p ck c (es ! i) (zs ! i)"
+  using assms
+  unfolding nullifier_scheduled_sim_a_commits_def
+  by simp
+
+lemma nullifier_scheduled_sim_a_nullifiers_nth:
+  assumes len_eq: "length es = length zs"
+      and i_lt: "i < length es"
+  shows "nullifier_scheduled_sim_a_nullifiers p nk nf es zs ! i =
+         nullifier_sigma_sim_nullifier p nk nf (es ! i) (zs ! i)"
+  using assms
+  unfolding nullifier_scheduled_sim_a_nullifiers_def
+  by simp
+
+lemma nullifier_scheduled_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and nf_key_ok: "valid_commit_key p nk"
+      and c_valid: "valid_commitment p c"
+      and nf_valid: "valid_commitment p nf"
+      and es_len: "length es = nullifier_fs_rounds"
+      and zs_len: "length zs = nullifier_fs_rounds"
+      and challenges_ok:
+        "\<forall>i < nullifier_fs_rounds. valid_nullifier_challenge p (es ! i)"
+      and responses_ok:
+        "\<forall>i < nullifier_fs_rounds. valid_nullifier_response p gamma (es ! i) (zs ! i)"
+  shows "nullifier_scheduled_verify p gamma ck nk c nf
+           (nullifier_a_commits
+             (nullifier_scheduled_simulate p ck nk c nf es zs))
+           (nullifier_a_nullifiers
+             (nullifier_scheduled_simulate p ck nk c nf es zs))
+           es
+           (map (\<lambda>i. \<lparr> open_msg = nullifier_z_msgs
+                      (nullifier_scheduled_simulate p ck nk c nf es zs) ! i,
+                      open_rand = nullifier_z_rands
+                      (nullifier_scheduled_simulate p ck nk c nf es zs) ! i \<rparr>)
+                [0..<nullifier_fs_rounds])"
+proof -
+  have len_eq: "length es = length zs"
+    using es_len zs_len by simp
+  have commits_len:
+    "length (nullifier_scheduled_sim_a_commits p ck c es zs) =
+     nullifier_fs_rounds"
+    using es_len zs_len
+    unfolding nullifier_scheduled_sim_a_commits_def
+    by simp
+  have nullifiers_len:
+    "length (nullifier_scheduled_sim_a_nullifiers p nk nf es zs) =
+     nullifier_fs_rounds"
+    using es_len zs_len
+    unfolding nullifier_scheduled_sim_a_nullifiers_def
+    by simp
+  have zs_rounds:
+    "map (\<lambda>i. \<lparr> open_msg = map open_msg zs ! i,
+                 open_rand = map open_rand zs ! i \<rparr>)
+       [0..<nullifier_fs_rounds] = zs"
+  proof (rule nth_equalityI)
+    show "length (map (\<lambda>i. \<lparr> open_msg = map open_msg zs ! i,
+                            open_rand = map open_rand zs ! i \<rparr>)
+                    [0..<nullifier_fs_rounds]) = length zs"
+      using zs_len by simp
+  next
+    fix i
+    assume i_lt:
+      "i < length (map (\<lambda>i. \<lparr> open_msg = map open_msg zs ! i,
+                              open_rand = map open_rand zs ! i \<rparr>)
+                      [0..<nullifier_fs_rounds])"
+    then have i_lt_rounds: "i < nullifier_fs_rounds"
+      by simp
+    then have i_lt_zs: "i < length zs"
+      using zs_len by simp
+    show "map (\<lambda>i. \<lparr> open_msg = map open_msg zs ! i,
+                    open_rand = map open_rand zs ! i \<rparr>)
+             [0..<nullifier_fs_rounds] ! i = zs ! i"
+      using i_lt_rounds i_lt_zs by simp
+  qed
+  have sigma_ok:
+    "\<forall>i < nullifier_fs_rounds.
+      nullifier_sigma_verify p gamma ck nk c nf
+        (nullifier_scheduled_sim_a_commits p ck c es zs ! i)
+        (nullifier_scheduled_sim_a_nullifiers p nk nf es zs ! i)
+        (es ! i)
+        (zs ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < nullifier_fs_rounds"
+    have i_lt_es: "i < length es"
+      using i_lt es_len by simp
+    have a_commit_def:
+      "nullifier_scheduled_sim_a_commits p ck c es zs ! i =
+       nullifier_sigma_sim_commit p ck c (es ! i) (zs ! i)"
+      using nullifier_scheduled_sim_a_commits_nth[OF len_eq i_lt_es] .
+    have a_nullifier_def:
+      "nullifier_scheduled_sim_a_nullifiers p nk nf es zs ! i =
+       nullifier_sigma_sim_nullifier p nk nf (es ! i) (zs ! i)"
+      using nullifier_scheduled_sim_a_nullifiers_nth[OF len_eq i_lt_es] .
+    show "nullifier_sigma_verify p gamma ck nk c nf
+            (nullifier_scheduled_sim_a_commits p ck c es zs ! i)
+            (nullifier_scheduled_sim_a_nullifiers p nk nf es zs ! i)
+            (es ! i)
+            (zs ! i)"
+      using nullifier_sigma_simulate_verify[
+        OF params_ok key_ok nf_key_ok c_valid nf_valid
+           challenges_ok[rule_format, OF i_lt]
+           responses_ok[rule_format, OF i_lt]
+           a_commit_def a_nullifier_def]
+      .
+  qed
+  show ?thesis
+    unfolding nullifier_scheduled_simulate_def nullifier_scheduled_verify_def
+    using es_len commits_len nullifiers_len zs_len zs_rounds sigma_ok
     by simp
 qed
 

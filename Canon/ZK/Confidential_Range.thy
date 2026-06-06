@@ -330,6 +330,40 @@ definition range_pair_sigma_sim_commit ::
   "range_pair_sigma_sim_commit p ck c e z =
     balance_sigma_sim_commit p ck c e z"
 
+definition range_scheduled_sim_amount_as ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow>
+   commitment list" where
+  "range_scheduled_sim_amount_as p ck c es zs =
+    map2 (range_amount_sigma_sim_commit p ck c) es zs"
+
+definition range_scheduled_sim_pair_round ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> int \<Rightarrow> int_vec list \<Rightarrow>
+   commitment list" where
+  "range_scheduled_sim_pair_round p ck cs e zs =
+    map2 (\<lambda>c z. range_pair_sigma_sim_commit p ck c e z) cs zs"
+
+definition range_scheduled_sim_pair_ass ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment list \<Rightarrow> int list \<Rightarrow>
+   int_vec list list \<Rightarrow> commitment list list" where
+  "range_scheduled_sim_pair_ass p ck cs es zss =
+    map2 (range_scheduled_sim_pair_round p ck cs) es zss"
+
+definition range_scheduled_simulate ::
+  "commit_params \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow> commitment list \<Rightarrow>
+   commitment list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow> int_vec list list \<Rightarrow>
+   range_proof" where
+  "range_scheduled_simulate p ck c_amount c_bits c_comps es z_amounts z_pairss =
+    (let c_amount_res = range_amount_commitment p ck c_amount c_bits;
+         c_pair_res = range_pair_commitments p ck c_bits c_comps
+     in \<lparr> range_bits = c_bits,
+          range_comps = c_comps,
+          range_amount_as =
+            range_scheduled_sim_amount_as p ck c_amount_res es z_amounts,
+          range_amount_zs = z_amounts,
+          range_pair_ass =
+            range_scheduled_sim_pair_ass p ck c_pair_res es z_pairss,
+          range_pair_zss = z_pairss \<rparr>)"
+
 lemma range_amount_sigma_simulate_verify:
   assumes params_ok: "valid_scalar_commit_params p"
       and key_ok: "valid_commit_key p ck"
@@ -383,6 +417,208 @@ proof -
   show ?thesis
     unfolding range_pair_sigma_verify_def
     using params_ok key_ok a_valid challenge_ok z_ok sim_eq
+    by simp
+qed
+
+lemma range_scheduled_sim_amount_as_nth:
+  assumes len_eq: "length es = length zs"
+      and i_lt: "i < length es"
+  shows "range_scheduled_sim_amount_as p ck c es zs ! i =
+         range_amount_sigma_sim_commit p ck c (es ! i) (zs ! i)"
+  using assms
+  unfolding range_scheduled_sim_amount_as_def
+  by simp
+
+lemma range_scheduled_sim_pair_round_nth:
+  assumes len_eq: "length cs = length zs"
+      and j_lt: "j < length cs"
+  shows "range_scheduled_sim_pair_round p ck cs e zs ! j =
+         range_pair_sigma_sim_commit p ck (cs ! j) e (zs ! j)"
+  using assms
+  unfolding range_scheduled_sim_pair_round_def
+  by simp
+
+lemma range_scheduled_sim_pair_ass_nth:
+  assumes len_eq: "length es = length zss"
+      and i_lt: "i < length es"
+  shows "range_scheduled_sim_pair_ass p ck cs es zss ! i =
+         range_scheduled_sim_pair_round p ck cs (es ! i) (zss ! i)"
+  using assms
+  unfolding range_scheduled_sim_pair_ass_def
+  by simp
+
+definition range_scheduled_verify ::
+  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+   commitment list \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
+   commitment list list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow>
+   int_vec list list \<Rightarrow> bool" where
+  "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+     a_amounts a_pairss es z_amounts z_pairss \<longleftrightarrow>
+    (let c_amount_res = range_amount_commitment p ck c_amount c_bits;
+         c_pair_res = range_pair_commitments p ck c_bits c_comps
+     in valid_commitment p c_amount \<and>
+        length c_bits = k \<and>
+        length c_comps = k \<and>
+        length c_pair_res = k \<and>
+        length a_amounts = range_fs_rounds \<and>
+        length a_pairss = range_fs_rounds \<and>
+        length es = range_fs_rounds \<and>
+        length z_amounts = range_fs_rounds \<and>
+        length z_pairss = range_fs_rounds \<and>
+        (\<forall>i < range_fs_rounds.
+          length (a_pairss ! i) = k \<and>
+          length (z_pairss ! i) = k \<and>
+          range_amount_sigma_verify p gamma k ck c_amount_res
+            (a_amounts ! i) (es ! i) (z_amounts ! i) \<and>
+          (\<forall>j < k.
+            range_pair_sigma_verify p gamma ck (c_pair_res ! j)
+              ((a_pairss ! i) ! j) (es ! i) ((z_pairss ! i) ! j))))"
+
+lemma range_scheduled_simulate_verify:
+  assumes params_ok: "valid_scalar_commit_params p"
+      and key_ok: "valid_commit_key p ck"
+      and c_amount_public_valid: "valid_commitment p c_amount"
+      and c_amount_valid: "valid_commitment p (range_amount_commitment p ck c_amount c_bits)"
+      and c_pair_len:
+        "length (range_pair_commitments p ck c_bits c_comps) = k"
+      and c_pair_valid:
+        "\<forall>j < k. valid_commitment p
+          ((range_pair_commitments p ck c_bits c_comps) ! j)"
+      and bits_len: "length c_bits = k"
+      and comps_len: "length c_comps = k"
+      and es_len: "length es = range_fs_rounds"
+      and z_amounts_len: "length z_amounts = range_fs_rounds"
+      and z_pairss_len: "length z_pairss = range_fs_rounds"
+      and challenges_ok:
+        "\<forall>i < range_fs_rounds. valid_range_challenge p (es ! i)"
+      and amount_responses_ok:
+        "\<forall>i < range_fs_rounds.
+          valid_range_amount_response p gamma k (es ! i) (z_amounts ! i)"
+      and pair_lengths_ok:
+        "\<forall>i < range_fs_rounds. length (z_pairss ! i) = k"
+      and pair_responses_ok:
+        "\<forall>i < range_fs_rounds.
+          (\<forall>j < k. valid_range_pair_response p gamma (es ! i) ((z_pairss ! i) ! j))"
+  shows "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
+           (range_amount_as
+             (range_scheduled_simulate p ck c_amount c_bits c_comps
+                es z_amounts z_pairss))
+           (range_pair_ass
+             (range_scheduled_simulate p ck c_amount c_bits c_comps
+                es z_amounts z_pairss))
+           es
+           (range_amount_zs
+             (range_scheduled_simulate p ck c_amount c_bits c_comps
+                es z_amounts z_pairss))
+           (range_pair_zss
+             (range_scheduled_simulate p ck c_amount c_bits c_comps
+                es z_amounts z_pairss))"
+proof -
+  let ?c_amount_res = "range_amount_commitment p ck c_amount c_bits"
+  let ?c_pair_res = "range_pair_commitments p ck c_bits c_comps"
+  have amount_len:
+    "length (range_scheduled_sim_amount_as p ck ?c_amount_res es z_amounts) =
+     range_fs_rounds"
+    using es_len z_amounts_len
+    unfolding range_scheduled_sim_amount_as_def
+    by simp
+  have pair_ass_len:
+    "length (range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) =
+     range_fs_rounds"
+    using es_len z_pairss_len
+    unfolding range_scheduled_sim_pair_ass_def
+    by simp
+  have amount_ok:
+    "\<forall>i < range_fs_rounds.
+      range_amount_sigma_verify p gamma k ck ?c_amount_res
+        (range_scheduled_sim_amount_as p ck ?c_amount_res es z_amounts ! i)
+        (es ! i)
+        (z_amounts ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < range_fs_rounds"
+    have len_eq: "length es = length z_amounts"
+      using es_len z_amounts_len by simp
+    have i_lt_es: "i < length es"
+      using i_lt es_len by simp
+    have a_def:
+      "range_scheduled_sim_amount_as p ck ?c_amount_res es z_amounts ! i =
+       range_amount_sigma_sim_commit p ck ?c_amount_res (es ! i) (z_amounts ! i)"
+      using range_scheduled_sim_amount_as_nth[OF len_eq i_lt_es] .
+    show "range_amount_sigma_verify p gamma k ck ?c_amount_res
+            (range_scheduled_sim_amount_as p ck ?c_amount_res es z_amounts ! i)
+            (es ! i)
+            (z_amounts ! i)"
+      using range_amount_sigma_simulate_verify[
+        OF params_ok key_ok c_amount_valid challenges_ok[rule_format, OF i_lt]
+           amount_responses_ok[rule_format, OF i_lt] a_def]
+      .
+  qed
+  have pairs_ok:
+    "\<forall>i < range_fs_rounds.
+      length ((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) = k \<and>
+      (\<forall>j < k.
+        range_pair_sigma_verify p gamma ck (?c_pair_res ! j)
+          (((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) ! j)
+          (es ! i)
+          ((z_pairss ! i) ! j))"
+  proof (intro allI impI)
+    fix i
+    assume i_lt: "i < range_fs_rounds"
+    have len_eq_i: "length es = length z_pairss"
+      using es_len z_pairss_len by simp
+    have i_lt_es: "i < length es"
+      using i_lt es_len by simp
+    have round_def:
+      "range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss ! i =
+       range_scheduled_sim_pair_round p ck ?c_pair_res (es ! i) (z_pairss ! i)"
+      using range_scheduled_sim_pair_ass_nth[OF len_eq_i i_lt_es] .
+    have round_len:
+      "length (range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss ! i) = k"
+      using round_def c_pair_len pair_lengths_ok[rule_format, OF i_lt]
+      unfolding range_scheduled_sim_pair_round_def
+      by simp
+    have pair_ok_i:
+      "\<forall>j < k.
+        range_pair_sigma_verify p gamma ck (?c_pair_res ! j)
+          (((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) ! j)
+          (es ! i)
+          ((z_pairss ! i) ! j)"
+    proof (intro allI impI)
+      fix j
+      assume j_lt: "j < k"
+      have pair_len_eq: "length ?c_pair_res = length (z_pairss ! i)"
+        using c_pair_len pair_lengths_ok[rule_format, OF i_lt] by simp
+      have j_lt_pair: "j < length ?c_pair_res"
+        using j_lt c_pair_len by simp
+      have a_def:
+        "((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) ! j =
+         range_pair_sigma_sim_commit p ck (?c_pair_res ! j) (es ! i) ((z_pairss ! i) ! j)"
+        using range_scheduled_sim_pair_round_nth[OF pair_len_eq j_lt_pair]
+              round_def
+        by simp
+      show "range_pair_sigma_verify p gamma ck (?c_pair_res ! j)
+              (((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) ! j)
+              (es ! i)
+              ((z_pairss ! i) ! j)"
+        using range_pair_sigma_simulate_verify[
+          OF params_ok key_ok c_pair_valid[rule_format, OF j_lt]
+             challenges_ok[rule_format, OF i_lt]
+             pair_responses_ok[rule_format, OF i_lt, rule_format, OF j_lt] a_def]
+        .
+    qed
+    show "length ((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) = k \<and>
+          (\<forall>j < k.
+            range_pair_sigma_verify p gamma ck (?c_pair_res ! j)
+              (((range_scheduled_sim_pair_ass p ck ?c_pair_res es z_pairss) ! i) ! j)
+              (es ! i)
+              ((z_pairss ! i) ! j))"
+      using round_len pair_ok_i by simp
+  qed
+  show ?thesis
+    unfolding range_scheduled_simulate_def range_scheduled_verify_def Let_def
+    using bits_len comps_len c_pair_len es_len z_amounts_len z_pairss_len
+          c_amount_public_valid amount_len pair_ass_len amount_ok pairs_ok pair_lengths_ok
     by simp
 qed
 
@@ -792,33 +1028,6 @@ definition range_fs_verify ::
             (a_amounts ! i) (es ! i) (z_amounts ! i) \<and>
           range_sigma_verify_pairs p gamma ck c_pair_res
             (a_pairss ! i) (es ! i) (z_pairss ! i)))"
-
-definition range_scheduled_verify ::
-  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
-   commitment list \<Rightarrow> commitment list \<Rightarrow> commitment list \<Rightarrow>
-   commitment list list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow>
-   int_vec list list \<Rightarrow> bool" where
-  "range_scheduled_verify p gamma k ck c_amount c_bits c_comps
-     a_amounts a_pairss es z_amounts z_pairss \<longleftrightarrow>
-    (let c_amount_res = range_amount_commitment p ck c_amount c_bits;
-         c_pair_res = range_pair_commitments p ck c_bits c_comps
-     in valid_commitment p c_amount \<and>
-        length c_bits = k \<and>
-        length c_comps = k \<and>
-        length c_pair_res = k \<and>
-        length a_amounts = range_fs_rounds \<and>
-        length a_pairss = range_fs_rounds \<and>
-        length es = range_fs_rounds \<and>
-        length z_amounts = range_fs_rounds \<and>
-        length z_pairss = range_fs_rounds \<and>
-        (\<forall>i < range_fs_rounds.
-          length (a_pairss ! i) = k \<and>
-          length (z_pairss ! i) = k \<and>
-          range_amount_sigma_verify p gamma k ck c_amount_res
-            (a_amounts ! i) (es ! i) (z_amounts ! i) \<and>
-          (\<forall>j < k.
-            range_pair_sigma_verify p gamma ck (c_pair_res ! j)
-              ((a_pairss ! i) ! j) (es ! i) ((z_pairss ! i) ! j))))"
 
 definition range_scheduled_fork_extract_amount ::
   "int list \<Rightarrow> int_vec list \<Rightarrow> int list \<Rightarrow> int_vec list \<Rightarrow> nat \<Rightarrow>
