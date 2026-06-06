@@ -2724,6 +2724,156 @@ lemma nullifier_fs_hvzk_if_assumed:
   unfolding nullifier_fs_hvzk_assumption_def
   by auto
 
+text \<open>
+  The following programmed-schedule HVZK interfaces narrow the older simulator
+  assumptions above. They expose the concrete scheduled simulator, response
+  validity checks, and the exact Fiat--Shamir challenge-match condition that a
+  programmable transcript theorem must justify. They still do not prove
+  distributional indistinguishability or rejection-sampling bounds.
+\<close>
+
+definition balance_fs_programmed_hvzk_assumption ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+   int list \<Rightarrow> int_vec list \<Rightarrow> balance_proof \<Rightarrow>
+   (balance_proof \<Rightarrow> balance_proof \<Rightarrow> bool) \<Rightarrow> bool" where
+  "balance_fs_programmed_hvzk_assumption p gamma ck c es zs real_proof indist \<longleftrightarrow>
+    valid_scalar_commit_params p \<and>
+    valid_commit_key p ck \<and>
+    valid_commitment p c \<and>
+    length es = balance_fs_rounds \<and>
+    length zs = balance_fs_rounds \<and>
+    (\<forall>i < balance_fs_rounds. valid_balance_challenge p (es ! i)) \<and>
+    (\<forall>i < balance_fs_rounds. valid_balance_response p gamma (es ! i) (zs ! i)) \<and>
+    balance_fs_challenges p ck c
+      (balance_as (balance_scheduled_simulate p ck c es zs)) = es \<and>
+    indist (balance_scheduled_simulate p ck c es zs) real_proof"
+
+lemma balance_fs_hvzk_if_programmed_scheduled:
+  assumes programmed:
+    "balance_fs_programmed_hvzk_assumption p gamma ck c es zs real_proof indist"
+  shows "balance_fs_verify p gamma ck c (balance_scheduled_simulate p ck c es zs)"
+    and "indist (balance_scheduled_simulate p ck c es zs) real_proof"
+proof -
+  show "balance_fs_verify p gamma ck c (balance_scheduled_simulate p ck c es zs)"
+    using programmed
+    unfolding balance_fs_programmed_hvzk_assumption_def
+    by (auto intro: balance_fs_verify_scheduled_simulate_if_challenges_match)
+  show "indist (balance_scheduled_simulate p ck c es zs) real_proof"
+    using programmed
+    unfolding balance_fs_programmed_hvzk_assumption_def
+    by simp
+qed
+
+definition range_fs_programmed_hvzk_assumption ::
+  "commit_params \<Rightarrow> int \<Rightarrow> nat \<Rightarrow> commit_key \<Rightarrow> commitment \<Rightarrow>
+   commitment list \<Rightarrow> commitment list \<Rightarrow> int list \<Rightarrow>
+   int_vec list \<Rightarrow> int_vec list list \<Rightarrow> range_proof \<Rightarrow>
+   (range_proof \<Rightarrow> range_proof \<Rightarrow> bool) \<Rightarrow> bool" where
+  "range_fs_programmed_hvzk_assumption
+      p gamma k ck c_amount c_bits c_comps es z_amounts z_pairss
+      real_proof indist \<longleftrightarrow>
+    valid_scalar_commit_params p \<and>
+    valid_commit_key p ck \<and>
+    valid_commitment p c_amount \<and>
+    valid_commitment p (range_amount_commitment p ck c_amount c_bits) \<and>
+    length (range_pair_commitments p ck c_bits c_comps) = k \<and>
+    (\<forall>j < k.
+      valid_commitment p
+        ((range_pair_commitments p ck c_bits c_comps) ! j)) \<and>
+    length c_bits = k \<and>
+    length c_comps = k \<and>
+    length es = range_fs_rounds \<and>
+    length z_amounts = range_fs_rounds \<and>
+    length z_pairss = range_fs_rounds \<and>
+    (\<forall>i < range_fs_rounds. valid_range_challenge p (es ! i)) \<and>
+    (\<forall>i < range_fs_rounds.
+      valid_range_amount_response p gamma k (es ! i) (z_amounts ! i)) \<and>
+    (\<forall>i < range_fs_rounds. length (z_pairss ! i) = k) \<and>
+    (\<forall>i < range_fs_rounds.
+      (\<forall>j < k.
+        valid_range_pair_response p gamma (es ! i) ((z_pairss ! i) ! j))) \<and>
+    range_fs_challenges p ck c_amount c_bits c_comps
+      (range_amount_as
+        (range_scheduled_simulate p ck c_amount c_bits c_comps
+          es z_amounts z_pairss))
+      (range_pair_ass
+        (range_scheduled_simulate p ck c_amount c_bits c_comps
+          es z_amounts z_pairss)) = es \<and>
+    indist
+      (range_scheduled_simulate p ck c_amount c_bits c_comps
+        es z_amounts z_pairss)
+      real_proof"
+
+lemma range_fs_hvzk_if_programmed_scheduled:
+  assumes programmed:
+    "range_fs_programmed_hvzk_assumption
+      p gamma k ck c_amount c_bits c_comps es z_amounts z_pairss
+      real_proof indist"
+  shows "range_fs_verify p gamma k ck c_amount
+           (range_scheduled_simulate p ck c_amount c_bits c_comps
+             es z_amounts z_pairss)"
+    and "indist
+          (range_scheduled_simulate p ck c_amount c_bits c_comps
+            es z_amounts z_pairss)
+          real_proof"
+proof -
+  show "range_fs_verify p gamma k ck c_amount
+          (range_scheduled_simulate p ck c_amount c_bits c_comps
+            es z_amounts z_pairss)"
+    using programmed
+    unfolding range_fs_programmed_hvzk_assumption_def
+    by (auto intro: range_fs_verify_scheduled_simulate_if_challenges_match)
+  show "indist
+          (range_scheduled_simulate p ck c_amount c_bits c_comps
+            es z_amounts z_pairss)
+          real_proof"
+    using programmed
+    unfolding range_fs_programmed_hvzk_assumption_def
+    by simp
+qed
+
+definition nullifier_fs_programmed_hvzk_assumption ::
+  "commit_params \<Rightarrow> int \<Rightarrow> commit_key \<Rightarrow> commit_key \<Rightarrow>
+   commitment \<Rightarrow> commitment \<Rightarrow> int list \<Rightarrow> commit_opening list \<Rightarrow>
+   nullifier_proof \<Rightarrow> (nullifier_proof \<Rightarrow> nullifier_proof \<Rightarrow> bool) \<Rightarrow> bool" where
+  "nullifier_fs_programmed_hvzk_assumption
+      p gamma ck nk c nf es zs real_proof indist \<longleftrightarrow>
+    valid_scalar_commit_params p \<and>
+    valid_commit_key p ck \<and>
+    valid_commit_key p nk \<and>
+    valid_commitment p c \<and>
+    valid_commitment p nf \<and>
+    length es = nullifier_fs_rounds \<and>
+    length zs = nullifier_fs_rounds \<and>
+    (\<forall>i < nullifier_fs_rounds. valid_nullifier_challenge p (es ! i)) \<and>
+    (\<forall>i < nullifier_fs_rounds.
+      valid_nullifier_response p gamma (es ! i) (zs ! i)) \<and>
+    nullifier_fs_challenges p ck nk c nf
+      (nullifier_a_commits
+        (nullifier_scheduled_simulate p ck nk c nf es zs))
+      (nullifier_a_nullifiers
+        (nullifier_scheduled_simulate p ck nk c nf es zs)) = es \<and>
+    indist (nullifier_scheduled_simulate p ck nk c nf es zs) real_proof"
+
+lemma nullifier_fs_hvzk_if_programmed_scheduled:
+  assumes programmed:
+    "nullifier_fs_programmed_hvzk_assumption
+      p gamma ck nk c nf es zs real_proof indist"
+  shows "nullifier_fs_verify p gamma ck nk c nf
+           (nullifier_scheduled_simulate p ck nk c nf es zs)"
+    and "indist (nullifier_scheduled_simulate p ck nk c nf es zs) real_proof"
+proof -
+  show "nullifier_fs_verify p gamma ck nk c nf
+          (nullifier_scheduled_simulate p ck nk c nf es zs)"
+    using programmed
+    unfolding nullifier_fs_programmed_hvzk_assumption_def
+    by (auto intro: nullifier_fs_verify_scheduled_simulate_if_challenges_match)
+  show "indist (nullifier_scheduled_simulate p ck nk c nf es zs) real_proof"
+    using programmed
+    unfolding nullifier_fs_programmed_hvzk_assumption_def
+    by simp
+qed
+
 theorem verified_opening_collision_yields_sis:
   assumes params_ok: "valid_commit_params p"
       and key_ok: "valid_commit_key p ck"

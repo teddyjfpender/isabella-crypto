@@ -67,9 +67,10 @@ benchmarks are independently checked.
   fixture/source agreement across OCaml, Haskell, TypeScript, and generators.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
-  assumptions for HVZK, and a theorem reducing verified opening collisions to
-  SIS via `binding_implies_sis`. Balance, range, and nullifier response bounds
-  now also have explicit binary-challenge lemmas for the exact margins used by
+  assumptions for HVZK, narrower programmed-schedule HVZK assumptions, and a
+  theorem reducing verified opening collisions to SIS via
+  `binding_implies_sis`. Balance, range, and nullifier response bounds now
+  also have explicit binary-challenge lemmas for the exact margins used by
   later SIS reductions.
 - `Repeated_FS.thy` now defines valid and forked binary challenge schedules.
   `Confidential_Balance.thy`, `Confidential_Range.thy`, and
@@ -91,7 +92,12 @@ benchmarks are independently checked.
   transcript-derived challenge list equals the programmed schedule. This is
   the algebraic simulator core plus an explicit challenge-match bridge only;
   it does not prove distributional HVZK, rejection-sampling bounds, or
-  Fiat-Shamir programmability.
+  Fiat-Shamir programmability. `Confidential_Transaction.thy` now packages
+  this boundary as `balance_fs_programmed_hvzk_assumption`,
+  `range_fs_programmed_hvzk_assumption`, and
+  `nullifier_fs_programmed_hvzk_assumption`, then proves verifier acceptance
+  and the stated indistinguishability predicate from those narrower
+  assumptions.
 - `Authenticated_Ledger.thy` now marks `ledger_hash` as an execution scaffold
   and explicitly not production-ready. `Authenticated_Merkle.thy` provides the
   checked cryptographic target model for the replacement: canonical empty,
