@@ -28,17 +28,30 @@ def matching_parameters(candidate: dict) -> dict:
     return {field: candidate[field] for field in fields}
 
 
-def estimator_report(candidate: dict, security_bits: int, parameters: dict) -> dict:
-    return {
+def estimator_report(
+    candidate: dict,
+    security_bits: int | None,
+    parameters: dict,
+    status: str | None = None,
+) -> dict:
+    request = candidate["external_lattice_estimator_request"]
+    report = {
         "candidate": candidate["name"],
         "tool": "regression-estimator",
         "source": "scripts/check_confidential_parameter_readiness_regressions.py",
         "generated_at": "2026-06-06T00:00:00Z",
         "command": ["regression-estimator", candidate["name"]],
-        "security_level_bits": security_bits,
+        "status": status or request["status"],
         "parameters": parameters,
+        "estimator_request": request,
         "assumptions": ["regression fixture; not production estimator evidence"],
     }
+    if report["status"] == "estimated":
+        report["security_level_bits"] = security_bits
+        report["estimates"] = {"SIS.estimate.rough": {"regression": {"rop_bits": security_bits}}}
+    else:
+        report["reason"] = "regression fixture preserves a non-estimated request status"
+    return report
 
 
 def lazer_report(candidate: dict, security_bits: int, parameter_set: dict) -> dict:
@@ -80,22 +93,35 @@ def main() -> None:
         candidate = base_report["candidates"][0]
         params = matching_parameters(candidate)
 
-        low_security = copy.deepcopy(base_report)
-        low_security["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
+        blocked_estimator = copy.deepcopy(base_report)
+        blocked_estimator["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
+            candidate,
+            None,
+            params,
+        )
+        blocked_estimator_path = tmpdir / "blocked-estimator.json"
+        write_report(blocked_estimator_path, blocked_estimator)
+        blocked_proc = run(["python3", str(CHECKER), "--report", str(blocked_estimator_path)])
+        if blocked_proc.returncode != 0:
+            raise SystemExit(blocked_proc.stdout + blocked_proc.stderr)
+
+        dishonest_estimated = copy.deepcopy(base_report)
+        dishonest_estimated["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
             candidate,
             candidate["target_security_bits"] - 1,
             params,
+            status="estimated",
         )
-        low_security_path = tmpdir / "low-security.json"
-        write_report(low_security_path, low_security)
-        expect_checker_failure(low_security_path, "below target_security_bits")
+        dishonest_estimated_path = tmpdir / "dishonest-estimated.json"
+        write_report(dishonest_estimated_path, dishonest_estimated)
+        expect_checker_failure(dishonest_estimated_path, "status must be blocked_by_formal_modulus")
 
         mismatched_estimator = copy.deepcopy(base_report)
         bad_params = dict(params)
         bad_params["q"] = bad_params["q"] + 1
         mismatched_estimator["candidates"][0]["external_lattice_estimator_report"] = estimator_report(
             candidate,
-            candidate["target_security_bits"],
+            None,
             bad_params,
         )
         mismatched_estimator_path = tmpdir / "mismatched-estimator.json"

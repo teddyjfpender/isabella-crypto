@@ -147,6 +147,75 @@ def validate_report_security_level(
         fail(f"{label}.security_level_bits is below target_security_bits={target_security_bits}")
 
 
+def validate_estimator_report_request(
+    report: dict[str, Any],
+    candidate: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    candidate_request = require_object(
+        candidate.get("external_lattice_estimator_request"),
+        f"{candidate_name(candidate)}.external_lattice_estimator_request",
+    )
+    report_request = require_object(
+        report.get("estimator_request"),
+        f"{label}.estimator_request",
+    )
+
+    if report_request.get("applicable") != candidate_request.get("applicable"):
+        fail(f"{label}.estimator_request.applicable must match candidate request")
+
+    if not candidate_request.get("applicable", False):
+        required_relations = require_list(
+            report_request.get("required_relations"),
+            f"{label}.estimator_request.required_relations",
+        )
+        expected_relations = require_list(
+            candidate_request.get("required_relations"),
+            f"{candidate_name(candidate)}.external_lattice_estimator_request.required_relations",
+        )
+        if required_relations != expected_relations:
+            fail(f"{label}.estimator_request.required_relations must match candidate request")
+        return candidate_request
+
+    report_mapping = require_object(
+        report_request.get("parameter_mapping"),
+        f"{label}.estimator_request.parameter_mapping",
+    )
+    expected_mapping = require_object(
+        candidate_request.get("parameter_mapping"),
+        f"{candidate_name(candidate)}.external_lattice_estimator_request.parameter_mapping",
+    )
+    if report_mapping != expected_mapping:
+        fail(f"{label}.estimator_request.parameter_mapping must match candidate request")
+
+    report_source = require_object(
+        report_request.get("source_bound"),
+        f"{label}.estimator_request.source_bound",
+    )
+    expected_source = require_object(
+        candidate_request.get("source_bound"),
+        f"{candidate_name(candidate)}.external_lattice_estimator_request.source_bound",
+    )
+    if report_source != expected_source:
+        fail(f"{label}.estimator_request.source_bound must match candidate request")
+
+    report_preconditions = require_object(
+        report_request.get("estimator_preconditions"),
+        f"{label}.estimator_request.estimator_preconditions",
+    )
+    expected_preconditions = require_object(
+        candidate_request.get("estimator_preconditions"),
+        f"{candidate_name(candidate)}.external_lattice_estimator_request.estimator_preconditions",
+    )
+    if report_preconditions != expected_preconditions:
+        fail(f"{label}.estimator_request.estimator_preconditions must match candidate request")
+
+    if report_request.get("status") != candidate_request.get("status"):
+        fail(f"{label}.estimator_request.status must match candidate request")
+
+    return candidate_request
+
+
 def validate_external_estimator_report(report: dict[str, Any], candidate: dict[str, Any]) -> None:
     candidate_id = candidate_name(candidate)
     label = f"{candidate_id}.external_lattice_estimator_report"
@@ -156,18 +225,52 @@ def validate_external_estimator_report(report: dict[str, Any], candidate: dict[s
     require_string(report.get("source"), f"{label}.source")
     require_string(report.get("generated_at"), f"{label}.generated_at")
     validate_command(report.get("command"), f"{label}.command")
-    validate_report_security_level(report, candidate, label)
+    status = require_string(report.get("status"), f"{label}.status")
+    allowed_statuses = {"estimated", "blocked_by_formal_modulus", "failed", "not_applicable"}
+    if status not in allowed_statuses:
+        fail(f"{label}.status must be one of {sorted(allowed_statuses)}")
     parameters = require_object(
         report.get("parameters"),
         f"{label}.parameters",
     )
     validate_parameter_snapshot(parameters, candidate, f"{label}.parameters")
+    candidate_request = validate_estimator_report_request(report, candidate, label)
     assumptions = require_list(
         report.get("assumptions"),
         f"{label}.assumptions",
     )
     if not assumptions or not all(isinstance(assumption, str) and assumption for assumption in assumptions):
         fail(f"{label}.assumptions must contain non-empty strings")
+
+    if not candidate_request.get("applicable", False):
+        if status != "not_applicable":
+            fail(f"{label}.status must be not_applicable when estimator request is not applicable")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
+    request_status = require_string(
+        candidate_request.get("status"),
+        f"{candidate_id}.external_lattice_estimator_request.status",
+    )
+    if request_status != "ready_for_external_estimator":
+        if status != request_status:
+            fail(f"{label}.status must be {request_status}")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
+    if status != "estimated":
+        if status != "failed":
+            fail(f"{label}.status must be estimated or failed when estimator request is ready")
+        require_string(report.get("reason"), f"{label}.reason")
+        return
+
+    validate_report_security_level(report, candidate, label)
+    estimates = require_object(
+        report.get("estimates"),
+        f"{label}.estimates",
+    )
+    if not estimates:
+        fail(f"{label}.estimates must not be empty when status is estimated")
 
 
 def validate_lazer_parameter_report(report: dict[str, Any], candidate: dict[str, Any]) -> None:

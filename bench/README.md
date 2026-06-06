@@ -91,6 +91,16 @@ norm=infinity)`, but the request remains `blocked_by_formal_modulus` because
 `2 * length_bound < q - 1` is false. This baseline remains blocked even when
 runtime budgets pass.
 
+To generate the current external-estimator report collection, run:
+
+```bash
+make run-confidential-lattice-estimator
+```
+
+The default output is `/tmp/confidential-lattice-estimator-reports.json`. With
+the current parameters it records blocked/not-applicable evidence; only
+`status: "estimated"` reports can satisfy the production estimator gate.
+
 ### Function-Specific Examples
 
 **Quick benchmark (recommended):**

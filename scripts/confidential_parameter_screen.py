@@ -267,18 +267,22 @@ def production_blockers(screened: dict[str, Any], external_estimator: bool) -> l
     target_security_bits = screened.get("target_security_bits")
     estimator_report = screened.get("external_lattice_estimator_report")
     if isinstance(estimator_report, dict):
-        security_bits = estimator_report.get("security_level_bits")
-        if (
-            not isinstance(security_bits, (int, float))
-            or isinstance(security_bits, bool)
-            or not isinstance(target_security_bits, (int, float))
-            or isinstance(target_security_bits, bool)
-            or security_bits < target_security_bits
-        ):
-            blockers.append("external_lattice_estimator_security_below_target")
-        parameters = estimator_report.get("parameters")
-        if not isinstance(parameters, dict) or not parameter_snapshot_matches(screened, parameters):
-            blockers.append("external_lattice_estimator_parameter_mismatch")
+        status = estimator_report.get("status")
+        if status != "estimated":
+            blockers.append(f"external_lattice_estimator_report_not_estimated:{status}")
+        else:
+            security_bits = estimator_report.get("security_level_bits")
+            if (
+                not isinstance(security_bits, (int, float))
+                or isinstance(security_bits, bool)
+                or not isinstance(target_security_bits, (int, float))
+                or isinstance(target_security_bits, bool)
+                or security_bits < target_security_bits
+            ):
+                blockers.append("external_lattice_estimator_security_below_target")
+            parameters = estimator_report.get("parameters")
+            if not isinstance(parameters, dict) or not parameter_snapshot_matches(screened, parameters):
+                blockers.append("external_lattice_estimator_parameter_mismatch")
 
     lazer_report = screened.get("lazer_parameter_generation_report")
     if isinstance(lazer_report, dict):
@@ -454,7 +458,8 @@ def main() -> None:
         screened = screen(candidate)
         if candidate.name in estimator_reports:
             screened["external_lattice_estimator_report"] = estimator_reports[candidate.name]
-            screened["screening_status"] = "production_candidate"
+            if estimator_reports[candidate.name].get("status") == "estimated":
+                screened["screening_status"] = "production_candidate"
         if candidate.name in lazer_reports:
             screened["lazer_parameter_generation_report"] = lazer_reports[candidate.name]
         blockers = production_blockers(screened, estimator_available)

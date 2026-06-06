@@ -229,6 +229,8 @@ External estimator and LaZer parameter evidence must be attached as structured
 JSON report collections, keyed by candidate:
 
 ```bash
+make run-confidential-lattice-estimator
+
 python3 scripts/confidential_parameter_screen.py \
   --external-estimator-report path/to/estimator-reports.json \
   --lazer-parameter-report path/to/lazer-parameter-reports.json \
@@ -236,12 +238,16 @@ python3 scripts/confidential_parameter_screen.py \
 ```
 
 `scripts/check_confidential_parameter_readiness.py` now validates the estimator
-probe, external-estimator report fields, LaZer parameter-generation report
-fields, candidate target-security floors, exact parameter-snapshot equality, and
-the arithmetic behind each formal proof-margin modulus requirement before any
-candidate can be marked production-ready. The regression gate
+probe, external-estimator request/report fields, LaZer parameter-generation
+report fields, candidate target-security floors, exact parameter-snapshot
+equality, and the arithmetic behind each formal proof-margin modulus requirement
+before any candidate can be marked production-ready. Non-estimated
+external-estimator reports are accepted as audit evidence but remain explicit
+blockers; only `status: "estimated"` can satisfy the production estimator gate.
+The regression gate
 `scripts/check_confidential_parameter_readiness_regressions.py` checks that
-below-target estimator evidence and mismatched estimator/LaZer parameter
+honest blocked estimator reports are accepted, dishonest estimated reports for
+blocked requests are rejected, and mismatched estimator/LaZer parameter
 snapshots are rejected.
 
 Selected baseline candidates:
@@ -272,6 +278,11 @@ norm=infinity)`. The selected length bound comes from
 `q_minus_one = 8380416`. The RLWE/AHE research candidate has no estimator
 request yet because its `EncryptValid`, `SamePlaintext`, `TransferValid`, and
 `NoiseBoundValid` relations remain unformalized.
+`scripts/run_confidential_lattice_estimator.py` consumes these requests and
+emits report collections. With the current parameter screen it emits
+`blocked_by_formal_modulus` for `ct_sis_note_mvp_v0` and `not_applicable` for
+the RLWE/AHE research candidate; it will only invoke malb/lattice-estimator
+after the formal request status becomes `ready_for_external_estimator`.
 
 ## Validation Plan
 
