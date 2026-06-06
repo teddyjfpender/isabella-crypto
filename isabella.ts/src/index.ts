@@ -215,6 +215,13 @@ export interface ConfidentialTransactionEnvelope {
   proof: MerkleTransactionProof;
 }
 
+/** Public wallet proof request snapshot bound before local proof generation */
+export interface ConfidentialWalletProofRequest {
+  context: ConfidentialTransactionContext;
+  acceptedRoots: MerkleDigest[];
+  spentNullifiers: IntMatrix;
+}
+
 /** Local policy expected by a verifier before accepting a transaction envelope */
 export interface ConfidentialTransactionContextPolicy {
   protocolVersion?: number;
@@ -939,11 +946,15 @@ const CT_TRANSACTION_TAGS = {
   context: 0,
   merkleProof: 1,
   envelope: 2,
+  walletProofRequest: 3,
 } as const;
 
 function assertSafeI64(value: number, label: string): void {
   if (!Number.isSafeInteger(value)) {
     throw new RangeError(`${label} must be a safe signed integer`);
+  }
+  if (Object.is(value, -0)) {
+    throw new RangeError(`${label} must not be negative zero`);
   }
 }
 
@@ -1049,6 +1060,50 @@ function encodeDigestVector(digests: MerkleDigest[], label: string): Buffer {
     encodeI64LE(digests.length, `${label}.length`),
     ...digests.map((digest, index) => encodeDigest(digest, `${label}[${index}]`)),
   ]);
+}
+
+function compareIntVectors(left: IntVec, right: IntVec): number {
+  const width = Math.min(left.length, right.length);
+  for (let index = 0; index < width; index += 1) {
+    if (left[index] < right[index]) {
+      return -1;
+    }
+    if (left[index] > right[index]) {
+      return 1;
+    }
+  }
+  return Math.sign(left.length - right.length);
+}
+
+function assertCanonicalDigestSet(digests: MerkleDigest[], label: string): void {
+  if (digests.length === 0) {
+    throw new Error(`${label} must not be empty`);
+  }
+  let previous: MerkleDigest | null = null;
+  for (let index = 0; index < digests.length; index += 1) {
+    const digest = digests[index];
+    assertDigestHex(digest, `${label}[${index}]`);
+    if (previous !== null && previous >= digest) {
+      throw new Error(`${label} must be sorted lexicographically with no duplicates`);
+    }
+    previous = digest;
+  }
+}
+
+function assertCanonicalIntMatrixSet(rows: IntMatrix, label: string): void {
+  assertNonNegativeSafeI64(rows.length, `${label}.length`);
+  let previous: IntVec | null = null;
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    assertNonNegativeSafeI64(row.length, `${label}[${rowIndex}].length`);
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      assertSafeI64(row[colIndex], `${label}[${rowIndex}][${colIndex}]`);
+    }
+    if (previous !== null && compareIntVectors(previous, row) >= 0) {
+      throw new Error(`${label} must be sorted lexicographically with no duplicates`);
+    }
+    previous = row;
+  }
 }
 
 function merklePreimage(tag: number, body: Buffer): Buffer {
@@ -1262,6 +1317,34 @@ function transactionEnvelopePreimage(envelope: ConfidentialTransactionEnvelope):
     Buffer.concat([
       encodeDigest(contextDigest, 'contextDigest'),
       encodeDigest(sha3Hex(transactionMerkleProofPreimage(envelope.proof)), 'proofDigest'),
+    ])
+  );
+}
+
+function transactionWalletProofRequestPreimage(
+  request: ConfidentialWalletProofRequest
+): Buffer {
+  assertCanonicalDigestSet(request.acceptedRoots, 'acceptedRoots');
+  assertCanonicalIntMatrixSet(request.spentNullifiers, 'spentNullifiers');
+  const contextDigest = sha3Hex(transactionContextPreimage(request.context));
+  if (!request.acceptedRoots.includes(request.context.root)) {
+    throw new Error('context.root must be inside acceptedRoots');
+  }
+  if (sameVec(request.context.nf1, request.context.nf2)) {
+    throw new Error('context nullifiers must be distinct');
+  }
+  if (
+    containsVec(request.spentNullifiers, request.context.nf1) ||
+    containsVec(request.spentNullifiers, request.context.nf2)
+  ) {
+    throw new Error('context nullifiers must be absent from spentNullifiers');
+  }
+  return transactionTaggedPreimage(
+    CT_TRANSACTION_TAGS.walletProofRequest,
+    Buffer.concat([
+      encodeDigest(contextDigest, 'contextDigest'),
+      encodeDigestVector(request.acceptedRoots, 'acceptedRoots'),
+      encodeIntMatrix(request.spentNullifiers, 'spentNullifiers'),
     ])
   );
 }
@@ -2325,6 +2408,18 @@ export namespace ConfidentialTransaction {
     envelope: ConfidentialTransactionEnvelope
   ): MerkleDigest {
     return sha3Hex(transactionEnvelopePreimage(envelope));
+  }
+
+  export function transactionWalletProofRequestPreimageHex(
+    request: ConfidentialWalletProofRequest
+  ): string {
+    return transactionWalletProofRequestPreimage(request).toString('hex');
+  }
+
+  export function transactionWalletProofRequestDigest(
+    request: ConfidentialWalletProofRequest
+  ): MerkleDigest {
+    return sha3Hex(transactionWalletProofRequestPreimage(request));
   }
 
   export function transactionContextMatchesPolicy(

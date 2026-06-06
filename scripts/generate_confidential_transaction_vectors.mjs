@@ -17,11 +17,15 @@ const tags = {
   context: 0,
   merkleProof: 1,
   envelope: 2,
+  walletProofRequest: 3,
 };
 
 function i64le(value) {
   if (!Number.isSafeInteger(value)) {
     throw new RangeError(`non-canonical integer: ${value}`);
+  }
+  if (Object.is(value, -0)) {
+    throw new RangeError('non-canonical integer: negative zero');
   }
   const out = Buffer.alloc(8);
   out.writeBigInt64LE(BigInt(value), 0);
@@ -51,12 +55,20 @@ function encodeIntVec(values) {
   return Buffer.concat([i64le(values.length), ...values.map(i64le)]);
 }
 
+function encodeIntMatrix(rows) {
+  return Buffer.concat([i64le(rows.length), ...rows.map(encodeIntVec)]);
+}
+
 function encodeDigest(digest) {
   if (!/^[0-9a-f]{64}$/.test(digest)) {
     throw new Error('digest must be a canonical lowercase SHA3-256 digest');
   }
   const bytes = Buffer.from(digest, 'hex');
   return Buffer.concat([i64le(bytes.length), bytes]);
+}
+
+function encodeDigestVector(digests) {
+  return Buffer.concat([i64le(digests.length), ...digests.map(encodeDigest)]);
 }
 
 function contextPreimage(context) {
@@ -77,6 +89,91 @@ function contextPreimage(context) {
     encodeIntVec(context.nf1),
     encodeIntVec(context.nf2),
   ]);
+}
+
+function taggedPreimage(tag, body) {
+  return Buffer.concat([
+    dst,
+    i64le(tag),
+    encodeAscii(protocolId, 'protocolId'),
+    body,
+  ]);
+}
+
+function compareIntVec(left, right) {
+  const width = Math.min(left.length, right.length);
+  for (let index = 0; index < width; index += 1) {
+    if (left[index] < right[index]) {
+      return -1;
+    }
+    if (left[index] > right[index]) {
+      return 1;
+    }
+  }
+  return Math.sign(left.length - right.length);
+}
+
+function assertCanonicalDigestSet(digests, label) {
+  if (digests.length === 0) {
+    throw new Error(`${label} must not be empty`);
+  }
+  let previous = null;
+  for (let index = 0; index < digests.length; index += 1) {
+    const digest = digests[index];
+    encodeDigest(digest);
+    if (previous !== null && previous >= digest) {
+      throw new Error(`${label} must be sorted lexicographically with no duplicates`);
+    }
+    previous = digest;
+  }
+}
+
+function assertCanonicalIntMatrixSet(rows, label) {
+  let previous = null;
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    for (const value of row) {
+      i64le(value);
+    }
+    if (previous !== null && compareIntVec(previous, row) >= 0) {
+      throw new Error(`${label} must be sorted lexicographically with no duplicates`);
+    }
+    previous = row;
+  }
+}
+
+function sameVec(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function containsVec(rows, value) {
+  return rows.some((row) => sameVec(row, value));
+}
+
+function walletProofRequestPreimage(request) {
+  assertCanonicalDigestSet(request.acceptedRoots, 'acceptedRoots');
+  assertCanonicalIntMatrixSet(request.spentNullifiers, 'spentNullifiers');
+  const contextDigest = digestHex(contextPreimage(request.context));
+  if (!request.acceptedRoots.includes(request.context.root)) {
+    throw new Error('context.root must be inside acceptedRoots');
+  }
+  if (sameVec(request.context.nf1, request.context.nf2)) {
+    throw new Error('context nullifiers must be distinct');
+  }
+  if (
+    containsVec(request.spentNullifiers, request.context.nf1) ||
+    containsVec(request.spentNullifiers, request.context.nf2)
+  ) {
+    throw new Error('context nullifiers must be absent from spentNullifiers');
+  }
+  return taggedPreimage(
+    tags.walletProofRequest,
+    Buffer.concat([
+      encodeDigest(contextDigest),
+      encodeDigestVector(request.acceptedRoots),
+      encodeIntMatrix(request.spentNullifiers),
+    ])
+  );
 }
 
 function digestHex(buffer) {
@@ -211,6 +308,23 @@ const envelope = {
 };
 const envelopePreimageHex = tx.transactionEnvelopePreimageHex(envelope);
 const envelopeDigest = tx.transactionEnvelopeDigest(envelope);
+const extraAcceptedRoot = digestHex(Buffer.from('isabella-accepted-root-window-extra', 'ascii'));
+const walletProofRequest = {
+  context: envelopeContext,
+  acceptedRoots: [proofFixture.root, extraAcceptedRoot].sort(),
+  spentNullifiers: [
+    [-9, 0, 9],
+    [10, 11, 12],
+  ],
+};
+const walletProofRequestPreimageHex = walletProofRequestPreimage(walletProofRequest).toString('hex');
+const walletProofRequestDigest = digestHex(Buffer.from(walletProofRequestPreimageHex, 'hex'));
+if (tx.transactionWalletProofRequestPreimageHex(walletProofRequest) !== walletProofRequestPreimageHex) {
+  throw new Error('wallet proof request preimage implementation mismatch');
+}
+if (tx.transactionWalletProofRequestDigest(walletProofRequest) !== walletProofRequestDigest) {
+  throw new Error('wallet proof request digest implementation mismatch');
+}
 
 const vectors = {
   version: 1,
@@ -247,6 +361,15 @@ const vectors = {
       digest: envelopeDigest,
     },
   ],
+  walletProofRequestCases: [
+    {
+      name: 'sis-note-wallet-proof-request-basic',
+      request: walletProofRequest,
+      contextDigest: envelopeContextDigest,
+      preimageHex: walletProofRequestPreimageHex,
+      digest: walletProofRequestDigest,
+    },
+  ],
 };
 
 fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -267,6 +390,11 @@ console.log(JSON.stringify({
     preimageBytes: entry.preimageHex.length / 2,
   })),
   envelopeCases: vectors.envelopeCases.map((entry) => ({
+    name: entry.name,
+    digest: entry.digest,
+    preimageBytes: entry.preimageHex.length / 2,
+  })),
+  walletProofRequestCases: vectors.walletProofRequestCases.map((entry) => ({
     name: entry.name,
     digest: entry.digest,
     preimageBytes: entry.preimageHex.length / 2,

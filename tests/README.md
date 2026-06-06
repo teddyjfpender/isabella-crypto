@@ -106,9 +106,11 @@ The harnesses are repair-aware:
   `ConfidentialTransaction.semanticStepValid` and
   `ConfidentialTransaction.ledgerStepValid`.
 - The confidential transaction context vector pins public replay context
-  bytes plus canonical Merkle-proof and envelope preimage/digest bytes. The
-  TS envelope verifier checks the context digest and expected network/asset/root
-  policy before delegating to the Merkle proof verifier.
+  bytes plus canonical Merkle-proof, envelope, and wallet proof request
+  preimage/digest bytes. The wallet request vector binds the canonical context
+  digest, accepted-root window, and spent-nullifier snapshot before local proof
+  generation. The TS envelope verifier checks the context digest and expected
+  network/asset/root policy before delegating to the Merkle proof verifier.
   The OCaml and Haskell CLIs expose `ct-verify-merkle-envelope`; the validators
   feed native context digests and native Merkle transaction proofs through that
   command, check native proof/envelope digest parity against the pinned vectors,

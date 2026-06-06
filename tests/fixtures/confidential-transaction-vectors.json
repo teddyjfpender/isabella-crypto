@@ -10,7 +10,8 @@
   "tags": {
     "context": 0,
     "merkleProof": 1,
-    "envelope": 2
+    "envelope": 2,
+    "walletProofRequest": 3
   },
   "cases": [
     {
@@ -103,6 +104,64 @@
       "proofDigest": "98a02a3e37ace016fb2527b1a6eef89c4130a916f3b4173cbf742dc9c7f8dab1",
       "preimageHex": "49534142454c4c412d43542d54582d76310200000000000000140000000000000049534142454c4c412d43542d5349532d4e4f54452000000000000000adb12a6e72c9874ca350f3c3fb2a8c962de267f6115569b5be632d4184ad4364200000000000000098a02a3e37ace016fb2527b1a6eef89c4130a916f3b4173cbf742dc9c7f8dab1",
       "digest": "b4a8255649a4306b4a95ca52a297b357b0f679c7d509a4e7754bbbf31193d597"
+    }
+  ],
+  "walletProofRequestCases": [
+    {
+      "name": "sis-note-wallet-proof-request-basic",
+      "request": {
+        "context": {
+          "protocolVersion": 1,
+          "networkId": "isabella-local-devnet",
+          "assetId": 7,
+          "ledgerEpoch": 42,
+          "root": "f169305c42d0b822cb03bb755529043942339c94caca4bf45f9ad5db87b2c89a",
+          "publicFee": 0,
+          "cIn1": [
+            1,
+            1
+          ],
+          "cIn2": [
+            1,
+            0
+          ],
+          "cOut1": [
+            1,
+            1
+          ],
+          "cOut2": [
+            1,
+            0
+          ],
+          "nf1": [
+            1,
+            1
+          ],
+          "nf2": [
+            0,
+            1
+          ]
+        },
+        "acceptedRoots": [
+          "6fe20e02764f55b36a3e32df77696a96fabbbd14b93f34be27b349b5a5478df9",
+          "f169305c42d0b822cb03bb755529043942339c94caca4bf45f9ad5db87b2c89a"
+        ],
+        "spentNullifiers": [
+          [
+            -9,
+            0,
+            9
+          ],
+          [
+            10,
+            11,
+            12
+          ]
+        ]
+      },
+      "contextDigest": "adb12a6e72c9874ca350f3c3fb2a8c962de267f6115569b5be632d4184ad4364",
+      "preimageHex": "49534142454c4c412d43542d54582d76310300000000000000140000000000000049534142454c4c412d43542d5349532d4e4f54452000000000000000adb12a6e72c9874ca350f3c3fb2a8c962de267f6115569b5be632d4184ad4364020000000000000020000000000000006fe20e02764f55b36a3e32df77696a96fabbbd14b93f34be27b349b5a5478df92000000000000000f169305c42d0b822cb03bb755529043942339c94caca4bf45f9ad5db87b2c89a02000000000000000300000000000000f7ffffffffffffff0000000000000000090000000000000003000000000000000a000000000000000b000000000000000c00000000000000",
+      "digest": "dcf8fa1e321bb2e78d31f38839a94010cf1e6603d924e5d2f8d28281e60393b4"
     }
   ]
 }

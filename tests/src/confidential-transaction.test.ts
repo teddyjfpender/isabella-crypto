@@ -45,6 +45,17 @@ type EnvelopeVector = DigestVector & {
   proofDigest: string;
 };
 
+type WalletProofRequest = {
+  context: TransactionContext;
+  acceptedRoots: string[];
+  spentNullifiers: number[][];
+};
+
+type WalletProofRequestVector = DigestVector & {
+  request: WalletProofRequest;
+  contextDigest: string;
+};
+
 type TransactionVectors = {
   version: number;
   algorithm: string;
@@ -54,10 +65,11 @@ type TransactionVectors = {
   stringEncoding: string;
   digestEncoding: string;
   vectorEncoding: string;
-  tags: { context: number; merkleProof: number; envelope: number };
+  tags: { context: number; merkleProof: number; envelope: number; walletProofRequest: number };
   cases: TransactionVector[];
   merkleProofCases: DigestVector[];
   envelopeCases: EnvelopeVector[];
+  walletProofRequestCases: WalletProofRequestVector[];
 };
 
 function sha3Hex(preimageHex: string): string {
@@ -77,7 +89,12 @@ describe('Confidential transaction context vectors', () => {
     expect(vectors.stringEncoding).toBe('len_i64_le || printable_ascii_bytes');
     expect(vectors.digestEncoding).toBe('len_i64_le || 32 raw digest bytes');
     expect(vectors.vectorEncoding).toBe('len_i64_le || values_i64_le...');
-    expect(vectors.tags).toEqual({ context: 0, merkleProof: 1, envelope: 2 });
+    expect(vectors.tags).toEqual({
+      context: 0,
+      merkleProof: 1,
+      envelope: 2,
+      walletProofRequest: 3,
+    });
   });
 
   it('hashes every pinned transaction context preimage to the recorded digest', () => {
@@ -91,6 +108,9 @@ describe('Confidential transaction context vectors', () => {
       expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
     }
     for (const entry of vectors.envelopeCases) {
+      expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
+    }
+    for (const entry of vectors.walletProofRequestCases) {
       expect(sha3Hex(entry.preimageHex)).toBe(entry.digest);
     }
   });
@@ -122,6 +142,7 @@ describe('Confidential transaction context vectors', () => {
     const [entry] = vectors.cases;
 
     expect(() => tx.transactionContextDigest({ ...entry.context, publicFee: -1 })).toThrow();
+    expect(() => tx.transactionContextDigest({ ...entry.context, publicFee: -0 })).toThrow();
     expect(() => tx.transactionContextDigest({ ...entry.context, assetId: Number.MAX_SAFE_INTEGER + 1 }))
       .toThrow();
     expect(() => tx.transactionContextDigest({ ...entry.context, networkId: 'isabella-\u2603' }))
@@ -179,6 +200,95 @@ describe('Confidential transaction context vectors', () => {
     })).not.toBe(envelopeVector.digest);
     expect(() => tx.transactionEnvelopeDigest({ ...envelope, contextDigest: proofVector.digest }))
       .toThrow();
+  });
+
+  it('matches the TypeScript wallet proof request serialization API', async () => {
+    const sdk = await import(pathToFileURL(typeScriptEntry).href);
+    const tx = sdk.ConfidentialTransaction;
+    const [requestVector] = vectors.walletProofRequestCases;
+    const request = requestVector.request;
+    const mutableAcceptedRootIndex = request.acceptedRoots.findIndex(
+      (root) => root !== request.context.root
+    );
+    expect(mutableAcceptedRootIndex).toBeGreaterThanOrEqual(0);
+
+    expect(tx.transactionWalletProofRequestPreimageHex(request)).toBe(requestVector.preimageHex);
+    expect(tx.transactionWalletProofRequestDigest(request)).toBe(requestVector.digest);
+    expect(tx.transactionContextDigest(request.context)).toBe(requestVector.contextDigest);
+    expect(tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.map((root, index) =>
+        index === mutableAcceptedRootIndex
+          ? root.replace(/^./, root[0] === '0' ? '1' : '0')
+          : root
+      ).sort(),
+    })).not.toBe(requestVector.digest);
+    expect(tx.transactionWalletProofRequestDigest({
+      ...request,
+      spentNullifiers: [...request.spentNullifiers, [99, 100, 101]],
+    })).not.toBe(requestVector.digest);
+    expect(tx.transactionWalletProofRequestDigest({
+      ...request,
+      context: { ...request.context, ledgerEpoch: request.context.ledgerEpoch + 1 },
+    })).not.toBe(requestVector.digest);
+  });
+
+  it('rejects malformed or non-canonical wallet proof requests', async () => {
+    const sdk = await import(pathToFileURL(typeScriptEntry).href);
+    const tx = sdk.ConfidentialTransaction;
+    const [requestVector] = vectors.walletProofRequestCases;
+    const request = requestVector.request;
+    const unsortedRoots = request.acceptedRoots.slice().reverse();
+    const duplicateRoots = [request.acceptedRoots[0], request.acceptedRoots[0]];
+
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: [],
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.filter((root) => root !== request.context.root),
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: duplicateRoots,
+    })).toThrow();
+    if (unsortedRoots.join('|') !== request.acceptedRoots.join('|')) {
+      expect(() => tx.transactionWalletProofRequestDigest({
+        ...request,
+        acceptedRoots: unsortedRoots,
+      })).toThrow();
+    }
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      acceptedRoots: request.acceptedRoots.map((root, index) =>
+        index === 0 ? `${root.slice(0, -1)}A` : root
+      ),
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      spentNullifiers: request.spentNullifiers.slice().reverse(),
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      spentNullifiers: [request.spentNullifiers[0], request.spentNullifiers[0]],
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      spentNullifiers: [[Number.MAX_SAFE_INTEGER + 1]],
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      spentNullifiers: [[-0]],
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      spentNullifiers: [request.context.nf1],
+    })).toThrow();
+    expect(() => tx.transactionWalletProofRequestDigest({
+      ...request,
+      context: { ...request.context, nf2: request.context.nf1 },
+    })).toThrow();
   });
 
   it('verifies Merkle transaction envelopes only under the expected public context', async () => {

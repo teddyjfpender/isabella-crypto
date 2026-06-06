@@ -96,6 +96,11 @@ benchmarks are independently checked.
   bytes under separate `merkleProof` and `envelope` transaction tags. TypeScript,
   OCaml, and Haskell expose proof/envelope digest APIs, and the native
   SDK-equivalence validators check those digests against the pinned vectors.
+  The same fixture now pins a TypeScript wallet proof request preimage/digest
+  under a separate `walletProofRequest` tag. That request binds the canonical
+  public transaction context digest, a sorted duplicate-free accepted-root
+  window containing the context root, and a sorted duplicate-free spent-nullifier
+  snapshot that must not contain either revealed transaction nullifier.
   TypeScript exposes `fsVerifyMerkleEnvelope`, and OCaml/Haskell expose a
   matching `ct-verify-merkle-envelope` command, so callers can verify the
   canonical context digest, expected network/asset/root policy, and explicit
@@ -139,9 +144,9 @@ The formalization still needs these before production:
    beyond same-path uniqueness.
 6. Run external lattice-estimator and LaZer-style parameter generation for the
    selected dimensions.
-7. Extend the pinned context/proof/envelope serialization into wallet request
-   serialization and consensus/indexer API contracts with non-canonical
-   encoding rejection.
+7. Extend the pinned TypeScript wallet proof request serialization into native
+   parity plus consensus/indexer API contracts with non-canonical encoding
+   rejection.
 8. Extend the zero-balance relation to a fee-aware balance relation before
    accepting nonzero public fees in verifier envelopes.
 
@@ -224,15 +229,19 @@ Important validation caveats:
   balance responses, range responses, and swapped proof components.
 - `tests/src/confidential-transaction.test.ts` pins the canonical public
   transaction context preimage/digest, TypeScript canonical Merkle-proof
-  preimage/digest, and TypeScript canonical envelope preimage/digest. It
-  rejects malformed roots, negative fees, unsafe integers, and non-ASCII
-  replay-context fields, and checks that proof/envelope digests change under
-  proof or public-context mutation. It also checks that the TypeScript Merkle
-  envelope verifier rejects stale context digests, wrong network/asset policy,
-  nonzero fees, and swapped proof components. OCaml/Haskell SDK-equivalence
-  validation now checks native proof/envelope digest parity against the pinned
-  vectors and verifies explicit Merkle proof rejection through native envelope
-  commands; wallet/consensus serialization remains open.
+  preimage/digest, TypeScript canonical envelope preimage/digest, and
+  TypeScript canonical wallet proof request preimage/digest. It rejects
+  malformed roots, negative fees, unsafe integers, non-ASCII replay-context
+  fields, empty/duplicate/unsorted accepted-root windows, non-canonical
+  spent-nullifier snapshots, already-spent requested nullifiers, and duplicate
+  requested nullifiers. It also checks that proof/envelope/request digests
+  change under proof, public-context, root-window, or spent-snapshot mutation.
+  It also checks that the TypeScript Merkle envelope verifier rejects stale
+  context digests, wrong network/asset policy, nonzero fees, and swapped proof
+  components. OCaml/Haskell SDK-equivalence validation now checks native
+  proof/envelope digest parity against the pinned vectors and verifies explicit
+  Merkle proof rejection through native envelope commands; native wallet-request
+  parity and consensus/indexer serialization remain open.
 - `test-sdk-equivalence` now runs 128-round balance, range, nullifier,
   membership, transaction context, transaction equivalence, and Merkle envelope
   acceptance/rejection against native context digests and Merkle proofs through

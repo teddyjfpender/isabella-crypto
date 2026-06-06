@@ -150,6 +150,10 @@ balance, range, membership, or nullifier statement being verified.
 3. Construct recipient and change note openings.
 4. Derive nullifiers for inputs.
 5. Build the public statement and bind protocol/network/asset/root/fee contexts.
+   The MVP wallet proof request serialization commits to the canonical public
+   context digest, a sorted duplicate-free accepted-root window containing the
+   selected root, and a sorted duplicate-free spent-nullifier snapshot that does
+   not already contain either requested nullifier.
 6. Sample masks with a CSPRNG.
 7. Generate balance, nullifier, membership, and output range proofs.
 8. Verify the full transaction locally before broadcast.
@@ -181,7 +185,7 @@ No verifier path may silently coerce a malformed value into a valid one.
 Before launch, this specification must be backed by:
 
 - formal statement definitions for every serialized field
-- runtime canonical serialization vectors
+- runtime canonical serialization vectors, including wallet proof requests
 - Merkle leaf/node/root vectors
 - negative mutation tests for every failure class above
 - parameter and proof-size reports
