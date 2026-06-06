@@ -370,6 +370,16 @@ export interface ConfidentialTransactionContextPolicy {
   publicFee?: number;
 }
 
+/** Local policy expected by a verifier before accepting a bignum transaction envelope */
+export interface BigIntConfidentialTransactionContextPolicy {
+  protocolVersion?: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch?: number;
+  root?: MerkleAcceptedRoot;
+  publicFee?: ConfidentialBigIntInput;
+}
+
 /**
  * Raw Isabella module interface (from js_of_ocaml)
  * @internal
@@ -5790,6 +5800,496 @@ export namespace ConfidentialTransactionBigInt {
     proof: MerkleMembershipProof
   ): boolean {
     return ConfidentialMerkleBigInt.membershipVerify(commitment, proof);
+  }
+
+  function normalizeOpening(opening: BigIntCommitOpening, label: string): BigIntCommitOpening {
+    assertExactObjectKeys(opening, ['msg', 'rand'], label);
+    return {
+      msg: normalizeBigIntVec(opening.msg, `${label}.msg`),
+      rand: normalizeBigIntVec(opening.rand, `${label}.rand`),
+    };
+  }
+
+  function normalizePublicFee(fee: ConfidentialBigIntInput, label: string): bigint {
+    const normalized = normalizeConfidentialBigInt(fee, label);
+    if (normalized < 0n) {
+      throw new Error(`${label} must be non-negative`);
+    }
+    return normalized;
+  }
+
+  function amountOfOpening(opening: BigIntCommitOpening): bigint {
+    const normalized = normalizeOpening(opening, 'opening');
+    if (normalized.msg.length !== 1) {
+      throw new Error('amount opening must have one message coordinate');
+    }
+    return normalized.msg[0];
+  }
+
+  function aggregateRandomness(
+    opIn1: BigIntCommitOpening,
+    opIn2: BigIntCommitOpening,
+    opOut1: BigIntCommitOpening,
+    opOut2: BigIntCommitOpening
+  ): BigIntVec {
+    const in1 = normalizeOpening(opIn1, 'opIn1').rand;
+    const in2 = normalizeOpening(opIn2, 'opIn2').rand;
+    const out1 = normalizeOpening(opOut1, 'opOut1').rand;
+    const out2 = normalizeOpening(opOut2, 'opOut2').rand;
+    return bigintVecAdd(
+      bigintVecAdd(in1, in2),
+      bigintScalarMult(-1n, bigintVecAdd(out1, out2))
+    );
+  }
+
+  function balanceCommitment(
+    params: BigIntScalarCommitParams,
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput
+  ): BigIntVec {
+    const inputs = bigintVecAdd(
+      normalizeBigIntVec(cIn1, 'cIn1'),
+      normalizeBigIntVec(cIn2, 'cIn2')
+    );
+    const outputs = bigintVecAdd(
+      normalizeBigIntVec(cOut1, 'cOut1'),
+      normalizeBigIntVec(cOut2, 'cOut2')
+    );
+    return bigintVecMod(bigintVecAdd(inputs, bigintScalarMult(-1n, outputs)), params.q);
+  }
+
+  function publicAmountCommitment(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    fee: ConfidentialBigIntInput
+  ): BigIntVec {
+    const normalizedFee = normalizePublicFee(fee, 'publicFee');
+    if (!ConfidentialBalanceBigInt.validCommitKey(params, ck)) {
+      throw new Error('invalid commitment key');
+    }
+    return bigintMatVecMultMod(
+      normalizeBigIntMatrix(ck, 'ck'),
+      [normalizedFee, ...Array.from({ length: params.n2 }, () => 0n)],
+      params.q
+    );
+  }
+
+  function feeBalanceCommitment(
+    params: BigIntScalarCommitParams,
+    ck: BigIntMatrixInput,
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    fee: ConfidentialBigIntInput
+  ): BigIntVec {
+    return bigintVecMod(
+      bigintVecAdd(
+        balanceCommitment(params, cIn1, cIn2, cOut1, cOut2),
+        bigintScalarMult(-1n, publicAmountCommitment(params, ck, fee))
+      ),
+      params.q
+    );
+  }
+
+  export function transactionContextMatchesPolicy(
+    context: BigIntConfidentialTransactionContext,
+    policy: BigIntConfidentialTransactionContextPolicy
+  ): boolean {
+    try {
+      const protocolVersion = policy.protocolVersion ?? 1;
+      const publicFee = normalizePublicFee(policy.publicFee ?? 0n, 'policy.publicFee');
+      if (protocolVersion !== 1) {
+        return false;
+      }
+      return (
+        context.protocolVersion === protocolVersion &&
+        context.networkId === policy.networkId &&
+        context.assetId === policy.assetId &&
+        normalizePublicFee(context.publicFee, 'context.publicFee') === publicFee &&
+        (policy.ledgerEpoch === undefined || context.ledgerEpoch === policy.ledgerEpoch) &&
+        (policy.root === undefined || sameAcceptedRoot(context.root, policy.root))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function transactionContextPolicyIsComplete(
+    policy: BigIntConfidentialTransactionContextPolicy
+  ): boolean {
+    try {
+      if (
+        policy.protocolVersion === undefined ||
+        policy.ledgerEpoch === undefined ||
+        policy.root === undefined ||
+        policy.publicFee === undefined
+      ) {
+        return false;
+      }
+      assertNonNegativeSafeI64(policy.protocolVersion, 'policy.protocolVersion');
+      if (policy.protocolVersion !== 1) {
+        return false;
+      }
+      encodeAsciiString(policy.networkId, 'policy.networkId');
+      assertNonNegativeSafeI64(policy.assetId, 'policy.assetId');
+      assertNonNegativeSafeI64(policy.ledgerEpoch, 'policy.ledgerEpoch');
+      encodeAcceptedRoot(policy.root, 'policy.root');
+      normalizePublicFee(policy.publicFee, 'policy.publicFee');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  export function fsProveMerkle(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    ledger: readonly BigIntVecInput[],
+    spent: readonly BigIntVecInput[],
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    nf1: BigIntVecInput,
+    nf2: BigIntVecInput,
+    opIn1: BigIntCommitOpening,
+    opIn2: BigIntCommitOpening,
+    opOut1: BigIntCommitOpening,
+    opOut2: BigIntCommitOpening,
+    out1Bits: readonly BigIntCommitOpening[],
+    out1Comps: readonly BigIntCommitOpening[],
+    out2Bits: readonly BigIntCommitOpening[],
+    out2Comps: readonly BigIntCommitOpening[],
+    yIn1: readonly BigIntCommitOpening[],
+    yIn2: readonly BigIntCommitOpening[],
+    yBalance: BigIntMatrixInput,
+    yOut1: BigIntMatrixInput,
+    yOut1Pairs: readonly BigIntMatrixInput[],
+    yOut2: BigIntMatrixInput,
+    yOut2Pairs: readonly BigIntMatrixInput[]
+  ): BigIntMerkleTransactionProof | null {
+    return fsProveMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      ledger,
+      spent,
+      0n,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      opIn1,
+      opIn2,
+      opOut1,
+      opOut2,
+      out1Bits,
+      out1Comps,
+      out2Bits,
+      out2Comps,
+      yIn1,
+      yIn2,
+      yBalance,
+      yOut1,
+      yOut1Pairs,
+      yOut2,
+      yOut2Pairs
+    );
+  }
+
+  export function fsProveMerkleWithFee(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    ledger: readonly BigIntVecInput[],
+    spent: readonly BigIntVecInput[],
+    publicFee: ConfidentialBigIntInput,
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    nf1: BigIntVecInput,
+    nf2: BigIntVecInput,
+    opIn1: BigIntCommitOpening,
+    opIn2: BigIntCommitOpening,
+    opOut1: BigIntCommitOpening,
+    opOut2: BigIntCommitOpening,
+    out1Bits: readonly BigIntCommitOpening[],
+    out1Comps: readonly BigIntCommitOpening[],
+    out2Bits: readonly BigIntCommitOpening[],
+    out2Comps: readonly BigIntCommitOpening[],
+    yIn1: readonly BigIntCommitOpening[],
+    yIn2: readonly BigIntCommitOpening[],
+    yBalance: BigIntMatrixInput,
+    yOut1: BigIntMatrixInput,
+    yOut1Pairs: readonly BigIntMatrixInput[],
+    yOut2: BigIntMatrixInput,
+    yOut2Pairs: readonly BigIntMatrixInput[]
+  ): BigIntMerkleTransactionProof | null {
+    try {
+      const fee = normalizePublicFee(publicFee, 'publicFee');
+      const spentRows = normalizeBigIntMatrix(spent, 'spent');
+      const nf1Vec = normalizeBigIntVec(nf1, 'nf1');
+      const nf2Vec = normalizeBigIntVec(nf2, 'nf2');
+      if (
+        containsBigIntVec(spentRows, nf1Vec) ||
+        containsBigIntVec(spentRows, nf2Vec) ||
+        sameBigIntVec(nf1Vec, nf2Vec)
+      ) {
+        return null;
+      }
+      const inputAmount = amountOfOpening(opIn1) + amountOfOpening(opIn2);
+      const outputAmount = amountOfOpening(opOut1) + amountOfOpening(opOut2);
+      if (inputAmount !== outputAmount + fee) {
+        return null;
+      }
+      const in1Member = ConfidentialMerkleBigInt.membershipProve(ledger, cIn1);
+      const in2Member = ConfidentialMerkleBigInt.membershipProve(ledger, cIn2);
+      if (in1Member === null || in2Member === null || in1Member.index === in2Member.index) {
+        return null;
+      }
+      const in1Nullifier = ConfidentialNullifierBigInt.fsProve(
+        params,
+        gamma,
+        ck,
+        nk,
+        cIn1,
+        nf1,
+        opIn1,
+        yIn1
+      );
+      const in2Nullifier = ConfidentialNullifierBigInt.fsProve(
+        params,
+        gamma,
+        ck,
+        nk,
+        cIn2,
+        nf2,
+        opIn2,
+        yIn2
+      );
+      const balance = ConfidentialBalanceBigInt.fsProve(
+        params,
+        gamma,
+        ck,
+        feeBalanceCommitment(params, ck, cIn1, cIn2, cOut1, cOut2, fee),
+        aggregateRandomness(opIn1, opIn2, opOut1, opOut2),
+        yBalance
+      );
+      const out1Range = ConfidentialRangeBigInt.fsProve(
+        params,
+        gamma,
+        k,
+        ck,
+        cOut1,
+        opOut1,
+        out1Bits,
+        out1Comps,
+        yOut1,
+        yOut1Pairs
+      );
+      const out2Range = ConfidentialRangeBigInt.fsProve(
+        params,
+        gamma,
+        k,
+        ck,
+        cOut2,
+        opOut2,
+        out2Bits,
+        out2Comps,
+        yOut2,
+        yOut2Pairs
+      );
+      if (
+        in1Nullifier === null ||
+        in2Nullifier === null ||
+        balance === null ||
+        out1Range === null ||
+        out2Range === null
+      ) {
+        return null;
+      }
+      return {
+        in1Member,
+        in2Member,
+        in1Nullifier,
+        in2Nullifier,
+        balance,
+        out1Range,
+        out2Range,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  export function fsVerifyMerkle(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    root: MerkleDigest,
+    spent: readonly BigIntVecInput[],
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    nf1: BigIntVecInput,
+    nf2: BigIntVecInput,
+    proof: BigIntMerkleTransactionProof
+  ): boolean {
+    return fsVerifyMerkleWithFee(
+      params,
+      gamma,
+      k,
+      ck,
+      nk,
+      root,
+      spent,
+      0n,
+      cIn1,
+      cIn2,
+      cOut1,
+      cOut2,
+      nf1,
+      nf2,
+      proof
+    );
+  }
+
+  export function fsVerifyMerkleWithFee(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    root: MerkleDigest,
+    spent: readonly BigIntVecInput[],
+    publicFee: ConfidentialBigIntInput,
+    cIn1: BigIntVecInput,
+    cIn2: BigIntVecInput,
+    cOut1: BigIntVecInput,
+    cOut2: BigIntVecInput,
+    nf1: BigIntVecInput,
+    nf2: BigIntVecInput,
+    proof: BigIntMerkleTransactionProof
+  ): boolean {
+    try {
+      normalizePublicFee(publicFee, 'publicFee');
+      transactionBignumMerkleProofPreimage(proof);
+      const spentRows = normalizeBigIntMatrix(spent, 'spent');
+      const nf1Vec = normalizeBigIntVec(nf1, 'nf1');
+      const nf2Vec = normalizeBigIntVec(nf2, 'nf2');
+      return (
+        ConfidentialBalanceBigInt.validCommitKey(params, ck) &&
+        ConfidentialBalanceBigInt.validCommitKey(params, nk) &&
+        ConfidentialMerkleBigInt.membershipVerify(cIn1, proof.in1Member) &&
+        ConfidentialMerkleBigInt.membershipVerify(cIn2, proof.in2Member) &&
+        proof.in1Member.root === root &&
+        proof.in2Member.root === root &&
+        proof.in1Member.index !== proof.in2Member.index &&
+        !containsBigIntVec(spentRows, nf1Vec) &&
+        !containsBigIntVec(spentRows, nf2Vec) &&
+        !sameBigIntVec(nf1Vec, nf2Vec) &&
+        ConfidentialNullifierBigInt.fsVerify(
+          params,
+          gamma,
+          ck,
+          nk,
+          cIn1,
+          nf1Vec,
+          normalizeBigIntNullifierProofInput(proof.in1Nullifier, 'proof.in1Nullifier')
+        ) &&
+        ConfidentialNullifierBigInt.fsVerify(
+          params,
+          gamma,
+          ck,
+          nk,
+          cIn2,
+          nf2Vec,
+          normalizeBigIntNullifierProofInput(proof.in2Nullifier, 'proof.in2Nullifier')
+        ) &&
+        ConfidentialBalanceBigInt.fsVerify(
+          params,
+          gamma,
+          ck,
+          feeBalanceCommitment(params, ck, cIn1, cIn2, cOut1, cOut2, publicFee),
+          normalizeBigIntBalanceProofInput(proof.balance, 'proof.balance')
+        ) &&
+        ConfidentialRangeBigInt.fsVerify(
+          params,
+          gamma,
+          k,
+          ck,
+          cOut1,
+          normalizeBigIntRangeProofInput(proof.out1Range, 'proof.out1Range')
+        ) &&
+        ConfidentialRangeBigInt.fsVerify(
+          params,
+          gamma,
+          k,
+          ck,
+          cOut2,
+          normalizeBigIntRangeProofInput(proof.out2Range, 'proof.out2Range')
+        )
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  export function fsVerifyMerkleEnvelope(
+    params: BigIntScalarCommitParams,
+    gamma: ConfidentialBigIntInput,
+    k: number,
+    ck: BigIntMatrixInput,
+    nk: BigIntMatrixInput,
+    spent: readonly BigIntVecInput[],
+    envelope: BigIntConfidentialTransactionEnvelope,
+    policy: BigIntConfidentialTransactionContextPolicy
+  ): boolean {
+    try {
+      const contextDigest = transactionContextDigest(envelope.context);
+      return (
+        transactionContextPolicyIsComplete(policy) &&
+        envelope.contextDigest === contextDigest &&
+        transactionContextMatchesPolicy(envelope.context, policy) &&
+        fsVerifyMerkleWithFee(
+          params,
+          gamma,
+          k,
+          ck,
+          nk,
+          envelope.context.root.digest,
+          spent,
+          envelope.context.publicFee,
+          envelope.context.cIn1,
+          envelope.context.cIn2,
+          envelope.context.cOut1,
+          envelope.context.cOut2,
+          envelope.context.nf1,
+          envelope.context.nf2,
+          envelope.proof
+        ) &&
+        envelope.proof.in1Member.siblings.length === envelope.context.root.depth &&
+        envelope.proof.in2Member.siblings.length === envelope.context.root.depth
+      );
+    } catch {
+      return false;
+    }
   }
 }
 

@@ -345,18 +345,21 @@ reference vector with OCaml/Haskell multiprecision preview parity, the range
 slice now has a q83 `k = 64` BigInt reference vector with OCaml/Haskell
 multiprecision preview parity, and the nullifier slice now has q83 BigInt
 reference and native preview parity. TypeScript now exposes versioned
-`ConfidentialMerkleBigInt` and `ConfidentialTransactionBigInt` digest namespaces,
-and OCaml/Haskell now expose matching `ct-bignum-*` native preview commands
-checked against `tests/fixtures/confidential-bignum-transaction-vectors.json`
-for q83-scale Merkle leaves, transaction contexts, proof digests, envelopes,
+`ConfidentialMerkleBigInt` and `ConfidentialTransactionBigInt` bignum namespaces
+that compose balance, range, nullifier, Merkle membership, transaction digest,
+and envelope-policy checks for a BigInt Merkle transfer reference path.
+OCaml/Haskell now expose matching `ct-bignum-*` native preview commands checked
+against `tests/fixtures/confidential-bignum-transaction-vectors.json` for
+q83-scale Merkle leaves, transaction contexts, proof digests, envelopes,
 accepted-root windows, and wallet proof requests. The runtime-surface manifest
 still records `runtimeIntegerBoundary.status =
 "blocked_by_transaction_i64_encoding"`, and
 `scripts/check_confidential_runtime_surface.py --require-production` fails while
-launch callers remain on the signed-64 transaction namespace. Production still
-needs launch-callers moved to the bignum namespace, canonical bignum
-serialization for every proof API and transaction/runtime integer field that can
-carry widened values, and widened-runtime benchmark evidence across all runtimes.
+the selected launch namespaces remain signed-64. Production still needs native
+full-proof bignum parity, launch-callers moved to selected bignum namespaces,
+canonical bignum serialization for every remaining proof API and
+transaction/runtime integer field that can carry widened values, and
+widened-runtime benchmark evidence across all runtimes.
 External estimator evidence alone is not enough to
 mark the candidate launchable.
 

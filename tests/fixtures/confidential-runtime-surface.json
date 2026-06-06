@@ -245,10 +245,17 @@
         "transactionAcceptedRootWindowDigest",
         "transactionAcceptedRootWindowRoots",
         "transactionContextMatchesAcceptedRootWindow",
+        "transactionContextMatchesPolicy",
+        "transactionContextPolicyIsComplete",
         "transactionWalletProofRequestFromWindow",
         "merkleLedgerRoot",
         "merkleMembershipProve",
-        "merkleMembershipVerify"
+        "merkleMembershipVerify",
+        "fsProveMerkle",
+        "fsProveMerkleWithFee",
+        "fsVerifyMerkle",
+        "fsVerifyMerkleWithFee",
+        "fsVerifyMerkleEnvelope"
       ]
     },
     "requiredSnippets": [
@@ -300,8 +307,8 @@
       "transactionBignumMerkleProofPreimage("
     ],
     "requiredForProduction": [
-      "Move launch callers from the signed-64 transaction namespace to the bignum namespace now that TypeScript, OCaml, and Haskell preview parity is pinned.",
-      "Regenerate transaction, Merkle, proof-digest, envelope, accepted-root-window, wallet-request, and backend parity vectors under the selected bignum namespace across all runtimes.",
+      "Promote selected launch callers from the signed-64 transaction namespace to the bignum namespace once native full-proof parity and widened-runtime evidence are pinned.",
+      "Regenerate transaction, Merkle, proof-digest, envelope, accepted-root-window, wallet-request, full-proof, and backend parity vectors under the selected bignum namespace across all runtimes.",
       "Run realistic widened-modulus prover/verifier benchmarks across TypeScript, OCaml, and Haskell before clearing runtime_integer_model_incompatible."
     ]
   },

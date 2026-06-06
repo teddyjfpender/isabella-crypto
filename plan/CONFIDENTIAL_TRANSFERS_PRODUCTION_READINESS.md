@@ -41,9 +41,12 @@ range proof reference path in TypeScript BigInt arithmetic with OCaml/Haskell
 multiprecision preview parity, and
 `tests/fixtures/confidential-bigint-nullifier-vectors.json` pins a q83
 nullifier proof reference path with OCaml/Haskell multiprecision preview parity.
-Full native launch parity, the rest of the proof APIs, and transaction/runtime
-integer fields that can carry widened values still need multiprecision
-integration and regenerated vectors/benchmarks.
+`ConfidentialTransactionBigInt` now composes those TypeScript BigInt proof
+slices with bignum Merkle membership, transaction digests, fee-aware balance
+checks, and envelope-policy verification. Full native launch parity, selected
+bignum launch namespace wiring, remaining transaction/runtime integer fields
+that can carry widened values, and regenerated vectors/benchmarks still need
+multiprecision integration before production.
 
 ## Current Stabilization Commands
 
