@@ -59,9 +59,9 @@ build-export:
 	@$(ISABELLE) build -d $(CANON_DIR) -b -j1 $(CANON_EXPORT_SESSION)
 	@echo "Canon export session built"
 
-# Check formal proof hygiene (no sorry/oops/admit in Canon theories)
+# Check formal proof hygiene and build key Canon sessions when Isabelle is available
 check-formalization:
-	@./scripts/check_formalization.sh
+	@CANON_DIR="$(CANON_DIR)" CANON_SESSIONS="$(CANON_SESSIONS)" ISABELLE="$(ISABELLE)" ./scripts/check_formalization.sh
 
 # Build Haskell library
 haskell:
@@ -286,7 +286,7 @@ help:
 	@echo "  build-export        Build optional Canon export session ($(CANON_EXPORT_SESSION))"
 	@echo "  all                 Build Canon + all libraries"
 	@echo "  canon               Alias for build-cool"
-	@echo "  check-formalization Check Canon has no sorry/oops/admit"
+	@echo "  check-formalization Check Canon proof hygiene and build key sessions when available"
 	@echo "  haskell             Build Haskell library"
 	@echo "  ocaml               Build OCaml library"
 	@echo "  typescript          Build TypeScript library (via js_of_ocaml)"

@@ -407,6 +407,8 @@ structured deterministic commitment key and is not a security estimate.
 Completed:
 
 - `./scripts/check_formalization.sh`
+- `./scripts/check_formalization.sh` now builds `Canon_Rings Canon_Crypto
+  Canon_ZK` when Isabelle is available
 - `isabelle build -d Canon Canon_ZK`
 - `make build-cool`
 - `cd tests && bun run audit-confidential`
