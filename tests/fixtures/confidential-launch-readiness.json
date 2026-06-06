@@ -142,7 +142,7 @@
           "snippets": [
             "ISABELLA-CT-MERKLE-BIGNUM-v1",
             "ISABELLA-CT-TX-BIGNUM-v1",
-            "typescript-bignum-transaction-namespace-preview"
+            "native-bignum-transaction-namespace-preview"
           ]
         },
         {

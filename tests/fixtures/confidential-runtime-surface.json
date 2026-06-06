@@ -44,7 +44,18 @@
       "ct-nullifier-bigint-fs-fields",
       "ct-nullifier-bigint-fs-challenges",
       "ct-nullifier-bigint-prove",
-      "ct-nullifier-bigint-verify"
+      "ct-nullifier-bigint-verify",
+      "ct-bignum-merkle-leaf",
+      "ct-bignum-merkle-empty",
+      "ct-bignum-merkle-node",
+      "ct-bignum-merkle-root",
+      "ct-bignum-merkle-member-prove",
+      "ct-bignum-merkle-member-verify",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-wallet-proof-request-digest",
+      "ct-bignum-accepted-root-window-digest"
     ],
     "ocamlPreviewCommands": [
       "ct-balance-bigint-rand-commit",
@@ -60,7 +71,18 @@
       "ct-nullifier-bigint-fs-fields",
       "ct-nullifier-bigint-fs-challenges",
       "ct-nullifier-bigint-prove",
-      "ct-nullifier-bigint-verify"
+      "ct-nullifier-bigint-verify",
+      "ct-bignum-merkle-leaf",
+      "ct-bignum-merkle-empty",
+      "ct-bignum-merkle-node",
+      "ct-bignum-merkle-root",
+      "ct-bignum-merkle-member-prove",
+      "ct-bignum-merkle-member-verify",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-wallet-proof-request-digest",
+      "ct-bignum-accepted-root-window-digest"
     ],
     "scaffoldCommands": [
       "ct-member-prove",
@@ -270,8 +292,7 @@
       "transactionBignumMerkleProofPreimage("
     ],
     "requiredForProduction": [
-      "Port the versioned transaction/Merkle bignum namespace to OCaml, Haskell, and native CLIs before digest compatibility changes.",
-      "Move launch callers from the signed-64 transaction namespace to the bignum namespace once backend parity is pinned.",
+      "Move launch callers from the signed-64 transaction namespace to the bignum namespace now that TypeScript, OCaml, and Haskell preview parity is pinned.",
       "Regenerate transaction, Merkle, proof-digest, envelope, accepted-root-window, wallet-request, and backend parity vectors under the selected bignum namespace across all runtimes.",
       "Run realistic widened-modulus prover/verifier benchmarks across TypeScript, OCaml, and Haskell before clearing runtime_integer_model_incompatible."
     ]
@@ -286,6 +307,14 @@
       "ct-merkle-member-verify",
       "ct-bignum-encode",
       "ct-bignum-vector-encode",
+      "ct-bignum-merkle-leaf",
+      "ct-bignum-merkle-root",
+      "ct-bignum-merkle-member-prove",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-wallet-proof-request-digest",
+      "ct-bignum-accepted-root-window-digest",
       "ct-balance-bigint-rand-commit",
       "ct-balance-bigint-fs-fields",
       "ct-balance-bigint-fs-challenges",
@@ -327,6 +356,14 @@
       "ct-merkle-member-verify",
       "ct-bignum-encode",
       "ct-bignum-vector-encode",
+      "ct-bignum-merkle-leaf",
+      "ct-bignum-merkle-root",
+      "ct-bignum-merkle-member-prove",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest",
+      "ct-bignum-merkle-envelope-digest",
+      "ct-bignum-wallet-proof-request-digest",
+      "ct-bignum-accepted-root-window-digest",
       "ct-balance-bigint-rand-commit",
       "ct-balance-bigint-fs-fields",
       "ct-balance-bigint-fs-challenges",
@@ -379,6 +416,28 @@
       "ISABELLA-CT-MERKLE-BIGNUM-v1",
       "ISABELLA-CT-TX-BIGNUM-v1",
       "transactionMerkleProofPreimage"
+    ],
+    "isabella.ml/bin/isabella_cli.ml": [
+      "ISABELLA-CT-MERKLE-BIGNUM-v1",
+      "ISABELLA-CT-TX-BIGNUM-v1",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest"
+    ],
+    "isabella.hs/app/CLI/Commands.hs": [
+      "ISABELLA-CT-MERKLE-BIGNUM-v1",
+      "ISABELLA-CT-TX-BIGNUM-v1",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest"
+    ],
+    "tests/src/validate-ocaml.ts": [
+      "confidential-bignum-transaction-vectors.json",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest"
+    ],
+    "tests/src/validate-haskell.ts": [
+      "confidential-bignum-transaction-vectors.json",
+      "ct-bignum-transaction-context",
+      "ct-bignum-merkle-proof-digest"
     ],
     "tests/src/confidential-bignum-transaction.test.ts": [
       "ConfidentialMerkleBigInt",

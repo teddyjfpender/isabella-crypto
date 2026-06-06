@@ -15,7 +15,8 @@ import qualified Canon.ZK.Internal.RepeatedFS as RepeatedFS
 import qualified Canon.Zq as Zq
 import Data.Bits ((.&.))
 import Data.Char (ord)
-import Data.List (intercalate, sort, zip4)
+import Data.List (findIndex, intercalate, sort, zip4)
+import Data.Word (Word8)
 import GHC.Clock (getMonotonicTimeNSec)
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
@@ -85,6 +86,17 @@ runCommand format cmd args = case cmd of
     "ct-merkle-member-verify" -> cmdCtMerkleMemberVerify format args
     "ct-bignum-encode" -> cmdCtBignumEncode format args
     "ct-bignum-vector-encode" -> cmdCtBignumVectorEncode format args
+    "ct-bignum-merkle-leaf" -> cmdCtBignumMerkleLeaf format args
+    "ct-bignum-merkle-empty" -> cmdCtBignumMerkleEmpty format args
+    "ct-bignum-merkle-node" -> cmdCtBignumMerkleNode format args
+    "ct-bignum-merkle-root" -> cmdCtBignumMerkleRoot format args
+    "ct-bignum-merkle-member-prove" -> cmdCtBignumMerkleMemberProve format args
+    "ct-bignum-merkle-member-verify" -> cmdCtBignumMerkleMemberVerify format args
+    "ct-bignum-transaction-context" -> cmdCtBignumTransactionContext format args
+    "ct-bignum-merkle-proof-digest" -> cmdCtBignumMerkleProofDigest format args
+    "ct-bignum-merkle-envelope-digest" -> cmdCtBignumMerkleEnvelopeDigest format args
+    "ct-bignum-wallet-proof-request-digest" -> cmdCtBignumWalletProofRequestDigest format args
+    "ct-bignum-accepted-root-window-digest" -> cmdCtBignumAcceptedRootWindowDigest format args
     "ct-transaction-context" -> cmdCtTransactionContext format args
     "ct-merkle-proof-digest" -> cmdCtMerkleProofDigest format args
     "ct-merkle-envelope-digest" -> cmdCtMerkleEnvelopeDigest format args
@@ -224,6 +236,450 @@ encodeBignumInteger value =
 encodeBignumIntegerVector :: [Integer] -> [Int]
 encodeBignumIntegerVector values =
     bignumLengthLeBytes (length values) ++ concatMap encodeBignumInteger values
+
+bignumMerkleDst :: String
+bignumMerkleDst = "ISABELLA-CT-MERKLE-BIGNUM-v1"
+
+bignumTransactionDst :: String
+bignumTransactionDst = "ISABELLA-CT-TX-BIGNUM-v1"
+
+sisNoteProtocolId :: String
+sisNoteProtocolId = "ISABELLA-CT-SIS-NOTE"
+
+transactionInt64LeBytes :: Int -> [Word8]
+transactionInt64LeBytes value =
+    [ fromIntegral ((asInteger `div` (256 ^ i)) `mod` 256)
+    | i <- [0 :: Int .. 7]
+    ]
+  where
+    asInteger = toInteger value
+
+transactionHexByte :: Word8 -> String
+transactionHexByte byte =
+    let alphabet = "0123456789abcdef"
+        value = fromIntegral byte :: Int
+        hi = (value `div` 16) `mod` 16
+        lo = value `mod` 16
+     in [alphabet !! hi, alphabet !! lo]
+
+transactionDigestHex :: [Word8] -> String
+transactionDigestHex = concatMap transactionHexByte
+
+transactionHexValue :: Char -> Maybe Word8
+transactionHexValue c
+    | c >= '0' && c <= '9' = Just (fromIntegral (ord c - ord '0'))
+    | c >= 'a' && c <= 'f' = Just (fromIntegral (10 + ord c - ord 'a'))
+    | otherwise = Nothing
+
+transactionHexToBytes :: String -> Maybe [Word8]
+transactionHexToBytes hex
+    | length hex /= 64 = Nothing
+    | otherwise = go hex
+  where
+    go [] = Just []
+    go (hi:lo:rest) = do
+        hiValue <- transactionHexValue hi
+        loValue <- transactionHexValue lo
+        tailBytes <- go rest
+        pure ((hiValue * 16 + loValue) : tailBytes)
+    go _ = Nothing
+
+encodeTransactionAscii :: String -> String -> [Word8]
+encodeTransactionAscii label value =
+    let bytes = map ord value
+        validByte index byte =
+          if byte >= 0x20 && byte <= 0x7e
+            then fromIntegral byte
+            else error (label ++ "[" ++ show index ++ "] must be printable ASCII")
+     in transactionInt64LeBytes (length bytes) ++ zipWith validByte [0 :: Int ..] bytes
+
+encodeTransactionDigest :: String -> String -> [Word8]
+encodeTransactionDigest label digest =
+    case transactionHexToBytes digest of
+      Just bytes -> transactionInt64LeBytes (length bytes) ++ bytes
+      Nothing -> error (label ++ " must be a canonical lowercase SHA3-256 digest")
+
+encodeTransactionDigestVector :: String -> [String] -> [Word8]
+encodeTransactionDigestVector label digests =
+    transactionInt64LeBytes (length digests) ++
+    concat
+      [ encodeTransactionDigest (label ++ "[" ++ show index ++ "]") digest
+      | (index, digest) <- zip [0 :: Int ..] digests
+      ]
+
+encodeTransactionBoolVec :: [Bool] -> [Word8]
+encodeTransactionBoolVec values =
+    transactionInt64LeBytes (length values) ++
+    concatMap (transactionInt64LeBytes . boolInt) values
+  where
+    boolInt True = 1
+    boolInt False = 0
+
+encodeTransactionAcceptedRoot :: String -> (String, Int) -> [Word8]
+encodeTransactionAcceptedRoot label (digest, depth) =
+    encodeTransactionDigest (label ++ ".digest") digest ++
+    encodeNonNegativeI64 (label ++ ".depth") depth
+
+encodeTransactionAcceptedRootVector :: String -> [(String, Int)] -> [Word8]
+encodeTransactionAcceptedRootVector label roots =
+    transactionInt64LeBytes (length roots) ++
+    concat
+      [ encodeTransactionAcceptedRoot (label ++ "[" ++ show index ++ "]") root
+      | (index, root) <- zip [0 :: Int ..] roots
+      ]
+
+encodeTransactionAcceptedRootWindowEntry :: String -> (String, Int, Int, Int) -> [Word8]
+encodeTransactionAcceptedRootWindowEntry label (digest, depth, validFromEpoch, expiresAtEpoch)
+    | expiresAtEpoch <= validFromEpoch =
+        error (label ++ ".expiresAtEpoch must be greater than validFromEpoch")
+    | otherwise =
+        encodeTransactionAcceptedRoot (label ++ ".root") (digest, depth) ++
+        encodeNonNegativeI64 (label ++ ".validFromEpoch") validFromEpoch ++
+        encodeNonNegativeI64 (label ++ ".expiresAtEpoch") expiresAtEpoch
+
+encodeTransactionAcceptedRootWindowEntryVector :: String -> [(String, Int, Int, Int)] -> [Word8]
+encodeTransactionAcceptedRootWindowEntryVector label entries =
+    transactionInt64LeBytes (length entries) ++
+    concat
+      [ encodeTransactionAcceptedRootWindowEntry (label ++ "[" ++ show index ++ "]") entry
+      | (index, entry) <- zip [0 :: Int ..] entries
+      ]
+
+requireSortedUnique :: Ord a => String -> [a] -> ()
+requireSortedUnique label values
+    | any (uncurry (>=)) (zip values (drop 1 values)) =
+        error (label ++ " must be sorted with no duplicates")
+    | otherwise = ()
+
+requireCanonicalAcceptedRootSet :: String -> [(String, Int)] -> ()
+requireCanonicalAcceptedRootSet label roots
+    | null roots = error (label ++ " must not be empty")
+    | otherwise =
+        let encoded = encodeTransactionAcceptedRootVector label roots
+         in length encoded `seq` requireSortedUnique label roots
+
+requireCanonicalAcceptedRootWindow :: Int -> String -> [(String, Int, Int, Int)] -> ()
+requireCanonicalAcceptedRootWindow ledgerEpoch label entries
+    | null entries = error (label ++ " must not be empty")
+    | otherwise =
+        let encoded = encodeTransactionAcceptedRootWindowEntryVector label entries
+            roots = [(digest, depth) | (digest, depth, _, _) <- entries]
+            live = all entryLive entries
+         in length encoded `seq`
+            if not live
+              then error (label ++ " contains a root that is not live at ledgerEpoch")
+              else requireSortedUnique label roots
+  where
+    entryLive (_, _, validFromEpoch, expiresAtEpoch) =
+        validFromEpoch <= ledgerEpoch && ledgerEpoch < expiresAtEpoch
+
+bignumBytes :: [Int] -> [Word8]
+bignumBytes = map fromIntegral
+
+encodeNonNegativeI64 :: String -> Int -> [Word8]
+encodeNonNegativeI64 label value
+    | value < 0 = error (label ++ " must be non-negative")
+    | otherwise = transactionInt64LeBytes value
+
+encodeBignumValueBytes :: Integer -> [Word8]
+encodeBignumValueBytes = bignumBytes . encodeBignumInteger
+
+encodeBignumVectorBytes :: String -> [Integer] -> [Word8]
+encodeBignumVectorBytes _ = bignumBytes . encodeBignumIntegerVector
+
+encodeBignumMatrixBytes :: String -> [[Integer]] -> [Word8]
+encodeBignumMatrixBytes label rows =
+    encodeNonNegativeI64 (label ++ ".length") (length rows) ++
+    concat
+      [ encodeBignumVectorBytes (label ++ "[" ++ show index ++ "]") row
+      | (index, row) <- zip [0 :: Int ..] rows
+      ]
+
+encodeBignumCubeBytes :: String -> [[[Integer]]] -> [Word8]
+encodeBignumCubeBytes label cubes =
+    encodeNonNegativeI64 (label ++ ".length") (length cubes) ++
+    concat
+      [ encodeBignumMatrixBytes (label ++ "[" ++ show index ++ "]") cube
+      | (index, cube) <- zip [0 :: Int ..] cubes
+      ]
+
+bignumDigest :: [Word8] -> String
+bignumDigest = transactionDigestHex . RepeatedFS.sha3_256
+
+bignumMerklePreimage :: Int -> [Word8] -> [Word8]
+bignumMerklePreimage tag body =
+    map (fromIntegral . ord) bignumMerkleDst ++ encodeNonNegativeI64 "merkle tag" tag ++ body
+
+bignumMerkleLeaf :: [Integer] -> String
+bignumMerkleLeaf commitment =
+    bignumDigest (bignumMerklePreimage 0 (encodeBignumVectorBytes "commitment" commitment))
+
+bignumMerkleEmpty :: Int -> String
+bignumMerkleEmpty width =
+    bignumDigest (bignumMerklePreimage 2 (encodeNonNegativeI64 "width" width))
+
+bignumMerkleNode :: String -> String -> String
+bignumMerkleNode left right =
+    bignumDigest
+      (bignumMerklePreimage
+        1
+        (encodeTransactionDigest "left" left ++ encodeTransactionDigest "right" right))
+
+sameBignumWidth :: [[Integer]] -> Int -> Bool
+sameBignumWidth commitments width =
+    all ((== width) . length) commitments
+
+bignumMerkleCompressLevel :: Int -> [String] -> [String]
+bignumMerkleCompressLevel _ [] = []
+bignumMerkleCompressLevel _ [x] = [x]
+bignumMerkleCompressLevel width xs =
+    go xs
+  where
+    go [] = []
+    go [left] = [bignumMerkleNode left (bignumMerkleEmpty width)]
+    go (left:right:rest) = bignumMerkleNode left right : go rest
+
+bignumMerkleRoot :: [[Integer]] -> String
+bignumMerkleRoot commitments =
+    let width = case commitments of
+          [] -> 0
+          first:_ -> length first
+     in if not (sameBignumWidth commitments width)
+          then error "Bignum Merkle commitments must all have the same width"
+          else case commitments of
+            [] -> bignumMerkleEmpty 0
+            _ -> go (map bignumMerkleLeaf commitments)
+              where
+                go [] = bignumMerkleEmpty width
+                go [x] = x
+                go level = go (bignumMerkleCompressLevel width level)
+
+bignumMerklePathRoot :: [Integer] -> [String] -> [Bool] -> Maybe String
+bignumMerklePathRoot commitment siblings directions =
+    go (bignumMerkleLeaf commitment) siblings directions
+  where
+    go acc [] [] = Just acc
+    go acc (sibling:restSiblings) (False:restDirections) =
+        go (bignumMerkleNode acc sibling) restSiblings restDirections
+    go acc (sibling:restSiblings) (True:restDirections) =
+        go (bignumMerkleNode sibling acc) restSiblings restDirections
+    go _ _ _ = Nothing
+
+bignumMerkleMembershipProve :: [[Integer]] -> [Integer] -> Maybe ConfidentialMerkle.MerkleMembershipProof
+bignumMerkleMembershipProve ledger commitment = do
+    index <- findIndex (== commitment) ledger
+    let width = case ledger of
+          [] -> length commitment
+          first:_ -> length first
+    if not (sameBignumWidth ledger width)
+      then Nothing
+      else go index width index (map bignumMerkleLeaf ledger) [] []
+  where
+    go _ _ _ [] _ _ = Nothing
+    go originalIndex _ _ [rt] siblings directions =
+        Just
+          ConfidentialMerkle.MerkleMembershipProof
+            { ConfidentialMerkle.merkle_index = originalIndex
+            , ConfidentialMerkle.merkle_root = rt
+            , ConfidentialMerkle.merkle_siblings = reverse siblings
+            , ConfidentialMerkle.merkle_directions = reverse directions
+            }
+    go originalIndex width current level siblings directions =
+        let isRight = odd current
+            sibling =
+              if isRight
+                then level !! (current - 1)
+                else if current + 1 < length level
+                  then level !! (current + 1)
+                  else bignumMerkleEmpty width
+         in go
+              originalIndex
+              width
+              (current `div` 2)
+              (bignumMerkleCompressLevel width level)
+              (sibling : siblings)
+              (isRight : directions)
+
+bignumIndexDirections :: Int -> Int -> [Bool]
+bignumIndexDirections depth index
+    | depth <= 0 = []
+    | otherwise = odd index : bignumIndexDirections (depth - 1) (index `div` 2)
+
+bignumMerkleMembershipVerify :: [Integer] -> ConfidentialMerkle.MerkleMembershipProof -> Bool
+bignumMerkleMembershipVerify commitment proof =
+    ConfidentialMerkle.merkle_directions proof ==
+      bignumIndexDirections (length (ConfidentialMerkle.merkle_siblings proof)) (ConfidentialMerkle.merkle_index proof) &&
+    case (transactionHexToBytes (ConfidentialMerkle.merkle_root proof),
+          bignumMerklePathRoot commitment (ConfidentialMerkle.merkle_siblings proof) (ConfidentialMerkle.merkle_directions proof)) of
+      (Just _, Just rt) -> rt == ConfidentialMerkle.merkle_root proof
+      _ -> False
+
+bignumTransactionTaggedPreimage :: Int -> [Word8] -> [Word8]
+bignumTransactionTaggedPreimage tag body =
+    map (fromIntegral . ord) bignumTransactionDst ++
+    encodeNonNegativeI64 "transaction tag" tag ++
+    encodeTransactionAscii "protocolId" sisNoteProtocolId ++
+    body
+
+encodeAcceptedRootBytes :: String -> (String, Int) -> [Word8]
+encodeAcceptedRootBytes = encodeTransactionAcceptedRoot
+
+encodeAcceptedRootVectorBytes :: String -> [(String, Int)] -> [Word8]
+encodeAcceptedRootVectorBytes = encodeTransactionAcceptedRootVector
+
+encodeAcceptedRootWindowEntryVectorBytes :: String -> [(String, Int, Int, Int)] -> [Word8]
+encodeAcceptedRootWindowEntryVectorBytes = encodeTransactionAcceptedRootWindowEntryVector
+
+bignumTransactionContextPreimage ::
+  Int -> String -> Int -> Int -> String -> Int -> Integer ->
+  [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Word8]
+bignumTransactionContextPreimage protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
+    map (fromIntegral . ord) bignumTransactionDst ++
+    encodeNonNegativeI64 "transaction tag" 0 ++
+    encodeTransactionAscii "protocolId" sisNoteProtocolId ++
+    encodeNonNegativeI64 "protocolVersion" protocolVersion ++
+    encodeTransactionAscii "networkId" networkId ++
+    encodeNonNegativeI64 "assetId" assetId ++
+    encodeNonNegativeI64 "ledgerEpoch" ledgerEpoch ++
+    encodeAcceptedRootBytes "root" (rt, rootDepth) ++
+    encodeBignumValueBytes publicFee ++
+    encodeBignumVectorBytes "cIn1" cIn1 ++
+    encodeBignumVectorBytes "cIn2" cIn2 ++
+    encodeBignumVectorBytes "cOut1" cOut1 ++
+    encodeBignumVectorBytes "cOut2" cOut2 ++
+    encodeBignumVectorBytes "nf1" nf1 ++
+    encodeBignumVectorBytes "nf2" nf2
+
+bignumTransactionContextDigest ::
+  Int -> String -> Int -> Int -> String -> Int -> Integer ->
+  [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> String
+bignumTransactionContextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 =
+    bignumDigest
+      (bignumTransactionContextPreimage
+        protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+        cIn1 cIn2 cOut1 cOut2 nf1 nf2)
+
+bignumAcceptedRootWindowDigest :: Int -> String -> Int -> Int -> [String] -> [Int] -> [Int] -> [Int] -> String
+bignumAcceptedRootWindowDigest protocolVersion networkId assetId ledgerEpoch roots rootDepths validFromEpochs expiresAtEpochs =
+    let lengthsOk =
+          length roots == length rootDepths &&
+          length roots == length validFromEpochs &&
+          length roots == length expiresAtEpochs
+        entries = zip4 roots rootDepths validFromEpochs expiresAtEpochs
+     in if not lengthsOk
+          then error "acceptedRootWindow.roots vectors must have the same length"
+          else
+            requireCanonicalAcceptedRootWindow ledgerEpoch "acceptedRootWindow.roots" entries `seq`
+            bignumDigest
+              (bignumTransactionTaggedPreimage
+                4
+                ( encodeNonNegativeI64 "acceptedRootWindow.protocolVersion" protocolVersion ++
+                  encodeTransactionAscii "acceptedRootWindow.networkId" networkId ++
+                  encodeNonNegativeI64 "acceptedRootWindow.assetId" assetId ++
+                  encodeNonNegativeI64 "acceptedRootWindow.ledgerEpoch" ledgerEpoch ++
+                  encodeAcceptedRootWindowEntryVectorBytes "acceptedRootWindow.roots" entries
+                ))
+
+bignumMembershipPreimage :: String -> ConfidentialMerkle.MerkleMembershipProof -> [Word8]
+bignumMembershipPreimage label proof
+    | length (ConfidentialMerkle.merkle_siblings proof) /=
+        length (ConfidentialMerkle.merkle_directions proof) =
+        error (label ++ ".siblings and directions must have the same length")
+    | otherwise =
+        encodeNonNegativeI64 (label ++ ".index") (ConfidentialMerkle.merkle_index proof) ++
+        encodeTransactionDigest (label ++ ".root") (ConfidentialMerkle.merkle_root proof) ++
+        encodeTransactionDigestVector (label ++ ".siblings") (ConfidentialMerkle.merkle_siblings proof) ++
+        encodeTransactionBoolVec (ConfidentialMerkle.merkle_directions proof)
+
+bignumNullifierProofPreimage :: String -> BigNfProof -> [Word8]
+bignumNullifierProofPreimage label proof =
+    encodeBignumMatrixBytes (label ++ ".aCommits") (bigNfACommits proof) ++
+    encodeBignumMatrixBytes (label ++ ".aNullifiers") (bigNfANullifiers proof) ++
+    encodeBignumMatrixBytes (label ++ ".zMsgs") (bigNfZMsgs proof) ++
+    encodeBignumMatrixBytes (label ++ ".zRands") (bigNfZRands proof)
+
+bignumBalanceProofPreimage :: String -> BigCbProof -> [Word8]
+bignumBalanceProofPreimage label proof =
+    encodeBignumMatrixBytes (label ++ ".as") (bigCbAs proof) ++
+    encodeBignumMatrixBytes (label ++ ".zs") (bigCbZs proof)
+
+bignumRangeProofPreimage :: String -> BigCrProof -> [Word8]
+bignumRangeProofPreimage label proof =
+    encodeBignumMatrixBytes (label ++ ".bits") (bigCrBits proof) ++
+    encodeBignumMatrixBytes (label ++ ".comps") (bigCrComps proof) ++
+    encodeBignumMatrixBytes (label ++ ".amountAs") (bigCrAmountAs proof) ++
+    encodeBignumMatrixBytes (label ++ ".amountZs") (bigCrAmountZs proof) ++
+    encodeBignumCubeBytes (label ++ ".pairAss") (bigCrPairAss proof) ++
+    encodeBignumCubeBytes (label ++ ".pairZss") (bigCrPairZss proof)
+
+bignumMerkleProofPreimage :: BigMerkleTransactionProof -> [Word8]
+bignumMerkleProofPreimage proof =
+    bignumTransactionTaggedPreimage 1 $
+      bignumMembershipPreimage "in1Member" (bigTxIn1Member proof) ++
+      bignumMembershipPreimage "in2Member" (bigTxIn2Member proof) ++
+      bignumNullifierProofPreimage "in1Nullifier" (bigTxIn1Nullifier proof) ++
+      bignumNullifierProofPreimage "in2Nullifier" (bigTxIn2Nullifier proof) ++
+      bignumBalanceProofPreimage "balance" (bigTxBalance proof) ++
+      bignumRangeProofPreimage "out1Range" (bigTxOut1Range proof) ++
+      bignumRangeProofPreimage "out2Range" (bigTxOut2Range proof)
+
+bignumMerkleProofDigest :: BigMerkleTransactionProof -> String
+bignumMerkleProofDigest = bignumDigest . bignumMerkleProofPreimage
+
+bignumEnvelopeDigest ::
+  String -> Int -> String -> Int -> Int -> String -> Int -> Integer ->
+  [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] ->
+  BigMerkleTransactionProof -> String
+bignumEnvelopeDigest contextDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof =
+    let computedDigest =
+          bignumTransactionContextDigest
+            protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+            cIn1 cIn2 cOut1 cOut2 nf1 nf2
+     in if contextDigest /= computedDigest
+          then error "contextDigest does not match canonical bignum transaction context"
+          else
+            bignumDigest
+              (bignumTransactionTaggedPreimage
+                2
+                (encodeTransactionDigest "contextDigest" computedDigest ++
+                 encodeTransactionDigest "proofDigest" (bignumMerkleProofDigest proof)))
+
+bignumWalletProofRequestDigest ::
+  Int -> String -> Int -> Int -> String -> Int -> Integer ->
+  [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] -> [Integer] ->
+  [String] -> [Int] -> [[Integer]] -> String
+bignumWalletProofRequestDigest protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+  cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots acceptedRootDepths spentNullifiers =
+    let rootLengthsOk =
+          if length acceptedRoots == length acceptedRootDepths
+            then ()
+            else error "acceptedRoots and acceptedRootDepths must have the same length"
+        acceptedRootPairs = zip acceptedRoots acceptedRootDepths
+        contextDigest =
+          bignumTransactionContextDigest
+            protocolVersion networkId assetId ledgerEpoch rt rootDepth publicFee
+            cIn1 cIn2 cOut1 cOut2 nf1 nf2
+     in rootLengthsOk `seq`
+        requireCanonicalAcceptedRootSet "acceptedRoots" acceptedRootPairs `seq`
+        requireSortedUnique "spentNullifiers" spentNullifiers `seq`
+        if (rt, rootDepth) `notElem` acceptedRootPairs
+          then error "context.root must be inside acceptedRoots"
+          else
+            if nf1 == nf2
+              then error "context nullifiers must be distinct"
+              else
+                if nf1 `elem` spentNullifiers || nf2 `elem` spentNullifiers
+                  then error "context nullifiers must be absent from spentNullifiers"
+                  else
+                    bignumDigest
+                      (bignumTransactionTaggedPreimage
+                        3
+                        (encodeTransactionDigest "contextDigest" contextDigest ++
+                         encodeAcceptedRootVectorBytes "acceptedRoots" acceptedRootPairs ++
+                         encodeBignumMatrixBytes "spentNullifiers" spentNullifiers))
 
 bignumHex :: [Int] -> String
 bignumHex = concatMap bignumHexByte
@@ -486,6 +942,16 @@ data BigNfProof = BigNfProof
   , bigNfANullifiers :: [[Integer]]
   , bigNfZMsgs :: [[Integer]]
   , bigNfZRands :: [[Integer]]
+  }
+
+data BigMerkleTransactionProof = BigMerkleTransactionProof
+  { bigTxIn1Member :: ConfidentialMerkle.MerkleMembershipProof
+  , bigTxIn2Member :: ConfidentialMerkle.MerkleMembershipProof
+  , bigTxIn1Nullifier :: BigNfProof
+  , bigTxIn2Nullifier :: BigNfProof
+  , bigTxBalance :: BigCbProof
+  , bigTxOut1Range :: BigCrProof
+  , bigTxOut2Range :: BigCrProof
   }
 
 jsonBigCbProof :: BigCbProof -> String
@@ -1168,6 +1634,117 @@ parseCtMerkleProofDigestArgs
             _ -> Left "Expected Merkle membership and transaction-proof fields"
 parseCtMerkleProofDigestArgs _ =
     Left ctMerkleProofDigestUsage
+
+ctBignumMerkleProofDigestUsage :: String
+ctBignumMerkleProofDigestUsage =
+    "Usage: ct-bignum-merkle-proof-digest IN1_INDEX IN1_ROOT IN1_SIBLINGS IN1_DIRECTIONS IN2_INDEX IN2_ROOT IN2_SIBLINGS IN2_DIRECTIONS IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+ctBignumMerkleProofArgsUsage :: String
+ctBignumMerkleProofArgsUsage =
+    drop (length ("Usage: ct-bignum-merkle-proof-digest " :: String)) ctBignumMerkleProofDigestUsage
+
+parseCtBignumMerkleProofDigestArgs :: [String] -> Either String BigMerkleTransactionProof
+parseCtBignumMerkleProofDigestArgs
+    [ in1IndexStr
+      , in1Root
+      , in1SiblingsStr
+      , in1DirectionsStr
+      , in2IndexStr
+      , in2Root
+      , in2SiblingsStr
+      , in2DirectionsStr
+      , in1ACommitsStr
+      , in1ANullifiersStr
+      , in1ZMsgsStr
+      , in1ZRandsStr
+      , in2ACommitsStr
+      , in2ANullifiersStr
+      , in2ZMsgsStr
+      , in2ZRandsStr
+      , balanceAsStr
+      , balanceZsStr
+      , out1BitsStr
+      , out1CompsStr
+      , out1AmountAsStr
+      , out1AmountZsStr
+      , out1PairAssStr
+      , out1PairZssStr
+      , out2BitsStr
+      , out2CompsStr
+      , out2AmountAsStr
+      , out2AmountZsStr
+      , out2PairAssStr
+      , out2PairZssStr
+      ] =
+        case
+            ( parseCtMerkleMembershipProof in1IndexStr in1Root in1SiblingsStr in1DirectionsStr
+            , parseCtMerkleMembershipProof in2IndexStr in2Root in2SiblingsStr in2DirectionsStr
+            , parseCanonicalIntegerMat in1ACommitsStr
+            , parseCanonicalIntegerMat in1ANullifiersStr
+            , parseCanonicalIntegerMat in1ZMsgsStr
+            , parseCanonicalIntegerMat in1ZRandsStr
+            , parseCanonicalIntegerMat in2ACommitsStr
+            , parseCanonicalIntegerMat in2ANullifiersStr
+            , parseCanonicalIntegerMat in2ZMsgsStr
+            , parseCanonicalIntegerMat in2ZRandsStr
+            , parseCanonicalIntegerMat balanceAsStr
+            , parseCanonicalIntegerMat balanceZsStr
+            , parseCanonicalIntegerMat out1BitsStr
+            , parseCanonicalIntegerMat out1CompsStr
+            , parseCanonicalIntegerMat out1AmountAsStr
+            , parseCanonicalIntegerMat out1AmountZsStr
+            , parseCanonicalIntegerCube out1PairAssStr
+            , parseCanonicalIntegerCube out1PairZssStr
+            , parseCanonicalIntegerMat out2BitsStr
+            , parseCanonicalIntegerMat out2CompsStr
+            , parseCanonicalIntegerMat out2AmountAsStr
+            , parseCanonicalIntegerMat out2AmountZsStr
+            , parseCanonicalIntegerCube out2PairAssStr
+            , parseCanonicalIntegerCube out2PairZssStr
+            )
+        of
+            ( Just in1Member
+              , Just in2Member
+              , Just in1ACommits
+              , Just in1ANullifiers
+              , Just in1ZMsgs
+              , Just in1ZRands
+              , Just in2ACommits
+              , Just in2ANullifiers
+              , Just in2ZMsgs
+              , Just in2ZRands
+              , Just balanceAs
+              , Just balanceZs
+              , Just out1Bits
+              , Just out1Comps
+              , Just out1AmountAs
+              , Just out1AmountZs
+              , Just out1PairAss
+              , Just out1PairZss
+              , Just out2Bits
+              , Just out2Comps
+              , Just out2AmountAs
+              , Just out2AmountZs
+              , Just out2PairAss
+              , Just out2PairZss
+              ) ->
+                Right
+                    BigMerkleTransactionProof
+                        { bigTxIn1Member = in1Member
+                        , bigTxIn2Member = in2Member
+                        , bigTxIn1Nullifier =
+                            BigNfProof in1ACommits in1ANullifiers in1ZMsgs in1ZRands
+                        , bigTxIn2Nullifier =
+                            BigNfProof in2ACommits in2ANullifiers in2ZMsgs in2ZRands
+                        , bigTxBalance = BigCbProof balanceAs balanceZs
+                        , bigTxOut1Range =
+                            BigCrProof out1Bits out1Comps out1AmountAs out1AmountZs out1PairAss out1PairZss
+                        , bigTxOut2Range =
+                            BigCrProof out2Bits out2Comps out2AmountAs out2AmountZs out2PairAss out2PairZss
+                        }
+            _ -> Left "Expected bignum Merkle membership and transaction-proof fields"
+parseCtBignumMerkleProofDigestArgs _ =
+    Left ctBignumMerkleProofDigestUsage
 
 parseCbParams :: String -> String -> String -> String -> Maybe Commit.CommitParams
 parseCbParams mStr n2Str qStr betaStr =
@@ -2242,6 +2819,285 @@ cmdCtBignumVectorEncode format valueStrs =
             outputStringResult format "ct_bignum_vector_encode = " $
                 bignumHex (encodeBignumIntegerVector values)
         Nothing -> outputError format "Expected canonical decimal integers"
+
+cmdCtBignumMerkleLeaf :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleLeaf format [commitmentStr] =
+    case parseCanonicalIntegerVec commitmentStr of
+        Just commitment ->
+            let digest = bignumMerkleLeaf commitment
+             in (evaluate digest >>= outputStringResult format "ct_bignum_merkle_leaf = ")
+                    `catch` handleSampleError format
+        Nothing -> outputError format "Expected canonical bignum commitment vector"
+cmdCtBignumMerkleLeaf format _ =
+    outputUsage format "Usage: ct-bignum-merkle-leaf \"[commitment]\""
+
+cmdCtBignumMerkleEmpty :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleEmpty format [widthStr] =
+    case parseCanonicalInt widthStr of
+        Just width ->
+            let digest = bignumMerkleEmpty width
+             in (evaluate digest >>= outputStringResult format "ct_bignum_merkle_empty = ")
+                    `catch` handleSampleError format
+        Nothing -> outputError format "Expected non-negative width"
+cmdCtBignumMerkleEmpty format _ =
+    outputUsage format "Usage: ct-bignum-merkle-empty WIDTH"
+
+cmdCtBignumMerkleNode :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleNode format [left, right] =
+    let digest = bignumMerkleNode left right
+     in (evaluate digest >>= outputStringResult format "ct_bignum_merkle_node = ")
+            `catch` handleSampleError format
+cmdCtBignumMerkleNode format _ =
+    outputUsage format "Usage: ct-bignum-merkle-node LEFT_DIGEST RIGHT_DIGEST"
+
+cmdCtBignumMerkleRoot :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleRoot format [ledgerStr] =
+    case parseCanonicalIntegerMat ledgerStr of
+        Just ledger ->
+            let digest = bignumMerkleRoot ledger
+             in (evaluate digest >>= outputStringResult format "ct_bignum_merkle_root = ")
+                    `catch` handleSampleError format
+        Nothing -> outputError format "Expected canonical bignum ledger matrix"
+cmdCtBignumMerkleRoot format _ =
+    outputUsage format "Usage: ct-bignum-merkle-root \"[[commitment],...]\""
+
+cmdCtBignumMerkleMemberProve :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleMemberProve format [ledgerStr, commitmentStr] =
+    case (parseCanonicalIntegerMat ledgerStr, parseCanonicalIntegerVec commitmentStr) of
+        (Just ledger, Just commitment) ->
+            let proof = bignumMerkleMembershipProve ledger commitment
+             in case proof of
+                  Just value ->
+                    case format of
+                      Human -> putStrLn $ "ct_bignum_merkle_membership_proof = " ++ jsonMerkleMembershipProof value
+                      Json -> putStrLn $ jsonMerkleMembershipProof value
+                  Nothing ->
+                    case format of
+                      Human -> putStrLn "ct_bignum_merkle_membership_proof = null"
+                      Json -> putStrLn "null"
+        _ -> outputError format "Expected canonical bignum ledger matrix and commitment vector"
+cmdCtBignumMerkleMemberProve format _ =
+    outputUsage format "Usage: ct-bignum-merkle-member-prove \"[[commitment],...]\" \"[commitment]\""
+
+cmdCtBignumMerkleMemberVerify :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleMemberVerify format [ledgerStr, commitmentStr] =
+    case (parseCanonicalIntegerMat ledgerStr, parseCanonicalIntegerVec commitmentStr) of
+        (Just ledger, Just commitment) ->
+            outputBoolResult format "ct_bignum_merkle_membership_verify = " $
+              case bignumMerkleMembershipProve ledger commitment of
+                Just proof -> bignumMerkleMembershipVerify commitment proof
+                Nothing -> False
+        _ -> outputError format "Expected canonical bignum ledger matrix and commitment vector"
+cmdCtBignumMerkleMemberVerify format _ =
+    outputUsage format "Usage: ct-bignum-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
+
+cmdCtBignumTransactionContext :: OutputFormat -> [String] -> IO ()
+cmdCtBignumTransactionContext format
+    [ protocolVersionStr
+    , networkId
+    , assetIdStr
+    , ledgerEpochStr
+    , rootDigest
+    , rootDepthStr
+    , publicFeeStr
+    , cIn1Str
+    , cIn2Str
+    , cOut1Str
+    , cOut2Str
+    , nf1Str
+    , nf2Str
+    ] =
+    case
+        ( parseCanonicalInt protocolVersionStr
+        , parseCanonicalInt assetIdStr
+        , parseCanonicalInt ledgerEpochStr
+        , parseCanonicalInt rootDepthStr
+        , parseCanonicalInteger publicFeeStr
+        , parseCanonicalIntegerVec cIn1Str
+        , parseCanonicalIntegerVec cIn2Str
+        , parseCanonicalIntegerVec cOut1Str
+        , parseCanonicalIntegerVec cOut2Str
+        , parseCanonicalIntegerVec nf1Str
+        , parseCanonicalIntegerVec nf2Str
+        )
+    of
+        ( Just protocolVersion
+          , Just assetId
+          , Just ledgerEpoch
+          , Just rootDepth
+          , Just publicFee
+          , Just cIn1
+          , Just cIn2
+          , Just cOut1
+          , Just cOut2
+          , Just nf1
+          , Just nf2
+          ) ->
+            let digest =
+                  bignumTransactionContextDigest
+                    protocolVersion networkId assetId ledgerEpoch rootDigest rootDepth publicFee
+                    cIn1 cIn2 cOut1 cOut2 nf1 nf2
+             in (evaluate digest >>= outputStringResult format "ct_bignum_transaction_context = ")
+                    `catch` handleSampleError format
+        _ -> outputError format "Expected bignum transaction context fields"
+cmdCtBignumTransactionContext format _ =
+    outputUsage format "Usage: ct-bignum-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
+
+cmdCtBignumMerkleProofDigest :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleProofDigest format args =
+    case parseCtBignumMerkleProofDigestArgs args of
+        Right proof ->
+            let digest = bignumMerkleProofDigest proof
+             in (evaluate digest >>= outputStringResult format "ct_bignum_merkle_proof_digest = ")
+                    `catch` handleSampleError format
+        Left err
+            | take 5 err == "Usage" -> outputUsage format err
+            | otherwise -> outputError format err
+
+cmdCtBignumMerkleEnvelopeDigest :: OutputFormat -> [String] -> IO ()
+cmdCtBignumMerkleEnvelopeDigest format
+    ( contextDigest : protocolVersionStr : networkId : assetIdStr : ledgerEpochStr
+      : rootDigest : rootDepthStr : publicFeeStr : cIn1Str : cIn2Str : cOut1Str : cOut2Str
+      : nf1Str : nf2Str : proofArgs
+    ) =
+        case
+            ( parseCanonicalInt protocolVersionStr
+            , parseCanonicalInt assetIdStr
+            , parseCanonicalInt ledgerEpochStr
+            , parseCanonicalInt rootDepthStr
+            , parseCanonicalInteger publicFeeStr
+            , parseCanonicalIntegerVec cIn1Str
+            , parseCanonicalIntegerVec cIn2Str
+            , parseCanonicalIntegerVec cOut1Str
+            , parseCanonicalIntegerVec cOut2Str
+            , parseCanonicalIntegerVec nf1Str
+            , parseCanonicalIntegerVec nf2Str
+            , parseCtBignumMerkleProofDigestArgs proofArgs
+            )
+        of
+            ( Just protocolVersion
+              , Just assetId
+              , Just ledgerEpoch
+              , Just rootDepth
+              , Just publicFee
+              , Just cIn1
+              , Just cIn2
+              , Just cOut1
+              , Just cOut2
+              , Just nf1
+              , Just nf2
+              , Right proof
+              ) ->
+                let digest =
+                      bignumEnvelopeDigest
+                        contextDigest protocolVersion networkId assetId ledgerEpoch rootDigest rootDepth publicFee
+                        cIn1 cIn2 cOut1 cOut2 nf1 nf2 proof
+                 in (evaluate digest >>= outputStringResult format "ct_bignum_merkle_envelope_digest = ")
+                        `catch` handleSampleError format
+            _ -> outputError format "Expected context digest, bignum context fields, and bignum Merkle proof fields"
+cmdCtBignumMerkleEnvelopeDigest format _ =
+    outputUsage format ("Usage: ct-bignum-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ++ ctBignumMerkleProofArgsUsage)
+
+cmdCtBignumWalletProofRequestDigest :: OutputFormat -> [String] -> IO ()
+cmdCtBignumWalletProofRequestDigest
+    format
+    [ protocolVersionStr
+    , networkId
+    , assetIdStr
+    , ledgerEpochStr
+    , rootDigest
+    , rootDepthStr
+    , publicFeeStr
+    , cIn1Str
+    , cIn2Str
+    , cOut1Str
+    , cOut2Str
+    , nf1Str
+    , nf2Str
+    , acceptedRootsStr
+    , acceptedRootDepthsStr
+    , spentNullifiersStr
+    ] =
+    case
+        ( parseCanonicalInt protocolVersionStr
+        , parseCanonicalInt assetIdStr
+        , parseCanonicalInt ledgerEpochStr
+        , parseCanonicalInt rootDepthStr
+        , parseCanonicalInteger publicFeeStr
+        , parseCanonicalIntegerVec cIn1Str
+        , parseCanonicalIntegerVec cIn2Str
+        , parseCanonicalIntegerVec cOut1Str
+        , parseCanonicalIntegerVec cOut2Str
+        , parseCanonicalIntegerVec nf1Str
+        , parseCanonicalIntegerVec nf2Str
+        , parseStringList acceptedRootsStr
+        , parseCanonicalVec acceptedRootDepthsStr
+        , parseCanonicalIntegerMat spentNullifiersStr
+        )
+    of
+        ( Just protocolVersion
+          , Just assetId
+          , Just ledgerEpoch
+          , Just rootDepth
+          , Just publicFee
+          , Just cIn1
+          , Just cIn2
+          , Just cOut1
+          , Just cOut2
+          , Just nf1
+          , Just nf2
+          , Just acceptedRoots
+          , Just acceptedRootDepths
+          , Just spentNullifiers
+          ) ->
+            let digest =
+                  bignumWalletProofRequestDigest
+                    protocolVersion networkId assetId ledgerEpoch rootDigest rootDepth publicFee
+                    cIn1 cIn2 cOut1 cOut2 nf1 nf2 acceptedRoots acceptedRootDepths spentNullifiers
+             in (evaluate digest >>= outputStringResult format "ct_bignum_wallet_proof_request_digest = ")
+                    `catch` handleSampleError format
+        _ -> outputError format "Expected bignum wallet proof request context, accepted roots, and spent nullifiers"
+cmdCtBignumWalletProofRequestDigest format _ =
+    outputUsage format "Usage: ct-bignum-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS ACCEPTED_ROOT_DEPTHS SPENT_NULLIFIERS"
+
+cmdCtBignumAcceptedRootWindowDigest :: OutputFormat -> [String] -> IO ()
+cmdCtBignumAcceptedRootWindowDigest
+    format
+    [ protocolVersionStr
+    , networkId
+    , assetIdStr
+    , ledgerEpochStr
+    , rootsStr
+    , rootDepthsStr
+    , validFromEpochsStr
+    , expiresAtEpochsStr
+    ] =
+    case
+        ( parseCanonicalInt protocolVersionStr
+        , parseCanonicalInt assetIdStr
+        , parseCanonicalInt ledgerEpochStr
+        , parseStringList rootsStr
+        , parseCanonicalVec rootDepthsStr
+        , parseCanonicalVec validFromEpochsStr
+        , parseCanonicalVec expiresAtEpochsStr
+        )
+    of
+        ( Just protocolVersion
+          , Just assetId
+          , Just ledgerEpoch
+          , Just roots
+          , Just rootDepths
+          , Just validFromEpochs
+          , Just expiresAtEpochs
+          ) ->
+            let digest =
+                  bignumAcceptedRootWindowDigest
+                    protocolVersion networkId assetId ledgerEpoch roots rootDepths validFromEpochs expiresAtEpochs
+             in (evaluate digest >>= outputStringResult format "ct_bignum_accepted_root_window_digest = ")
+                    `catch` handleSampleError format
+        _ -> outputError format "Expected bignum accepted-root window fields"
+cmdCtBignumAcceptedRootWindowDigest format _ =
+    outputUsage format "Usage: ct-bignum-accepted-root-window-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOTS ROOT_DEPTHS VALID_FROM_EPOCHS EXPIRES_AT_EPOCHS"
 
 cmdCtTransactionContext :: OutputFormat -> [String] -> IO ()
 cmdCtTransactionContext format

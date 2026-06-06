@@ -76,6 +76,7 @@ const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
   ? path.resolve(process.env.ISABELLA_TS_ENTRY)
   : path.join(projectRoot, 'isabella.ts', 'dist', 'index.mjs');
 const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
+const bignumTransactionVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-transaction-vectors.json');
 const bigintBalanceVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-balance-vectors.json');
 const bigintRangeVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-range-vectors.json');
 const bigintNullifierVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-nullifier-vectors.json');
@@ -115,6 +116,72 @@ type BigintNullifierProofJson = {
   aNullifiers: string[][];
   zMsgs: string[][];
   zRands: string[][];
+};
+type BignumAcceptedRoot = { digest: string; depth: number };
+type BignumMerkleMembership = {
+  index: number;
+  root: string;
+  siblings: string[];
+  directions: boolean[];
+};
+type BignumBalanceProofJson = { as: string[][]; zs: string[][] };
+type BignumNullifierProofJson = {
+  aCommits: string[][];
+  aNullifiers: string[][];
+  zMsgs: string[][];
+  zRands: string[][];
+};
+type BignumRangeProofJson = {
+  bits: string[][];
+  comps: string[][];
+  amountAs: string[][];
+  amountZs: string[][];
+  pairAss: string[][][];
+  pairZss: string[][][];
+};
+type BignumMerkleTransactionProofJson = {
+  in1Member: BignumMerkleMembership;
+  in2Member: BignumMerkleMembership;
+  in1Nullifier: BignumNullifierProofJson;
+  in2Nullifier: BignumNullifierProofJson;
+  balance: BignumBalanceProofJson;
+  out1Range: BignumRangeProofJson;
+  out2Range: BignumRangeProofJson;
+};
+type BignumTransactionContextJson = {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  root: BignumAcceptedRoot;
+  publicFee: string;
+  cIn1: string[];
+  cIn2: string[];
+  cOut1: string[];
+  cOut2: string[];
+  nf1: string[];
+  nf2: string[];
+};
+type BignumAcceptedRootWindowJson = {
+  protocolVersion: number;
+  networkId: string;
+  assetId: number;
+  ledgerEpoch: number;
+  roots: Array<{ root: BignumAcceptedRoot; validFromEpoch: number; expiresAtEpoch: number }>;
+};
+type BignumWalletProofRequestJson = {
+  context: BignumTransactionContextJson;
+  acceptedRoots: BignumAcceptedRoot[];
+  spentNullifiers: string[][];
+};
+type BignumTransactionVectors = {
+  ledger: string[][];
+  merkleCases: Array<{ name: string; commitment?: string[]; commitments?: string[][]; digest: string }>;
+  contextCases: Array<{ name: string; context: BignumTransactionContextJson; digest: string }>;
+  merkleProofCases: Array<{ name: string; proof: BignumMerkleTransactionProofJson; digest: string }>;
+  envelopeCases: Array<{ name: string; envelope: { context: BignumTransactionContextJson; contextDigest: string; proof: BignumMerkleTransactionProofJson }; digest: string }>;
+  acceptedRootWindowCases: Array<{ name: string; window: BignumAcceptedRootWindowJson; digest: string }>;
+  walletProofRequestCases: Array<{ name: string; request: BignumWalletProofRequestJson; digest: string }>;
 };
 
 function expectOcamlCommandRejected(args: string[], label: string): void {
@@ -210,6 +277,171 @@ for (const entry of bignumVectors.vectorCases) {
 for (const decimal of bignumVectors.rejectedDecimals) {
   expectOcamlCommandRejected(['ct-bignum-encode', decimal], `ct-bignum-encode OCaml rejects ${decimal}`);
 }
+
+const bignumTransactionVectors = JSON.parse(
+  fs.readFileSync(bignumTransactionVectorsPath, 'utf8')
+) as BignumTransactionVectors;
+
+function ocamlStringResult(args: string[]): string {
+  return parseCliResult<{ result: string }>(runCli(args)).result;
+}
+
+function bignumMemberArgs(member: BignumMerkleMembership): string[] {
+  return [
+    member.index.toString(),
+    member.root,
+    JSON.stringify(member.siblings),
+    integerVecText(member.directions.map((direction) => (direction ? '1' : '0'))),
+  ];
+}
+
+function bignumProofArgs(proof: BignumMerkleTransactionProofJson): string[] {
+  return [
+    ...bignumMemberArgs(proof.in1Member),
+    ...bignumMemberArgs(proof.in2Member),
+    integerMatText(proof.in1Nullifier.aCommits),
+    integerMatText(proof.in1Nullifier.aNullifiers),
+    integerMatText(proof.in1Nullifier.zMsgs),
+    integerMatText(proof.in1Nullifier.zRands),
+    integerMatText(proof.in2Nullifier.aCommits),
+    integerMatText(proof.in2Nullifier.aNullifiers),
+    integerMatText(proof.in2Nullifier.zMsgs),
+    integerMatText(proof.in2Nullifier.zRands),
+    integerMatText(proof.balance.as),
+    integerMatText(proof.balance.zs),
+    integerMatText(proof.out1Range.bits),
+    integerMatText(proof.out1Range.comps),
+    integerMatText(proof.out1Range.amountAs),
+    integerMatText(proof.out1Range.amountZs),
+    integerCubeText(proof.out1Range.pairAss),
+    integerCubeText(proof.out1Range.pairZss),
+    integerMatText(proof.out2Range.bits),
+    integerMatText(proof.out2Range.comps),
+    integerMatText(proof.out2Range.amountAs),
+    integerMatText(proof.out2Range.amountZs),
+    integerCubeText(proof.out2Range.pairAss),
+    integerCubeText(proof.out2Range.pairZss),
+  ];
+}
+
+function bignumContextArgs(context: BignumTransactionContextJson): string[] {
+  return [
+    context.protocolVersion.toString(),
+    context.networkId,
+    context.assetId.toString(),
+    context.ledgerEpoch.toString(),
+    context.root.digest,
+    context.root.depth.toString(),
+    context.publicFee,
+    integerVecText(context.cIn1),
+    integerVecText(context.cIn2),
+    integerVecText(context.cOut1),
+    integerVecText(context.cOut2),
+    integerVecText(context.nf1),
+    integerVecText(context.nf2),
+  ];
+}
+
+function acceptedRootDigests(roots: BignumAcceptedRoot[]): string[] {
+  return roots.map((root) => root.digest);
+}
+
+function acceptedRootDepths(roots: BignumAcceptedRoot[]): string[] {
+  return roots.map((root) => root.depth.toString());
+}
+
+const bignumLeafCase = bignumTransactionVectors.merkleCases.find((entry) => entry.commitment);
+assert.ok(bignumLeafCase?.commitment, 'bignum Merkle leaf vector exists');
+assert.equal(
+  ocamlStringResult(['ct-bignum-merkle-leaf', integerVecText(bignumLeafCase.commitment)]),
+  bignumLeafCase.digest,
+  'ct-bignum-merkle-leaf OCaml fixture parity'
+);
+const bignumRootCase = bignumTransactionVectors.merkleCases.find((entry) => entry.commitments);
+assert.ok(bignumRootCase?.commitments, 'bignum Merkle root vector exists');
+assert.equal(
+  ocamlStringResult(['ct-bignum-merkle-root', integerMatText(bignumRootCase.commitments)]),
+  bignumRootCase.digest,
+  'ct-bignum-merkle-root OCaml fixture parity'
+);
+const bignumMember = parseCliResult<BignumMerkleMembership>(
+  runCli([
+    'ct-bignum-merkle-member-prove',
+    integerMatText(bignumTransactionVectors.ledger),
+    integerVecText(bignumLeafCase.commitment),
+  ])
+);
+assert.equal(bignumMember.root, bignumRootCase.digest, 'ct-bignum-merkle-member-prove OCaml root parity');
+
+for (const entry of bignumTransactionVectors.contextCases) {
+  assert.equal(
+    ocamlStringResult(['ct-bignum-transaction-context', ...bignumContextArgs(entry.context)]),
+    entry.digest,
+    `ct-bignum-transaction-context OCaml parity for ${entry.name}`
+  );
+}
+
+for (const entry of bignumTransactionVectors.merkleProofCases) {
+  assert.equal(
+    ocamlStringResult(['ct-bignum-merkle-proof-digest', ...bignumProofArgs(entry.proof)]),
+    entry.digest,
+    `ct-bignum-merkle-proof-digest OCaml parity for ${entry.name}`
+  );
+}
+
+for (const entry of bignumTransactionVectors.envelopeCases) {
+  assert.equal(
+    ocamlStringResult([
+      'ct-bignum-merkle-envelope-digest',
+      entry.envelope.contextDigest,
+      ...bignumContextArgs(entry.envelope.context),
+      ...bignumProofArgs(entry.envelope.proof),
+    ]),
+    entry.digest,
+    `ct-bignum-merkle-envelope-digest OCaml parity for ${entry.name}`
+  );
+}
+
+for (const entry of bignumTransactionVectors.acceptedRootWindowCases) {
+  const roots = entry.window.roots.map((windowEntry) => windowEntry.root);
+  assert.equal(
+    ocamlStringResult([
+      'ct-bignum-accepted-root-window-digest',
+      entry.window.protocolVersion.toString(),
+      entry.window.networkId,
+      entry.window.assetId.toString(),
+      entry.window.ledgerEpoch.toString(),
+      JSON.stringify(acceptedRootDigests(roots)),
+      integerVecText(acceptedRootDepths(roots)),
+      integerVecText(entry.window.roots.map((windowEntry) => windowEntry.validFromEpoch.toString())),
+      integerVecText(entry.window.roots.map((windowEntry) => windowEntry.expiresAtEpoch.toString())),
+    ]),
+    entry.digest,
+    `ct-bignum-accepted-root-window-digest OCaml parity for ${entry.name}`
+  );
+}
+
+for (const entry of bignumTransactionVectors.walletProofRequestCases) {
+  assert.equal(
+    ocamlStringResult([
+      'ct-bignum-wallet-proof-request-digest',
+      ...bignumContextArgs(entry.request.context),
+      JSON.stringify(acceptedRootDigests(entry.request.acceptedRoots)),
+      integerVecText(acceptedRootDepths(entry.request.acceptedRoots)),
+      integerMatText(entry.request.spentNullifiers),
+    ]),
+    entry.digest,
+    `ct-bignum-wallet-proof-request-digest OCaml parity for ${entry.name}`
+  );
+}
+
+expectOcamlCommandRejected(
+  ['ct-bignum-transaction-context', ...bignumContextArgs({
+    ...bignumTransactionVectors.contextCases[0].context,
+    publicFee: nonCanonicalIntegerText(bignumTransactionVectors.contextCases[0].context.publicFee),
+  })],
+  'ct-bignum-transaction-context OCaml rejects non-canonical publicFee'
+);
 
 const bigintBalanceVectors = JSON.parse(fs.readFileSync(bigintBalanceVectorsPath, 'utf8')) as {
   status: string;
@@ -2699,5 +2931,5 @@ logProgress('validate-ocaml: verified input notes constructed');
 console.log('validate-ocaml: confidential transaction shared surface passed');
 
 console.log(
-  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native accepted-root-window and wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
+  'Validated the TypeScript SDK against the OCaml surface on deterministic shared-surface cases plus native bignum transaction preview parity, accepted-root-window and wallet-request digest/rejection parity, native non-canonical/out-of-range transaction encoding rejection, expanded Merkle envelope mutation rejection including membership index/path and root-depth mismatches, and randomized sampler bound checks.'
 );

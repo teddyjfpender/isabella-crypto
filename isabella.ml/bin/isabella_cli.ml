@@ -1125,6 +1125,440 @@ let big_nf_fs_verify params gamma ck nk c nf a_commits a_nullifiers z_msgs z_ran
 let hex_of_bytes bytes =
   String.concat "" (List.map (Printf.sprintf "%02x") bytes)
 
+let ct_bignum_merkle_dst = "ISABELLA-CT-MERKLE-BIGNUM-v1"
+let ct_bignum_transaction_dst = "ISABELLA-CT-TX-BIGNUM-v1"
+let ct_transaction_protocol_id = "ISABELLA-CT-SIS-NOTE"
+
+let encode_i64_nonnegative label value =
+  if value < 0 then invalid_arg (label ^ " must be non-negative");
+  Repeated_fs.int64_le_bytes (Int64.of_int value)
+
+let encode_printable_ascii label value =
+  let bytes = ascii_bytes value in
+  List.iteri
+    (fun index byte ->
+       if byte < 0x20 || byte > 0x7e then
+         invalid_arg (Printf.sprintf "%s[%d] must be printable ASCII" label index))
+    bytes;
+  encode_i64_nonnegative (label ^ ".length") (List.length bytes) @ bytes
+
+let encode_digest label digest =
+  match Confidential_merkle.hex_to_bytes digest with
+  | Some bytes -> encode_i64_nonnegative (label ^ ".length") (List.length bytes) @ bytes
+  | None -> invalid_arg (label ^ " must be a canonical lowercase SHA3-256 digest")
+
+let encode_digest_vec label digests =
+  encode_i64_nonnegative (label ^ ".length") (List.length digests)
+  @ List.concat
+      (List.mapi
+         (fun index digest -> encode_digest (Printf.sprintf "%s[%d]" label index) digest)
+         digests)
+
+let encode_bool_vec label values =
+  encode_i64_nonnegative (label ^ ".length") (List.length values)
+  @ List.concat
+      (List.map (fun value -> encode_i64_nonnegative label (if value then 1 else 0)) values)
+
+let encode_bigint_vec label values =
+  encode_i64_nonnegative (label ^ ".length") (List.length values)
+  @ List.concat (List.map encode_bigint_value values)
+
+let encode_bigint_mat label rows =
+  encode_i64_nonnegative (label ^ ".length") (List.length rows)
+  @ List.concat
+      (List.mapi
+         (fun index row -> encode_bigint_vec (Printf.sprintf "%s[%d]" label index) row)
+         rows)
+
+let encode_bigint_cube label cubes =
+  encode_i64_nonnegative (label ^ ".length") (List.length cubes)
+  @ List.concat
+      (List.mapi
+         (fun index rows -> encode_bigint_mat (Printf.sprintf "%s[%d]" label index) rows)
+         cubes)
+
+let digest_bytes bytes =
+  hex_of_bytes (Repeated_fs.sha3_256 bytes)
+
+let ct_bignum_merkle_preimage tag body =
+  ascii_bytes ct_bignum_merkle_dst @ encode_i64_nonnegative "merkle tag" tag @ body
+
+let ct_bignum_merkle_leaf commitment =
+  digest_bytes (ct_bignum_merkle_preimage 0 (encode_bigint_vec "commitment" commitment))
+
+let ct_bignum_merkle_empty width =
+  digest_bytes (ct_bignum_merkle_preimage 2 (encode_i64_nonnegative "width" width))
+
+let ct_bignum_merkle_node left right =
+  digest_bytes (ct_bignum_merkle_preimage 1 (encode_digest "left" left @ encode_digest "right" right))
+
+let ct_bignum_same_width commitments width =
+  List.for_all (fun commitment -> List.length commitment = width) commitments
+
+let ct_bignum_merkle_compress_level width level =
+  let rec loop acc = function
+    | [] -> List.rev acc
+    | [left] -> List.rev (ct_bignum_merkle_node left (ct_bignum_merkle_empty width) :: acc)
+    | left :: right :: rest -> loop (ct_bignum_merkle_node left right :: acc) rest
+  in
+  match level with
+  | [] -> []
+  | [x] -> [x]
+  | xs -> loop [] xs
+
+let ct_bignum_merkle_root commitments =
+  let width =
+    match commitments with
+    | [] -> 0
+    | first :: _ -> List.length first
+  in
+  if not (ct_bignum_same_width commitments width) then
+    invalid_arg "Bignum Merkle commitments must all have the same width";
+  match commitments with
+  | [] -> ct_bignum_merkle_empty 0
+  | _ ->
+    let rec loop level =
+      match level with
+      | [] -> ct_bignum_merkle_empty width
+      | [x] -> x
+      | xs -> loop (ct_bignum_merkle_compress_level width xs)
+    in
+    loop (List.map ct_bignum_merkle_leaf commitments)
+
+let ct_bignum_merkle_path_root commitment siblings directions =
+  let rec loop acc siblings directions =
+    match siblings, directions with
+    | [], [] -> Some acc
+    | sibling :: rest_siblings, false :: rest_directions ->
+      (try loop (ct_bignum_merkle_node acc sibling) rest_siblings rest_directions
+       with Invalid_argument _ -> None)
+    | sibling :: rest_siblings, true :: rest_directions ->
+      (try loop (ct_bignum_merkle_node sibling acc) rest_siblings rest_directions
+       with Invalid_argument _ -> None)
+    | _ -> None
+  in
+  loop (ct_bignum_merkle_leaf commitment) siblings directions
+
+let ct_bignum_merkle_membership_index ledger commitment =
+  let rec loop index = function
+    | [] -> None
+    | x :: xs -> if x = commitment then Some index else loop (index + 1) xs
+  in
+  loop 0 ledger
+
+let ct_bignum_merkle_membership_prove ledger commitment =
+  match ct_bignum_merkle_membership_index ledger commitment with
+  | None -> None
+  | Some index ->
+    let width =
+      match ledger with
+      | [] -> List.length commitment
+      | first :: _ -> List.length first
+    in
+    if not (ct_bignum_same_width ledger width) then
+      invalid_arg "Bignum Merkle commitments must all have the same width";
+    let rec loop current level siblings directions =
+      match level with
+      | [] -> None
+      | [rt] ->
+        Some
+          {
+            Confidential_merkle.merkle_index = index;
+            merkle_root = rt;
+            merkle_siblings = List.rev siblings;
+            merkle_directions = List.rev directions;
+          }
+      | _ ->
+        let is_right = current mod 2 = 1 in
+        let sibling =
+          if is_right then List.nth level (current - 1)
+          else if current + 1 < List.length level then List.nth level (current + 1)
+          else ct_bignum_merkle_empty width
+        in
+        loop
+          (current / 2)
+          (ct_bignum_merkle_compress_level width level)
+          (sibling :: siblings)
+          (is_right :: directions)
+    in
+    loop index (List.map ct_bignum_merkle_leaf ledger) [] []
+
+let rec ct_index_directions depth index =
+  if depth <= 0 then []
+  else (index mod 2 = 1) :: ct_index_directions (depth - 1) (index / 2)
+
+let ct_bignum_merkle_membership_verify commitment proof =
+  proof.Confidential_merkle.merkle_directions =
+    ct_index_directions (List.length proof.Confidential_merkle.merkle_siblings)
+      proof.Confidential_merkle.merkle_index &&
+  match
+    Confidential_merkle.hex_to_bytes proof.Confidential_merkle.merkle_root,
+    ct_bignum_merkle_path_root
+      commitment
+      proof.Confidential_merkle.merkle_siblings
+      proof.Confidential_merkle.merkle_directions
+  with
+  | Some _, Some root -> root = proof.Confidential_merkle.merkle_root
+  | _ -> false
+
+let compare_bigint_vec left right =
+  let rec loop left right =
+    match left, right with
+    | [], [] -> 0
+    | [], _ -> -1
+    | _, [] -> 1
+    | l :: ls, r :: rs ->
+      let cmp = compare_bigint l r in
+      if cmp <> 0 then cmp else loop ls rs
+  in
+  loop left right
+
+let compare_accepted_root (left_digest, left_depth) (right_digest, right_depth) =
+  let digest_cmp = String.compare left_digest right_digest in
+  if digest_cmp <> 0 then digest_cmp else compare left_depth right_depth
+
+let require_sorted_unique compare_value label values =
+  let rec loop previous = function
+    | [] -> ()
+    | value :: rest ->
+      (match previous with
+       | Some prev when compare_value prev value >= 0 ->
+         invalid_arg (label ^ " must be sorted with no duplicates")
+       | _ -> loop (Some value) rest)
+  in
+  loop None values
+
+let encode_accepted_root label (root, depth) =
+  encode_digest (label ^ ".digest") root @ encode_i64_nonnegative (label ^ ".depth") depth
+
+let encode_accepted_root_vec label roots =
+  encode_i64_nonnegative (label ^ ".length") (List.length roots)
+  @ List.concat
+      (List.mapi
+         (fun index root -> encode_accepted_root (Printf.sprintf "%s[%d]" label index) root)
+         roots)
+
+let encode_accepted_root_window_entry label (root, depth, valid_from_epoch, expires_at_epoch) =
+  if expires_at_epoch <= valid_from_epoch then
+    invalid_arg (label ^ ".expiresAtEpoch must be greater than validFromEpoch");
+  encode_accepted_root (label ^ ".root") (root, depth)
+  @ encode_i64_nonnegative (label ^ ".validFromEpoch") valid_from_epoch
+  @ encode_i64_nonnegative (label ^ ".expiresAtEpoch") expires_at_epoch
+
+let encode_accepted_root_window_entries label entries =
+  encode_i64_nonnegative (label ^ ".length") (List.length entries)
+  @ List.concat
+      (List.mapi
+         (fun index entry ->
+            encode_accepted_root_window_entry (Printf.sprintf "%s[%d]" label index) entry)
+         entries)
+
+let require_accepted_root_set label roots =
+  if roots = [] then invalid_arg (label ^ " must not be empty");
+  List.iteri
+    (fun index root -> ignore (encode_accepted_root (Printf.sprintf "%s[%d]" label index) root))
+    roots;
+  require_sorted_unique compare_accepted_root label roots
+
+let require_accepted_root_window ledger_epoch label entries =
+  if entries = [] then invalid_arg (label ^ " must not be empty");
+  List.iteri
+    (fun index entry ->
+       ignore (encode_accepted_root_window_entry (Printf.sprintf "%s[%d]" label index) entry))
+    entries;
+  List.iteri
+    (fun index (_root, _depth, valid_from_epoch, expires_at_epoch) ->
+       if valid_from_epoch > ledger_epoch || ledger_epoch >= expires_at_epoch then
+         invalid_arg (Printf.sprintf "%s[%d] is not live at ledgerEpoch" label index))
+    entries;
+  require_sorted_unique
+    compare_accepted_root
+    label
+    (List.map (fun (root, depth, _valid_from, _expires_at) -> (root, depth)) entries)
+
+let ct_bignum_transaction_tagged_preimage tag body =
+  ascii_bytes ct_bignum_transaction_dst
+  @ encode_i64_nonnegative "transaction tag" tag
+  @ encode_printable_ascii "protocolId" ct_transaction_protocol_id
+  @ body
+
+let ct_bignum_transaction_context_preimage
+    protocol_version
+    network_id
+    asset_id
+    ledger_epoch
+    root
+    root_depth
+    public_fee
+    c_in1
+    c_in2
+    c_out1
+    c_out2
+    nf1
+    nf2 =
+  ascii_bytes ct_bignum_transaction_dst
+  @ encode_i64_nonnegative "transaction tag" 0
+  @ encode_printable_ascii "protocolId" ct_transaction_protocol_id
+  @ encode_i64_nonnegative "protocolVersion" protocol_version
+  @ encode_printable_ascii "networkId" network_id
+  @ encode_i64_nonnegative "assetId" asset_id
+  @ encode_i64_nonnegative "ledgerEpoch" ledger_epoch
+  @ encode_accepted_root "root" (root, root_depth)
+  @ encode_bigint_value public_fee
+  @ encode_bigint_vec "cIn1" c_in1
+  @ encode_bigint_vec "cIn2" c_in2
+  @ encode_bigint_vec "cOut1" c_out1
+  @ encode_bigint_vec "cOut2" c_out2
+  @ encode_bigint_vec "nf1" nf1
+  @ encode_bigint_vec "nf2" nf2
+
+let ct_bignum_transaction_context_digest
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 =
+  digest_bytes
+    (ct_bignum_transaction_context_preimage
+       protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+       c_in1 c_in2 c_out1 c_out2 nf1 nf2)
+
+let ct_bignum_accepted_root_window_digest
+    protocol_version network_id asset_id ledger_epoch roots root_depths valid_from_epochs expires_at_epochs =
+  if List.length roots <> List.length root_depths ||
+     List.length roots <> List.length valid_from_epochs ||
+     List.length roots <> List.length expires_at_epochs
+  then invalid_arg "acceptedRootWindow.roots vectors must have the same length";
+  let entries = List.map2
+      (fun root (depth, valid_from, expires_at) -> (root, depth, valid_from, expires_at))
+      roots
+      (List.map2
+         (fun depth (valid_from, expires_at) -> (depth, valid_from, expires_at))
+         root_depths
+         (List.combine valid_from_epochs expires_at_epochs))
+  in
+  require_accepted_root_window ledger_epoch "acceptedRootWindow.roots" entries;
+  digest_bytes
+    (ct_bignum_transaction_tagged_preimage
+       4
+       (encode_i64_nonnegative "acceptedRootWindow.protocolVersion" protocol_version
+        @ encode_printable_ascii "acceptedRootWindow.networkId" network_id
+        @ encode_i64_nonnegative "acceptedRootWindow.assetId" asset_id
+        @ encode_i64_nonnegative "acceptedRootWindow.ledgerEpoch" ledger_epoch
+        @ encode_accepted_root_window_entries "acceptedRootWindow.roots" entries))
+
+let ct_bignum_merkle_membership_preimage label proof =
+  if List.length proof.Confidential_merkle.merkle_siblings <>
+     List.length proof.Confidential_merkle.merkle_directions
+  then invalid_arg (label ^ ".siblings and directions must have the same length");
+  encode_i64_nonnegative (label ^ ".index") proof.Confidential_merkle.merkle_index
+  @ encode_digest (label ^ ".root") proof.Confidential_merkle.merkle_root
+  @ encode_digest_vec (label ^ ".siblings") proof.Confidential_merkle.merkle_siblings
+  @ encode_bool_vec (label ^ ".directions") proof.Confidential_merkle.merkle_directions
+
+type ct_bignum_nullifier_proof = {
+  bignum_nf_a_commits : cli_bigint list list;
+  bignum_nf_a_nullifiers : cli_bigint list list;
+  bignum_nf_z_msgs : cli_bigint list list;
+  bignum_nf_z_rands : cli_bigint list list;
+}
+
+type ct_bignum_balance_proof = {
+  bignum_balance_as : cli_bigint list list;
+  bignum_balance_zs : cli_bigint list list;
+}
+
+type ct_bignum_range_proof = {
+  bignum_range_bits : cli_bigint list list;
+  bignum_range_comps : cli_bigint list list;
+  bignum_range_amount_as : cli_bigint list list;
+  bignum_range_amount_zs : cli_bigint list list;
+  bignum_range_pair_ass : cli_bigint list list list;
+  bignum_range_pair_zss : cli_bigint list list list;
+}
+
+type ct_bignum_merkle_transaction_proof = {
+  bignum_in1_member : Confidential_merkle.membership_proof;
+  bignum_in2_member : Confidential_merkle.membership_proof;
+  bignum_in1_nullifier : ct_bignum_nullifier_proof;
+  bignum_in2_nullifier : ct_bignum_nullifier_proof;
+  bignum_balance : ct_bignum_balance_proof;
+  bignum_out1_range : ct_bignum_range_proof;
+  bignum_out2_range : ct_bignum_range_proof;
+}
+
+let ct_bignum_nullifier_proof_preimage label proof =
+  encode_bigint_mat (label ^ ".aCommits") proof.bignum_nf_a_commits
+  @ encode_bigint_mat (label ^ ".aNullifiers") proof.bignum_nf_a_nullifiers
+  @ encode_bigint_mat (label ^ ".zMsgs") proof.bignum_nf_z_msgs
+  @ encode_bigint_mat (label ^ ".zRands") proof.bignum_nf_z_rands
+
+let ct_bignum_balance_proof_preimage label proof =
+  encode_bigint_mat (label ^ ".as") proof.bignum_balance_as
+  @ encode_bigint_mat (label ^ ".zs") proof.bignum_balance_zs
+
+let ct_bignum_range_proof_preimage label proof =
+  encode_bigint_mat (label ^ ".bits") proof.bignum_range_bits
+  @ encode_bigint_mat (label ^ ".comps") proof.bignum_range_comps
+  @ encode_bigint_mat (label ^ ".amountAs") proof.bignum_range_amount_as
+  @ encode_bigint_mat (label ^ ".amountZs") proof.bignum_range_amount_zs
+  @ encode_bigint_cube (label ^ ".pairAss") proof.bignum_range_pair_ass
+  @ encode_bigint_cube (label ^ ".pairZss") proof.bignum_range_pair_zss
+
+let ct_bignum_merkle_proof_preimage proof =
+  ct_bignum_transaction_tagged_preimage
+    1
+    (ct_bignum_merkle_membership_preimage "in1Member" proof.bignum_in1_member
+     @ ct_bignum_merkle_membership_preimage "in2Member" proof.bignum_in2_member
+     @ ct_bignum_nullifier_proof_preimage "in1Nullifier" proof.bignum_in1_nullifier
+     @ ct_bignum_nullifier_proof_preimage "in2Nullifier" proof.bignum_in2_nullifier
+     @ ct_bignum_balance_proof_preimage "balance" proof.bignum_balance
+     @ ct_bignum_range_proof_preimage "out1Range" proof.bignum_out1_range
+     @ ct_bignum_range_proof_preimage "out2Range" proof.bignum_out2_range)
+
+let ct_bignum_merkle_proof_digest proof =
+  digest_bytes (ct_bignum_merkle_proof_preimage proof)
+
+let ct_bignum_envelope_digest
+    context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof =
+  let computed_context_digest =
+    ct_bignum_transaction_context_digest
+      protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+  in
+  if context_digest <> computed_context_digest then
+    invalid_arg "contextDigest does not match canonical bignum transaction context";
+  digest_bytes
+    (ct_bignum_transaction_tagged_preimage
+       2
+       (encode_digest "contextDigest" computed_context_digest
+        @ encode_digest "proofDigest" (ct_bignum_merkle_proof_digest proof)))
+
+let ct_bignum_wallet_proof_request_digest
+    protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+    c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers =
+  if List.length accepted_roots <> List.length accepted_root_depths then
+    invalid_arg "acceptedRoots and acceptedRootDepths must have the same length";
+  let accepted_root_pairs = List.combine accepted_roots accepted_root_depths in
+  require_accepted_root_set "acceptedRoots" accepted_root_pairs;
+  require_sorted_unique compare_bigint_vec "spentNullifiers" spent_nullifiers;
+  let context_digest =
+    ct_bignum_transaction_context_digest
+      protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+      c_in1 c_in2 c_out1 c_out2 nf1 nf2
+  in
+  begin
+    if not (List.mem (root, root_depth) accepted_root_pairs) then
+      invalid_arg "context.root must be inside acceptedRoots";
+    if nf1 = nf2 then invalid_arg "context nullifiers must be distinct";
+    if List.mem nf1 spent_nullifiers || List.mem nf2 spent_nullifiers then
+      invalid_arg "context nullifiers must be absent from spentNullifiers";
+    digest_bytes
+      (ct_bignum_transaction_tagged_preimage
+         3
+         (encode_digest "contextDigest" context_digest
+          @ encode_accepted_root_vec "acceptedRoots" accepted_root_pairs
+          @ encode_bigint_mat "spentNullifiers" spent_nullifiers))
+  end
+
 let json_of_cb_params params =
   Printf.sprintf
     "{\"n1\":%d,\"n2\":%d,\"m\":%d,\"q\":%d,\"beta\":%d}"
@@ -1281,6 +1715,106 @@ let parse_ct_merkle_proof_digest_args args =
             (Confidential_range.make_range_proof out2_bits out2_comps out2_amount_a out2_amount_z out2_pair_as out2_pair_zs))
      | _ -> Error "Expected Merkle membership and transaction-proof fields")
   | _ -> Error ct_merkle_proof_digest_usage
+
+let ct_bignum_merkle_proof_digest_usage =
+  "Usage: ct-bignum-merkle-proof-digest IN1_INDEX IN1_ROOT IN1_SIBLINGS IN1_DIRECTIONS IN2_INDEX IN2_ROOT IN2_SIBLINGS IN2_DIRECTIONS IN1_A_COMMITS IN1_A_NULLIFIERS IN1_Z_MSGS IN1_Z_RANDS IN2_A_COMMITS IN2_A_NULLIFIERS IN2_Z_MSGS IN2_Z_RANDS BAL_AS BAL_ZS OUT1_BITS OUT1_COMPS OUT1_AMOUNT_AS OUT1_AMOUNT_ZS OUT1_PAIR_ASS OUT1_PAIR_ZSS OUT2_BITS OUT2_COMPS OUT2_AMOUNT_AS OUT2_AMOUNT_ZS OUT2_PAIR_ASS OUT2_PAIR_ZSS"
+
+let ct_bignum_merkle_proof_args_usage =
+  String.sub
+    ct_bignum_merkle_proof_digest_usage
+    (String.length "Usage: ct-bignum-merkle-proof-digest ")
+    (String.length ct_bignum_merkle_proof_digest_usage
+     - String.length "Usage: ct-bignum-merkle-proof-digest ")
+
+let parse_ct_bignum_merkle_proof_digest_args args =
+  match args with
+  | [in1_index_str; in1_root; in1_siblings_str; in1_directions_str;
+     in2_index_str; in2_root; in2_siblings_str; in2_directions_str;
+     in1_a_commits_str; in1_a_nullifiers_str; in1_z_msgs_str; in1_z_rands_str;
+     in2_a_commits_str; in2_a_nullifiers_str; in2_z_msgs_str; in2_z_rands_str;
+     balance_as_str; balance_zs_str;
+     out1_bits_str; out1_comps_str; out1_amount_a_str; out1_amount_z_str;
+     out1_pair_as_str; out1_pair_zs_str;
+     out2_bits_str; out2_comps_str; out2_amount_a_str; out2_amount_z_str;
+     out2_pair_as_str; out2_pair_zs_str] ->
+    (match
+       parse_ct_merkle_membership_proof in1_index_str in1_root in1_siblings_str in1_directions_str,
+       parse_ct_merkle_membership_proof in2_index_str in2_root in2_siblings_str in2_directions_str,
+       parse_canonical_bigint_mat in1_a_commits_str,
+       parse_canonical_bigint_mat in1_a_nullifiers_str,
+       parse_canonical_bigint_mat in1_z_msgs_str,
+       parse_canonical_bigint_mat in1_z_rands_str,
+       parse_canonical_bigint_mat in2_a_commits_str,
+       parse_canonical_bigint_mat in2_a_nullifiers_str,
+       parse_canonical_bigint_mat in2_z_msgs_str,
+       parse_canonical_bigint_mat in2_z_rands_str,
+       parse_canonical_bigint_mat balance_as_str,
+       parse_canonical_bigint_mat balance_zs_str,
+       parse_canonical_bigint_mat out1_bits_str,
+       parse_canonical_bigint_mat out1_comps_str,
+       parse_canonical_bigint_mat out1_amount_a_str,
+       parse_canonical_bigint_mat out1_amount_z_str,
+       parse_canonical_bigint_cube out1_pair_as_str,
+       parse_canonical_bigint_cube out1_pair_zs_str,
+       parse_canonical_bigint_mat out2_bits_str,
+       parse_canonical_bigint_mat out2_comps_str,
+       parse_canonical_bigint_mat out2_amount_a_str,
+       parse_canonical_bigint_mat out2_amount_z_str,
+       parse_canonical_bigint_cube out2_pair_as_str,
+       parse_canonical_bigint_cube out2_pair_zs_str
+     with
+     | Some in1_member, Some in2_member,
+       Some in1_a_commits, Some in1_a_nullifiers, Some in1_z_msgs, Some in1_z_rands,
+       Some in2_a_commits, Some in2_a_nullifiers, Some in2_z_msgs, Some in2_z_rands,
+       Some balance_as, Some balance_zs,
+       Some out1_bits, Some out1_comps, Some out1_amount_a, Some out1_amount_z,
+       Some out1_pair_as, Some out1_pair_zs,
+       Some out2_bits, Some out2_comps, Some out2_amount_a, Some out2_amount_z,
+       Some out2_pair_as, Some out2_pair_zs ->
+       Ok
+         {
+           bignum_in1_member = in1_member;
+           bignum_in2_member = in2_member;
+           bignum_in1_nullifier =
+             {
+               bignum_nf_a_commits = in1_a_commits;
+               bignum_nf_a_nullifiers = in1_a_nullifiers;
+               bignum_nf_z_msgs = in1_z_msgs;
+               bignum_nf_z_rands = in1_z_rands;
+             };
+           bignum_in2_nullifier =
+             {
+               bignum_nf_a_commits = in2_a_commits;
+               bignum_nf_a_nullifiers = in2_a_nullifiers;
+               bignum_nf_z_msgs = in2_z_msgs;
+               bignum_nf_z_rands = in2_z_rands;
+             };
+           bignum_balance =
+             {
+               bignum_balance_as = balance_as;
+               bignum_balance_zs = balance_zs;
+             };
+           bignum_out1_range =
+             {
+               bignum_range_bits = out1_bits;
+               bignum_range_comps = out1_comps;
+               bignum_range_amount_as = out1_amount_a;
+               bignum_range_amount_zs = out1_amount_z;
+               bignum_range_pair_ass = out1_pair_as;
+               bignum_range_pair_zss = out1_pair_zs;
+             };
+           bignum_out2_range =
+             {
+               bignum_range_bits = out2_bits;
+               bignum_range_comps = out2_comps;
+               bignum_range_amount_as = out2_amount_a;
+               bignum_range_amount_zs = out2_amount_z;
+               bignum_range_pair_ass = out2_pair_as;
+               bignum_range_pair_zss = out2_pair_zs;
+             };
+         }
+     | _ -> Error "Expected bignum Merkle membership and transaction-proof fields")
+  | _ -> Error ct_bignum_merkle_proof_digest_usage
 
 (** JSON output helpers *)
 let[@warning "-32"] output_result key value =
@@ -2564,6 +3098,205 @@ let cmd_ct_bignum_vector_encode args =
   try output_string_result "ct_bignum_vector_encode" (hex_of_bytes (encode_bignum_decimal_vec args))
   with Invalid_argument msg -> output_error msg
 
+let cmd_ct_bignum_merkle_leaf args =
+  match args with
+  | [commitment_str] ->
+    (match parse_canonical_bigint_vec commitment_str with
+     | Some commitment ->
+       (try output_string_result "ct_bignum_merkle_leaf" (ct_bignum_merkle_leaf commitment)
+        with Invalid_argument msg -> output_error msg)
+     | None -> output_error "Expected canonical bignum commitment vector")
+  | _ -> output_error "Usage: ct-bignum-merkle-leaf \"[commitment]\""
+
+let cmd_ct_bignum_merkle_empty args =
+  match args with
+  | [width_str] ->
+    (match parse_canonical_int width_str with
+     | Some width ->
+       (try output_string_result "ct_bignum_merkle_empty" (ct_bignum_merkle_empty width)
+        with Invalid_argument msg -> output_error msg)
+     | None -> output_error "Expected non-negative width")
+  | _ -> output_error "Usage: ct-bignum-merkle-empty WIDTH"
+
+let cmd_ct_bignum_merkle_node args =
+  match args with
+  | [left; right] ->
+    (try output_string_result "ct_bignum_merkle_node" (ct_bignum_merkle_node left right)
+     with Invalid_argument msg -> output_error msg)
+  | _ -> output_error "Usage: ct-bignum-merkle-node LEFT_DIGEST RIGHT_DIGEST"
+
+let cmd_ct_bignum_merkle_root args =
+  match args with
+  | [ledger_str] ->
+    (match parse_canonical_bigint_mat ledger_str with
+     | Some ledger ->
+       (try output_string_result "ct_bignum_merkle_root" (ct_bignum_merkle_root ledger)
+        with Invalid_argument msg -> output_error msg)
+     | None -> output_error "Expected canonical bignum ledger matrix")
+  | _ -> output_error "Usage: ct-bignum-merkle-root \"[[commitment],...]\""
+
+let cmd_ct_bignum_merkle_member_prove args =
+  match args with
+  | [ledger_str; commitment_str] ->
+    (match parse_canonical_bigint_mat ledger_str, parse_canonical_bigint_vec commitment_str with
+     | Some ledger, Some commitment ->
+       (try
+          match ct_bignum_merkle_membership_prove ledger commitment with
+          | Some proof ->
+            (match !output_format with
+             | Human -> Printf.printf "ct_bignum_merkle_membership_proof = %s\n" (json_of_merkle_membership_proof proof)
+             | Json -> Printf.printf "%s\n" (json_of_merkle_membership_proof proof))
+          | None ->
+            (match !output_format with
+             | Human -> print_endline "ct_bignum_merkle_membership_proof = null"
+             | Json -> print_endline "null")
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected canonical bignum ledger matrix and commitment vector")
+  | _ -> output_error "Usage: ct-bignum-merkle-member-prove \"[[commitment],...]\" \"[commitment]\""
+
+let cmd_ct_bignum_merkle_member_verify args =
+  match args with
+  | [ledger_str; commitment_str] ->
+    (match parse_canonical_bigint_mat ledger_str, parse_canonical_bigint_vec commitment_str with
+     | Some ledger, Some commitment ->
+       let result =
+         try
+           match ct_bignum_merkle_membership_prove ledger commitment with
+           | Some proof -> ct_bignum_merkle_membership_verify commitment proof
+           | None -> false
+         with Invalid_argument _ -> false
+       in
+       output_result "ct_bignum_merkle_membership_verify" (if result then "true" else "false")
+     | _ -> output_error "Expected canonical bignum ledger matrix and commitment vector")
+  | _ -> output_error "Usage: ct-bignum-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
+
+let cmd_ct_bignum_transaction_context args =
+  match args with
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
+     public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str] ->
+    (match
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
+       parse_canonical_bigint public_fee_str,
+       parse_canonical_bigint_vec c_in1_str,
+       parse_canonical_bigint_vec c_in2_str,
+       parse_canonical_bigint_vec c_out1_str,
+       parse_canonical_bigint_vec c_out2_str,
+       parse_canonical_bigint_vec nf1_str,
+       parse_canonical_bigint_vec nf2_str
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some root_depth, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2 ->
+       (try
+          output_string_result "ct_bignum_transaction_context"
+            (ct_bignum_transaction_context_digest
+               protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected bignum transaction context fields")
+  | _ ->
+    output_error "Usage: ct-bignum-transaction-context VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2"
+
+let cmd_ct_bignum_merkle_proof_digest args =
+  match parse_ct_bignum_merkle_proof_digest_args args with
+  | Ok proof ->
+    (try
+       output_string_result "ct_bignum_merkle_proof_digest" (ct_bignum_merkle_proof_digest proof)
+     with Invalid_argument msg -> output_error msg)
+  | Error msg -> output_error msg
+
+let cmd_ct_bignum_merkle_envelope_digest args =
+  match args with
+  | context_digest :: protocol_version_str :: network_id :: asset_id_str :: ledger_epoch_str ::
+    root :: root_depth_str :: public_fee_str :: c_in1_str :: c_in2_str :: c_out1_str :: c_out2_str ::
+    nf1_str :: nf2_str :: proof_args ->
+    (match
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
+       parse_canonical_bigint public_fee_str,
+       parse_canonical_bigint_vec c_in1_str,
+       parse_canonical_bigint_vec c_in2_str,
+       parse_canonical_bigint_vec c_out1_str,
+       parse_canonical_bigint_vec c_out2_str,
+       parse_canonical_bigint_vec nf1_str,
+       parse_canonical_bigint_vec nf2_str,
+       parse_ct_bignum_merkle_proof_digest_args proof_args
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some root_depth, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
+       Ok proof ->
+       (try
+          output_string_result "ct_bignum_merkle_envelope_digest"
+            (ct_bignum_envelope_digest
+               context_digest protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2 proof)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected context digest, bignum context fields, and bignum Merkle proof fields")
+  | _ ->
+    output_error ("Usage: ct-bignum-merkle-envelope-digest CONTEXT_DIGEST VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 " ^ ct_bignum_merkle_proof_args_usage)
+
+let cmd_ct_bignum_wallet_proof_request_digest args =
+  match args with
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
+     public_fee_str; c_in1_str; c_in2_str; c_out1_str; c_out2_str; nf1_str; nf2_str;
+     accepted_roots_str; accepted_root_depths_str; spent_nullifiers_str] ->
+    (match
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_canonical_int root_depth_str,
+       parse_canonical_bigint public_fee_str,
+       parse_canonical_bigint_vec c_in1_str,
+       parse_canonical_bigint_vec c_in2_str,
+       parse_canonical_bigint_vec c_out1_str,
+       parse_canonical_bigint_vec c_out2_str,
+       parse_canonical_bigint_vec nf1_str,
+       parse_canonical_bigint_vec nf2_str,
+       parse_string_list accepted_roots_str,
+       parse_canonical_vec accepted_root_depths_str,
+       parse_canonical_bigint_mat spent_nullifiers_str
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch, Some root_depth, Some public_fee,
+       Some c_in1, Some c_in2, Some c_out1, Some c_out2, Some nf1, Some nf2,
+       Some accepted_roots, Some accepted_root_depths, Some spent_nullifiers ->
+       (try
+          output_string_result "ct_bignum_wallet_proof_request_digest"
+            (ct_bignum_wallet_proof_request_digest
+               protocol_version network_id asset_id ledger_epoch root root_depth public_fee
+               c_in1 c_in2 c_out1 c_out2 nf1 nf2 accepted_roots accepted_root_depths spent_nullifiers)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected bignum wallet proof request context, accepted roots, and spent nullifiers")
+  | _ ->
+    output_error "Usage: ct-bignum-wallet-proof-request-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOT ROOT_DEPTH PUBLIC_FEE C_IN1 C_IN2 C_OUT1 C_OUT2 NF1 NF2 ACCEPTED_ROOTS ACCEPTED_ROOT_DEPTHS SPENT_NULLIFIERS"
+
+let cmd_ct_bignum_accepted_root_window_digest args =
+  match args with
+  | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str;
+     roots_str; root_depths_str; valid_from_epochs_str; expires_at_epochs_str] ->
+    (match
+       parse_canonical_int protocol_version_str,
+       parse_canonical_int asset_id_str,
+       parse_canonical_int ledger_epoch_str,
+       parse_string_list roots_str,
+       parse_canonical_vec root_depths_str,
+       parse_canonical_vec valid_from_epochs_str,
+       parse_canonical_vec expires_at_epochs_str
+     with
+     | Some protocol_version, Some asset_id, Some ledger_epoch,
+       Some roots, Some root_depths, Some valid_from_epochs, Some expires_at_epochs ->
+       (try
+          output_string_result "ct_bignum_accepted_root_window_digest"
+            (ct_bignum_accepted_root_window_digest
+               protocol_version network_id asset_id ledger_epoch roots root_depths valid_from_epochs expires_at_epochs)
+        with Invalid_argument msg -> output_error msg)
+     | _ -> output_error "Expected bignum accepted-root window fields")
+  | _ ->
+    output_error "Usage: ct-bignum-accepted-root-window-digest VERSION NETWORK_ID ASSET_ID LEDGER_EPOCH ROOTS ROOT_DEPTHS VALID_FROM_EPOCHS EXPIRES_AT_EPOCHS"
+
 let cmd_ct_transaction_context args =
   match args with
   | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
@@ -3551,6 +4284,17 @@ let show_help () =
   print_endline "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof";
   print_endline "  ct-bignum-encode INTEGER     Encode a canonical signed arbitrary-precision integer";
   print_endline "  ct-bignum-vector-encode INTS... Encode canonical signed arbitrary-precision integers";
+  print_endline "  ct-bignum-merkle-leaf C      Hash a bignum confidential note commitment leaf";
+  print_endline "  ct-bignum-merkle-empty WIDTH Hash an empty bignum Merkle placeholder";
+  print_endline "  ct-bignum-merkle-node LEFT RIGHT Hash an internal bignum Merkle node";
+  print_endline "  ct-bignum-merkle-root LEDGER Compute bignum cryptographic Merkle root";
+  print_endline "  ct-bignum-merkle-member-prove LEDGER C Build bignum Merkle membership proof";
+  print_endline "  ct-bignum-merkle-member-verify LEDGER C Verify bignum Merkle membership proof";
+  print_endline "  ct-bignum-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2";
+  print_endline "  ct-bignum-merkle-proof-digest ... Hash canonical bignum Merkle transaction proof bytes";
+  print_endline "  ct-bignum-merkle-envelope-digest ... Hash canonical bignum context digest and proof digest bytes";
+  print_endline "  ct-bignum-wallet-proof-request-digest ... Hash canonical bignum wallet proof request bytes";
+  print_endline "  ct-bignum-accepted-root-window-digest ... Hash canonical bignum live accepted-root window bytes";
   print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2";
   print_endline "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes";
   print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
@@ -3670,6 +4414,17 @@ let run_command cmd args =
   | "ct-merkle-member-verify" -> cmd_ct_merkle_member_verify args
   | "ct-bignum-encode" -> cmd_ct_bignum_encode args
   | "ct-bignum-vector-encode" -> cmd_ct_bignum_vector_encode args
+  | "ct-bignum-merkle-leaf" -> cmd_ct_bignum_merkle_leaf args
+  | "ct-bignum-merkle-empty" -> cmd_ct_bignum_merkle_empty args
+  | "ct-bignum-merkle-node" -> cmd_ct_bignum_merkle_node args
+  | "ct-bignum-merkle-root" -> cmd_ct_bignum_merkle_root args
+  | "ct-bignum-merkle-member-prove" -> cmd_ct_bignum_merkle_member_prove args
+  | "ct-bignum-merkle-member-verify" -> cmd_ct_bignum_merkle_member_verify args
+  | "ct-bignum-transaction-context" -> cmd_ct_bignum_transaction_context args
+  | "ct-bignum-merkle-proof-digest" -> cmd_ct_bignum_merkle_proof_digest args
+  | "ct-bignum-merkle-envelope-digest" -> cmd_ct_bignum_merkle_envelope_digest args
+  | "ct-bignum-wallet-proof-request-digest" -> cmd_ct_bignum_wallet_proof_request_digest args
+  | "ct-bignum-accepted-root-window-digest" -> cmd_ct_bignum_accepted_root_window_digest args
   | "ct-transaction-context" -> cmd_ct_transaction_context args
   | "ct-merkle-proof-digest" -> cmd_ct_merkle_proof_digest args
   | "ct-merkle-envelope-digest" -> cmd_ct_merkle_envelope_digest args

@@ -1,10 +1,10 @@
 {
   "version": 1,
   "algorithm": "SHA3-256",
-  "status": "typescript-bignum-transaction-namespace-preview",
+  "status": "native-bignum-transaction-namespace-preview",
   "notes": [
     "This fixture pins the versioned bignum Merkle and transaction digest namespace for widened SIS-note parameters.",
-    "It does not replace the existing signed-64 transaction namespace until OCaml/Haskell/native parity and launch wiring are complete."
+    "It does not replace the existing signed-64 transaction namespace until launch wiring and widened-runtime benchmarks are complete."
   ],
   "merkle": {
     "dst": "ISABELLA-CT-MERKLE-BIGNUM-v1",
