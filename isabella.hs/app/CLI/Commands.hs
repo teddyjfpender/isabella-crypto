@@ -63,6 +63,10 @@ runCommand format cmd args = case cmd of
     "ct-balance-bigint-fs-challenges" -> cmdCtBalanceBigintFsChallenges format args
     "ct-balance-bigint-prove" -> cmdCtBalanceBigintProve format args
     "ct-balance-bigint-verify" -> cmdCtBalanceBigintVerify format args
+    "ct-range-bigint-fs-fields" -> cmdCtRangeBigintFsFields format args
+    "ct-range-bigint-fs-challenges" -> cmdCtRangeBigintFsChallenges format args
+    "ct-range-bigint-prove" -> cmdCtRangeBigintProve format args
+    "ct-range-bigint-verify" -> cmdCtRangeBigintVerify format args
     "cr-amount-commitment" -> cmdCrAmountCommitment format args
     "cr-prove" -> cmdCrProve format args
     "cr-verify" -> cmdCrVerify format args
@@ -142,6 +146,9 @@ parseCanonicalIntegerVec = parseCanonicalRead
 
 parseCanonicalIntegerMat :: String -> Maybe [[Integer]]
 parseCanonicalIntegerMat = parseCanonicalRead
+
+parseCanonicalIntegerCube :: String -> Maybe [[[Integer]]]
+parseCanonicalIntegerCube = parseCanonicalRead
 
 parseCanonicalVec :: String -> Maybe [Int]
 parseCanonicalVec s = do
@@ -245,6 +252,9 @@ jsonIntegerVec = ("[" ++) . (++ "]") . intercalate "," . map jsonInteger
 
 jsonIntegerMat :: [[Integer]] -> String
 jsonIntegerMat = ("[" ++) . (++ "]") . intercalate "," . map jsonIntegerVec
+
+jsonIntegerCube :: [[[Integer]]] -> String
+jsonIntegerCube = ("[" ++) . (++ "]") . intercalate "," . map jsonIntegerMat
 
 jsonCube :: [[[Int]]] -> String
 jsonCube = ("[" ++) . (++ "]") . intercalate "," . map jsonMat
@@ -439,6 +449,20 @@ data BigCbProof = BigCbProof
   , bigCbZs :: [[Integer]]
   }
 
+data BigOpening = BigOpening
+  { bigOpenMsg :: [Integer]
+  , bigOpenRand :: [Integer]
+  }
+
+data BigCrProof = BigCrProof
+  { bigCrBits :: [[Integer]]
+  , bigCrComps :: [[Integer]]
+  , bigCrAmountAs :: [[Integer]]
+  , bigCrAmountZs :: [[Integer]]
+  , bigCrPairAss :: [[[Integer]]]
+  , bigCrPairZss :: [[[Integer]]]
+  }
+
 jsonBigCbProof :: BigCbProof -> String
 jsonBigCbProof proof =
     jsonObject
@@ -446,8 +470,22 @@ jsonBigCbProof proof =
         , ("zs", jsonIntegerMat (bigCbZs proof))
         ]
 
+jsonBigCrProof :: BigCrProof -> String
+jsonBigCrProof proof =
+    jsonObject
+        [ ("bits", jsonIntegerMat (bigCrBits proof))
+        , ("comps", jsonIntegerMat (bigCrComps proof))
+        , ("amountAs", jsonIntegerMat (bigCrAmountAs proof))
+        , ("amountZs", jsonIntegerMat (bigCrAmountZs proof))
+        , ("pairAss", jsonIntegerCube (bigCrPairAss proof))
+        , ("pairZss", jsonIntegerCube (bigCrPairZss proof))
+        ]
+
 bigCbFsDomain :: Int
 bigCbFsDomain = 1001
+
+bigCrFsDomain :: Int
+bigCrFsDomain = 2001
 
 bigCbFsRounds :: Int
 bigCbFsRounds = 128
@@ -595,6 +633,262 @@ bigFsVerify params gamma ck c proof =
         length as_ == bigCbFsRounds &&
         length zs == bigCbFsRounds &&
         and (zipWith3 (bigSigmaVerify params gamma ck c) as_ challenges zs)
+
+bigOpening :: [Integer] -> [Integer] -> BigOpening
+bigOpening = BigOpening
+
+validBigOpening :: BigCbParams -> BigOpening -> Bool
+validBigOpening params opening =
+    validBigCbParams params &&
+    validBigVec (bigCbN1 params) (bigOpenMsg opening) &&
+    validBigVec (bigCbN2 params) (bigOpenRand opening) &&
+    bigAllBounded (bigOpenMsg opening) (bigCbBeta params) &&
+    bigAllBounded (bigOpenRand opening) (bigCbBeta params)
+
+validBigBitOpening :: BigCbParams -> BigOpening -> Bool
+validBigBitOpening params opening =
+    validBigOpening params opening &&
+    bigAllBounded (bigOpenMsg opening) 1
+
+bigCommit :: BigCbParams -> [[Integer]] -> BigOpening -> [Integer]
+bigCommit params ck opening =
+    bigMatVecMultMod ck (bigOpenMsg opening ++ bigOpenRand opening) (bigCbQ params)
+
+bigZeroOpening :: BigCbParams -> BigOpening
+bigZeroOpening params =
+    BigOpening (replicate (bigCbN1 params) 0) (replicate (bigCbN2 params) 0)
+
+bigOneOpening :: BigCbParams -> BigOpening
+bigOneOpening params =
+    BigOpening [1] (replicate (bigCbN2 params) 0)
+
+bigOpeningAdd :: BigOpening -> BigOpening -> BigOpening
+bigOpeningAdd left right =
+    BigOpening
+        (bigVecAdd (bigOpenMsg left) (bigOpenMsg right))
+        (bigVecAdd (bigOpenRand left) (bigOpenRand right))
+
+bigOpeningSub :: BigOpening -> BigOpening -> BigOpening
+bigOpeningSub left right =
+    BigOpening
+        (bigVecAdd (bigOpenMsg left) (bigScalarMult (-1) (bigOpenMsg right)))
+        (bigVecAdd (bigOpenRand left) (bigScalarMult (-1) (bigOpenRand right)))
+
+bigOpeningScale :: Integer -> BigOpening -> BigOpening
+bigOpeningScale scalar opening =
+    BigOpening
+        (bigScalarMult scalar (bigOpenMsg opening))
+        (bigScalarMult scalar (bigOpenRand opening))
+
+bigWeightedOpening :: BigCbParams -> Integer -> [BigOpening] -> BigOpening
+bigWeightedOpening params base =
+    foldr (\opening acc -> bigOpeningAdd opening (bigOpeningScale base acc)) (bigZeroOpening params)
+
+bigWeightedCommitment :: BigCbParams -> [[Integer]] -> Integer -> [[Integer]] -> [Integer]
+bigWeightedCommitment params ck base =
+    foldr
+        (\row acc -> bigVecMod (bigVecAdd row (bigScalarMult base acc)) (bigCbQ params))
+        (bigRandCommit params ck (replicate (bigCbN2 params) 0))
+
+bigAmountOfOpening :: BigOpening -> Integer
+bigAmountOfOpening opening =
+    case bigOpenMsg opening of
+        value : _ -> value
+        [] -> 0
+
+bigBitPairRelation :: BigCbParams -> BigOpening -> BigOpening -> Bool
+bigBitPairRelation params bitOpening compOpening =
+    validBigBitOpening params bitOpening &&
+    validBigBitOpening params compOpening &&
+    bigAmountOfOpening bitOpening + bigAmountOfOpening compOpening == 1
+
+bigRecomposeBits :: [BigOpening] -> Integer
+bigRecomposeBits openings =
+    sum [bigAmountOfOpening opening * (2 ^ index) | (opening, index) <- zip openings [0 :: Int ..]]
+
+bigCrAmountCommitment :: BigCbParams -> [[Integer]] -> [Integer] -> [[Integer]] -> [Integer]
+bigCrAmountCommitment params ck cAmount cBits =
+    bigVecMod
+        (bigVecAdd cAmount (bigScalarMult (-1) (bigWeightedCommitment params ck 2 cBits)))
+        (bigCbQ params)
+
+bigCrPairCommitment :: BigCbParams -> [[Integer]] -> [Integer] -> [Integer] -> [Integer]
+bigCrPairCommitment params ck cBit cComp =
+    bigVecMod
+        (bigVecAdd
+            (bigVecAdd cBit cComp)
+            (bigScalarMult (-1) (bigCommit params ck (bigOneOpening params))))
+        (bigCbQ params)
+
+bigCrPairCommitments :: BigCbParams -> [[Integer]] -> [[Integer]] -> [[Integer]] -> [[Integer]]
+bigCrPairCommitments params ck cBits cComps =
+    zipWith (bigCrPairCommitment params ck) cBits cComps
+
+bigCrAmountOpening :: BigCbParams -> BigOpening -> [BigOpening] -> BigOpening
+bigCrAmountOpening params amountOpening bitOpenings =
+    bigOpeningSub amountOpening (bigWeightedOpening params 2 bitOpenings)
+
+bigCrPairOpening :: BigCbParams -> BigOpening -> BigOpening -> BigOpening
+bigCrPairOpening params bitOpening compOpening =
+    bigOpeningSub (bigOpeningAdd bitOpening compOpening) (bigOneOpening params)
+
+bigCrPairOpenings :: BigCbParams -> [BigOpening] -> [BigOpening] -> [BigOpening]
+bigCrPairOpenings params =
+    zipWith (bigCrPairOpening params)
+
+bigCrAmountWitnessBound :: BigCbParams -> Int -> Integer
+bigCrAmountWitnessBound params k =
+    (2 ^ k) * bigCbBeta params
+
+bigCrPairWitnessBound :: BigCbParams -> Integer
+bigCrPairWitnessBound params =
+    2 * bigCbBeta params
+
+validBigCrAmountWitness :: BigCbParams -> Int -> [Integer] -> Bool
+validBigCrAmountWitness params k r =
+    k >= 0 &&
+    validBigVec (bigCbN2 params) r &&
+    bigAllBounded r (bigCrAmountWitnessBound params k)
+
+validBigCrPairWitness :: BigCbParams -> [Integer] -> Bool
+validBigCrPairWitness params r =
+    validBigVec (bigCbN2 params) r &&
+    bigAllBounded r (bigCrPairWitnessBound params)
+
+bigCrAmountResponseBound :: BigCbParams -> Integer -> Int -> Int -> Integer
+bigCrAmountResponseBound params gamma k challenge =
+    gamma + toInteger challenge * bigCrAmountWitnessBound params k
+
+bigCrPairResponseBound :: BigCbParams -> Integer -> Int -> Integer
+bigCrPairResponseBound params gamma challenge =
+    gamma + toInteger challenge * bigCrPairWitnessBound params
+
+validBigCrAmountResponse :: BigCbParams -> Integer -> Int -> Int -> [Integer] -> Bool
+validBigCrAmountResponse params gamma k challenge z =
+    (challenge == 0 || challenge == 1) &&
+    validBigVec (bigCbN2 params) z &&
+    bigAllBounded z (bigCrAmountResponseBound params gamma k challenge)
+
+validBigCrPairResponse :: BigCbParams -> Integer -> Int -> [Integer] -> Bool
+validBigCrPairResponse params gamma challenge z =
+    (challenge == 0 || challenge == 1) &&
+    validBigVec (bigCbN2 params) z &&
+    bigAllBounded z (bigCrPairResponseBound params gamma challenge)
+
+bigCrRelation :: BigCbParams -> [[Integer]] -> [Integer] -> BigOpening -> [BigOpening] -> [BigOpening] -> Bool
+bigCrRelation params ck cAmount amountOpening bitOpenings compOpenings =
+    validBigCbParams params &&
+    validBigCommitKey params ck &&
+    validBigVec (bigCbM params) cAmount &&
+    length bitOpenings == length compOpenings &&
+    bigCommit params ck amountOpening == cAmount &&
+    and (zipWith (bigBitPairRelation params) bitOpenings compOpenings) &&
+    bigAmountOfOpening amountOpening == bigRecomposeBits bitOpenings
+
+bigCrFsFields :: [[Integer]] -> [Integer] -> [[Integer]] -> [[Integer]] -> [[Integer]] -> [[[Integer]]] -> [Integer]
+bigCrFsFields ck cAmount cBits cComps aAmounts aPairss =
+    [ sum (concat ck)
+    , sum cAmount
+    , sum (concat cBits)
+    , sum (concat cComps)
+    , sum (concat aAmounts)
+    , sum (concat (concat aPairss))
+    ]
+
+bigCrFsChallenges :: [[Integer]] -> [Integer] -> [[Integer]] -> [[Integer]] -> [[Integer]] -> [[[Integer]]] -> Int -> [Int]
+bigCrFsChallenges ck cAmount cBits cComps aAmounts aPairss rounds =
+    let fields = bigCrFsFields ck cAmount cBits cComps aAmounts aPairss
+     in [bigBinaryFsChallenge bigCrFsDomain fields roundIndex | roundIndex <- [0 .. rounds - 1]]
+
+bigCrSigmaVerify :: BigCbParams -> [[Integer]] -> [Integer] -> [Integer] -> Int -> [Integer] -> (Int -> [Integer] -> Bool) -> Bool
+bigCrSigmaVerify params ck c a challenge z validResponse =
+    validBigCommitKey params ck &&
+    validBigVec (bigCbM params) c &&
+    validBigVec (bigCbM params) a &&
+    validResponse challenge z &&
+    bigRandCommit params ck z ==
+        bigVecMod (bigVecAdd a (bigScalarMult (toInteger challenge) c)) (bigCbQ params)
+
+bigCrFsProve ::
+  BigCbParams ->
+  Integer ->
+  Int ->
+  [[Integer]] ->
+  [Integer] ->
+  BigOpening ->
+  [BigOpening] ->
+  [BigOpening] ->
+  [[Integer]] ->
+  [[[Integer]]] ->
+  Maybe BigCrProof
+bigCrFsProve params gamma k ck cAmount amountOpening bitOpenings compOpenings yAmounts yPairss =
+    let bits = map (bigCommit params ck) bitOpenings
+        comps = map (bigCommit params ck) compOpenings
+        amountWitness = bigOpenRand (bigCrAmountOpening params amountOpening bitOpenings)
+        pairWitnesses = map bigOpenRand (bigCrPairOpenings params bitOpenings compOpenings)
+        amountAs = map (bigRandCommit params ck) yAmounts
+        pairAss = map (map (bigRandCommit params ck)) yPairss
+        challenges = bigCrFsChallenges ck cAmount bits comps amountAs pairAss bigCbFsRounds
+        amountZs = zipWith (bigSigmaRespond amountWitness) yAmounts challenges
+        pairZss =
+            zipWith
+                (\roundMasks challenge ->
+                    zipWith (\mask witness -> bigSigmaRespond witness mask challenge) roundMasks pairWitnesses)
+                yPairss
+                challenges
+     in if k >= 0 &&
+           length bitOpenings == k &&
+           length compOpenings == k &&
+           length yAmounts == bigCbFsRounds &&
+           length yPairss == bigCbFsRounds &&
+           all ((== k) . length) yPairss &&
+           bigCrRelation params ck cAmount amountOpening bitOpenings compOpenings &&
+           all (validBigMask params gamma) yAmounts &&
+           all (all (validBigMask params gamma)) yPairss &&
+           validBigCrAmountWitness params k amountWitness &&
+           all (validBigCrPairWitness params) pairWitnesses &&
+           and (zipWith (validBigCrAmountResponse params gamma k) challenges amountZs) &&
+           and
+             [ all (validBigCrPairResponse params gamma challenge) responses
+             | (challenge, responses) <- zip challenges pairZss
+             ]
+        then Just (BigCrProof bits comps amountAs amountZs pairAss pairZss)
+        else Nothing
+
+bigCrFsVerify :: BigCbParams -> Integer -> Int -> [[Integer]] -> [Integer] -> BigCrProof -> Bool
+bigCrFsVerify params gamma k ck cAmount proof =
+    let bits = bigCrBits proof
+        comps = bigCrComps proof
+        amountAs = bigCrAmountAs proof
+        amountZs = bigCrAmountZs proof
+        pairAss = bigCrPairAss proof
+        pairZss = bigCrPairZss proof
+        amountCommit = bigCrAmountCommitment params ck cAmount bits
+        pairs = bigCrPairCommitments params ck bits comps
+        challenges = bigCrFsChallenges ck cAmount bits comps amountAs pairAss bigCbFsRounds
+     in k >= 0 &&
+        validBigCbParams params &&
+        validBigCommitKey params ck &&
+        validBigVec (bigCbM params) cAmount &&
+        length bits == k &&
+        length comps == k &&
+        length amountAs == bigCbFsRounds &&
+        length amountZs == bigCbFsRounds &&
+        length pairAss == bigCbFsRounds &&
+        length pairZss == bigCbFsRounds &&
+        all ((== k) . length) pairAss &&
+        all ((== k) . length) pairZss &&
+        and
+          [ bigCrSigmaVerify params ck amountCommit a challenge z
+              (validBigCrAmountResponse params gamma k)
+          | (a, challenge, z) <- zip3 amountAs challenges amountZs
+          ] &&
+        and
+          [ bigCrSigmaVerify params ck (pairs !! bitIndex) a challenge z
+              (validBigCrPairResponse params gamma)
+          | (roundAss, challenge, roundZss) <- zip3 pairAss challenges pairZss
+          , (bitIndex, a, z) <- zip3 [0 :: Int ..] roundAss roundZss
+          ]
 
 jsonCrProof :: ConfidentialRange.RangeProof -> String
 jsonCrProof proof =
@@ -1447,6 +1741,109 @@ cmdCtBalanceBigintVerify format [mStr, n2Str, qStr, betaStr, gammaStr, ckStr, cS
         _ -> outputError format "Expected params, gamma, BigInt commitment key matrix, commitment vector, announcement matrix, and response matrix"
 cmdCtBalanceBigintVerify format _ =
     outputUsage format "Usage: ct-balance-bigint-verify M N2 Q BETA GAMMA \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\" \"[[z1],[z2],...]\""
+
+makeBigScalarOpenings :: [Integer] -> [[Integer]] -> Maybe [BigOpening]
+makeBigScalarOpenings values rands
+  | length values == length rands = Just (zipWith (\value rand -> bigOpening [value] rand) values rands)
+  | otherwise = Nothing
+
+cmdCtRangeBigintFsFields :: OutputFormat -> [String] -> IO ()
+cmdCtRangeBigintFsFields format [ckStr, cAmountStr, bitsStr, compsStr, amountAsStr, pairAssStr] =
+    case
+        ( parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cAmountStr
+        , parseCanonicalIntegerMat bitsStr
+        , parseCanonicalIntegerMat compsStr
+        , parseCanonicalIntegerMat amountAsStr
+        , parseCanonicalIntegerCube pairAssStr
+        )
+    of
+        (Just ck, Just cAmount, Just bits, Just comps, Just amountAs, Just pairAss) ->
+            case format of
+                Human -> putStrLn $ "ct_range_bigint_fs_fields = " ++ show (bigCrFsFields ck cAmount bits comps amountAs pairAss)
+                Json -> putStrLn $ "{\"result\":" ++ jsonIntegerVec (bigCrFsFields ck cAmount bits comps amountAs pairAss) ++ "}"
+        _ -> outputError format "Expected BigInt commitment key, amount commitment, bit commitments, complement commitments, amount announcements, and pair announcements"
+cmdCtRangeBigintFsFields format _ =
+    outputUsage format "Usage: ct-range-bigint-fs-fields \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[[pairAss]]]\""
+
+cmdCtRangeBigintFsChallenges :: OutputFormat -> [String] -> IO ()
+cmdCtRangeBigintFsChallenges format [mStr, n2Str, qStr, betaStr, ckStr, cAmountStr, bitsStr, compsStr, amountAsStr, pairAssStr, roundsStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cAmountStr
+        , parseCanonicalIntegerMat bitsStr
+        , parseCanonicalIntegerMat compsStr
+        , parseCanonicalIntegerMat amountAsStr
+        , parseCanonicalIntegerCube pairAssStr
+        , parseCanonicalInt roundsStr
+        )
+    of
+        (Just params, Just ck, Just cAmount, Just bits, Just comps, Just amountAs, Just pairAss, Just rounds)
+            | validBigCbParams params && validBigCommitKey params ck && validBigVec (bigCbM params) cAmount && rounds >= 0 ->
+                outputVecResult format "ct_range_bigint_fs_challenges = "
+                    (bigCrFsChallenges ck cAmount bits comps amountAs pairAss rounds)
+        _ -> outputError format "Expected params, BigInt range transcript fields, and round count"
+cmdCtRangeBigintFsChallenges format _ =
+    outputUsage format "Usage: ct-range-bigint-fs-challenges M N2 Q BETA \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[[pairAss]]]\" ROUNDS"
+
+cmdCtRangeBigintProve :: OutputFormat -> [String] -> IO ()
+cmdCtRangeBigintProve format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, cAmountStr, amountStr, amountRandStr, bitsStr, bitRandsStr, compsStr, compRandsStr, yAmountsStr, yPairssStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInteger gammaStr
+        , parseCanonicalInt kStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cAmountStr
+        , parseCanonicalInteger amountStr
+        , parseCanonicalIntegerVec amountRandStr
+        , parseCanonicalIntegerVec bitsStr
+        , parseCanonicalIntegerMat bitRandsStr
+        , parseCanonicalIntegerVec compsStr
+        , parseCanonicalIntegerMat compRandsStr
+        , parseCanonicalIntegerMat yAmountsStr
+        , parseCanonicalIntegerCube yPairssStr
+        )
+    of
+        (Just params, Just gamma, Just k, Just ck, Just cAmount, Just amount, Just amountRand, Just bits, Just bitRands, Just comps, Just compRands, Just yAmounts, Just yPairss) ->
+            case (makeBigScalarOpenings bits bitRands, makeBigScalarOpenings comps compRands) of
+                (Just bitOpenings, Just compOpenings) ->
+                    case bigCrFsProve params gamma k ck cAmount (bigOpening [amount] amountRand) bitOpenings compOpenings yAmounts yPairss of
+                        Just proof ->
+                            case format of
+                                Human -> putStrLn $ "ct_range_bigint_proof = " ++ jsonBigCrProof proof
+                                Json -> putStrLn $ "{\"result\":" ++ jsonBigCrProof proof ++ "}"
+                        Nothing ->
+                            case format of
+                                Human -> putStrLn "ct_range_bigint_proof = null"
+                                Json -> putStrLn "{\"result\":null}"
+                _ -> outputError format "Bit/complement counts must match their randomness matrices"
+        _ -> outputError format "Expected params, gamma, BigInt commitment key, amount opening, bit openings, complement openings, and masks"
+cmdCtRangeBigintProve format _ =
+    outputUsage format "Usage: ct-range-bigint-prove M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" AMOUNT \"[amountRand]\" \"[bits]\" \"[[bitRands]]\" \"[comps]\" \"[[compRands]]\" \"[[yAmounts]]\" \"[[[yPairss]]]\""
+
+cmdCtRangeBigintVerify :: OutputFormat -> [String] -> IO ()
+cmdCtRangeBigintVerify format [mStr, n2Str, qStr, betaStr, gammaStr, kStr, ckStr, cAmountStr, bitsStr, compsStr, amountAsStr, amountZsStr, pairAssStr, pairZssStr] =
+    case
+        ( parseBigCbParams mStr n2Str qStr betaStr
+        , parseCanonicalInteger gammaStr
+        , parseCanonicalInt kStr
+        , parseCanonicalIntegerMat ckStr
+        , parseCanonicalIntegerVec cAmountStr
+        , parseCanonicalIntegerMat bitsStr
+        , parseCanonicalIntegerMat compsStr
+        , parseCanonicalIntegerMat amountAsStr
+        , parseCanonicalIntegerMat amountZsStr
+        , parseCanonicalIntegerCube pairAssStr
+        , parseCanonicalIntegerCube pairZssStr
+        )
+    of
+        (Just params, Just gamma, Just k, Just ck, Just cAmount, Just bits, Just comps, Just amountAs, Just amountZs, Just pairAss, Just pairZss) ->
+            outputBoolResult format "ct_range_bigint_verify = "
+                (bigCrFsVerify params gamma k ck cAmount (BigCrProof bits comps amountAs amountZs pairAss pairZss))
+        _ -> outputError format "Expected params, gamma, BigInt commitment key, amount commitment, and proof fields"
+cmdCtRangeBigintVerify format _ =
+    outputUsage format "Usage: ct-range-bigint-verify M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
 
 cmdCrAmountCommitment :: OutputFormat -> [String] -> IO ()
 cmdCrAmountCommitment format [mStr, n2Str, qStr, betaStr, ckStr, cAmountStr, cBitsStr] =

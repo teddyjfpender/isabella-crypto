@@ -480,6 +480,9 @@ let bigint_vec_text values =
 let bigint_mat_text rows =
   "[" ^ String.concat "," (List.map bigint_vec_text rows) ^ "]"
 
+let bigint_cube_text cubes =
+  "[" ^ String.concat "," (List.map bigint_mat_text cubes) ^ "]"
+
 let json_of_bigint value =
   json_of_string (string_of_bigint value)
 
@@ -488,6 +491,9 @@ let json_of_bigint_vec values =
 
 let json_of_bigint_mat rows =
   "[" ^ String.concat "," (List.map json_of_bigint_vec rows) ^ "]"
+
+let json_of_bigint_cube cubes =
+  "[" ^ String.concat "," (List.map json_of_bigint_mat cubes) ^ "]"
 
 let parse_canonical_bigint_vec s =
   let parse_inner inner =
@@ -529,6 +535,26 @@ let parse_canonical_bigint_mat s =
     | _ -> None
   else None
 
+let parse_canonical_bigint_cube s =
+  let parse_inner inner =
+    if String.trim inner = "" then Some []
+    else
+      let rec parse_cubes acc = function
+        | [] -> Some (List.rev acc)
+        | cube :: rest ->
+            match parse_canonical_bigint_mat cube with
+            | Some value -> parse_cubes (value :: acc) rest
+            | None -> None
+      in
+      parse_cubes [] (split_top_level inner)
+  in
+  if String.length s >= 2 && s.[0] = '[' && s.[String.length s - 1] = ']' then
+    let inner = String.sub s 1 (String.length s - 2) in
+    match parse_inner inner with
+    | Some cubes when bigint_cube_text cubes = s -> Some cubes
+    | _ -> None
+  else None
+
 let encode_bigint_value value =
   let magnitude = bignum_magnitude_le_bytes (bigint_to_abs_decimal value) in
   let sign = if value.big_neg then 1 else 0 in
@@ -540,6 +566,16 @@ let ascii_bytes text =
 let json_of_bigint_balance_proof as_ zs =
   Printf.sprintf "{\"as\":%s,\"zs\":%s}" (json_of_bigint_mat as_) (json_of_bigint_mat zs)
 
+let json_of_bigint_range_proof bits comps amount_as amount_zs pair_ass pair_zss =
+  Printf.sprintf
+    "{\"bits\":%s,\"comps\":%s,\"amountAs\":%s,\"amountZs\":%s,\"pairAss\":%s,\"pairZss\":%s}"
+    (json_of_bigint_mat bits)
+    (json_of_bigint_mat comps)
+    (json_of_bigint_mat amount_as)
+    (json_of_bigint_mat amount_zs)
+    (json_of_bigint_cube pair_ass)
+    (json_of_bigint_cube pair_zss)
+
 type big_cb_params = {
   big_cb_n1 : int;
   big_cb_n2 : int;
@@ -548,7 +584,13 @@ type big_cb_params = {
   big_cb_beta : cli_bigint;
 }
 
+type big_opening = {
+  big_open_msg : cli_bigint list;
+  big_open_rand : cli_bigint list;
+}
+
 let big_cb_fs_domain = 1001
+let big_cr_fs_domain = 2001
 let big_cb_fs_rounds = 128
 let big_cb_transcript_dst = "ISABELLA-CT-FS-v1"
 
@@ -708,6 +750,268 @@ let big_fs_verify params gamma ck c as_ zs =
       (fun a (challenge, z) -> big_sigma_verify params gamma ck c a challenge z)
       as_
       (List.combine challenges zs)
+  with Invalid_argument _ -> false
+
+let big_opening msg rand =
+  { big_open_msg = msg; big_open_rand = rand }
+
+let valid_big_opening params opening =
+  valid_big_cb_params params &&
+  valid_big_vec params.big_cb_n1 opening.big_open_msg &&
+  valid_big_vec params.big_cb_n2 opening.big_open_rand &&
+  bigint_all_bounded opening.big_open_msg params.big_cb_beta &&
+  bigint_all_bounded opening.big_open_rand params.big_cb_beta
+
+let valid_big_bit_opening params opening =
+  valid_big_opening params opening &&
+  bigint_all_bounded opening.big_open_msg bigint_one
+
+let big_commit params ck opening =
+  bigint_mat_vec_mult_mod ck (opening.big_open_msg @ opening.big_open_rand) params.big_cb_q
+
+let big_zero_opening params =
+  { big_open_msg = List.init params.big_cb_n1 (fun _ -> bigint_zero);
+    big_open_rand = List.init params.big_cb_n2 (fun _ -> bigint_zero) }
+
+let big_one_opening params =
+  { big_open_msg = [bigint_one];
+    big_open_rand = List.init params.big_cb_n2 (fun _ -> bigint_zero) }
+
+let big_opening_add left right =
+  { big_open_msg = bigint_vec_add left.big_open_msg right.big_open_msg;
+    big_open_rand = bigint_vec_add left.big_open_rand right.big_open_rand }
+
+let big_opening_sub left right =
+  { big_open_msg = bigint_vec_add left.big_open_msg (bigint_scalar_mult (bigint_of_int (-1)) right.big_open_msg);
+    big_open_rand = bigint_vec_add left.big_open_rand (bigint_scalar_mult (bigint_of_int (-1)) right.big_open_rand) }
+
+let big_opening_scale scalar opening =
+  { big_open_msg = bigint_scalar_mult scalar opening.big_open_msg;
+    big_open_rand = bigint_scalar_mult scalar opening.big_open_rand }
+
+let big_weighted_opening params base openings =
+  List.fold_right
+    (fun opening acc -> big_opening_add opening (big_opening_scale base acc))
+    openings
+    (big_zero_opening params)
+
+let big_weighted_commitment params ck base commitments =
+  List.fold_right
+    (fun row acc ->
+       bigint_vec_mod
+         (bigint_vec_add row (bigint_scalar_mult base acc))
+         params.big_cb_q)
+    commitments
+    (big_rand_commit params ck (List.init params.big_cb_n2 (fun _ -> bigint_zero)))
+
+let big_amount_of_opening opening =
+  match opening.big_open_msg with
+  | value :: _ -> value
+  | [] -> bigint_zero
+
+let big_bit_pair_relation params bit_opening comp_opening =
+  valid_big_bit_opening params bit_opening &&
+  valid_big_bit_opening params comp_opening &&
+  compare_bigint
+    (bigint_add (big_amount_of_opening bit_opening) (big_amount_of_opening comp_opening))
+    bigint_one = 0
+
+let big_recompose_bits openings =
+  let rec loop weight acc = function
+    | [] -> acc
+    | opening :: rest ->
+        loop
+          (bigint_mul_small weight 2)
+          (bigint_add acc (bigint_mul (big_amount_of_opening opening) weight))
+          rest
+  in
+  loop bigint_one bigint_zero openings
+
+let big_cr_amount_commitment params ck c_amount c_bits =
+  bigint_vec_mod
+    (bigint_vec_add
+       c_amount
+       (bigint_scalar_mult (bigint_of_int (-1)) (big_weighted_commitment params ck (bigint_of_int 2) c_bits)))
+    params.big_cb_q
+
+let big_cr_pair_commitment params ck c_bit c_comp =
+  bigint_vec_mod
+    (bigint_vec_add
+       (bigint_vec_add c_bit c_comp)
+       (bigint_scalar_mult (bigint_of_int (-1)) (big_commit params ck (big_one_opening params))))
+    params.big_cb_q
+
+let big_cr_pair_commitments params ck c_bits c_comps =
+  List.map2 (big_cr_pair_commitment params ck) c_bits c_comps
+
+let big_cr_amount_opening params amount_opening bit_openings =
+  big_opening_sub amount_opening (big_weighted_opening params (bigint_of_int 2) bit_openings)
+
+let big_cr_pair_opening params bit_opening comp_opening =
+  big_opening_sub (big_opening_add bit_opening comp_opening) (big_one_opening params)
+
+let big_cr_pair_openings params bit_openings comp_openings =
+  List.map2 (big_cr_pair_opening params) bit_openings comp_openings
+
+let bigint_pow2 exponent =
+  if exponent < 0 then invalid_arg "negative exponent";
+  let rec loop acc remaining =
+    if remaining = 0 then acc
+    else loop (bigint_mul_small acc 2) (remaining - 1)
+  in
+  loop bigint_one exponent
+
+let big_cr_amount_witness_bound params k =
+  bigint_mul (bigint_pow2 k) params.big_cb_beta
+
+let big_cr_pair_witness_bound params =
+  bigint_mul_small params.big_cb_beta 2
+
+let valid_big_cr_amount_witness params k r =
+  k >= 0 &&
+  valid_big_vec params.big_cb_n2 r &&
+  bigint_all_bounded r (big_cr_amount_witness_bound params k)
+
+let valid_big_cr_pair_witness params r =
+  valid_big_vec params.big_cb_n2 r &&
+  bigint_all_bounded r (big_cr_pair_witness_bound params)
+
+let big_cr_amount_response_bound params gamma k challenge =
+  bigint_add gamma (bigint_mul_small (big_cr_amount_witness_bound params k) challenge)
+
+let big_cr_pair_response_bound params gamma challenge =
+  bigint_add gamma (bigint_mul_small (big_cr_pair_witness_bound params) challenge)
+
+let valid_big_cr_amount_response params gamma k challenge z =
+  (challenge = 0 || challenge = 1) &&
+  valid_big_vec params.big_cb_n2 z &&
+  bigint_all_bounded z (big_cr_amount_response_bound params gamma k challenge)
+
+let valid_big_cr_pair_response params gamma challenge z =
+  (challenge = 0 || challenge = 1) &&
+  valid_big_vec params.big_cb_n2 z &&
+  bigint_all_bounded z (big_cr_pair_response_bound params gamma challenge)
+
+let big_cr_relation params ck c_amount amount_opening bit_openings comp_openings =
+  try
+    valid_big_cb_params params &&
+    valid_big_commit_key params ck &&
+    valid_big_vec params.big_cb_m c_amount &&
+    List.length bit_openings = List.length comp_openings &&
+    big_commit params ck amount_opening = c_amount &&
+    List.for_all2 (big_bit_pair_relation params) bit_openings comp_openings &&
+    compare_bigint (big_amount_of_opening amount_opening) (big_recompose_bits bit_openings) = 0
+  with Invalid_argument _ -> false
+
+let bigint_cube_sum cubes =
+  List.fold_left (fun acc rows -> bigint_add acc (bigint_matrix_sum rows)) bigint_zero cubes
+
+let big_cr_fs_fields ck c_amount c_bits c_comps amount_as pair_ass =
+  [ bigint_matrix_sum ck;
+    bigint_sum c_amount;
+    bigint_matrix_sum c_bits;
+    bigint_matrix_sum c_comps;
+    bigint_matrix_sum amount_as;
+    bigint_cube_sum pair_ass ]
+
+let big_cr_fs_challenges ck c_amount c_bits c_comps amount_as pair_ass rounds =
+  let fields = big_cr_fs_fields ck c_amount c_bits c_comps amount_as pair_ass in
+  List.init rounds (fun round -> big_binary_fs_challenge big_cr_fs_domain fields round)
+
+let big_cr_sigma_verify params ck c a challenge z valid_response =
+  try
+    valid_big_commit_key params ck &&
+    valid_big_vec params.big_cb_m c &&
+    valid_big_vec params.big_cb_m a &&
+    valid_response challenge z &&
+    big_rand_commit params ck z =
+      bigint_vec_mod
+        (bigint_vec_add a (bigint_scalar_mult (bigint_of_int challenge) c))
+        params.big_cb_q
+  with Invalid_argument _ -> false
+
+let big_cr_fs_prove params gamma k ck c_amount amount_opening bit_openings comp_openings y_amounts y_pairss =
+  try
+    let bits = List.map (big_commit params ck) bit_openings in
+    let comps = List.map (big_commit params ck) comp_openings in
+    let amount_witness = (big_cr_amount_opening params amount_opening bit_openings).big_open_rand in
+    let pair_witnesses = List.map (fun opening -> opening.big_open_rand) (big_cr_pair_openings params bit_openings comp_openings) in
+    let amount_as = List.map (big_rand_commit params ck) y_amounts in
+    let pair_ass = List.map (List.map (big_rand_commit params ck)) y_pairss in
+    let challenges = big_cr_fs_challenges ck c_amount bits comps amount_as pair_ass big_cb_fs_rounds in
+    let amount_zs = List.map2 (big_sigma_respond amount_witness) y_amounts challenges in
+    let pair_zss =
+      List.map2
+        (fun round_masks challenge ->
+           List.map2 (fun mask witness -> big_sigma_respond witness mask challenge) round_masks pair_witnesses)
+        y_pairss
+        challenges
+    in
+    if k >= 0 &&
+       List.length bit_openings = k &&
+       List.length comp_openings = k &&
+       List.length y_amounts = big_cb_fs_rounds &&
+       List.length y_pairss = big_cb_fs_rounds &&
+       List.for_all (fun round_masks -> List.length round_masks = k) y_pairss &&
+       big_cr_relation params ck c_amount amount_opening bit_openings comp_openings &&
+       List.for_all (valid_big_mask params gamma) y_amounts &&
+       List.for_all (List.for_all (valid_big_mask params gamma)) y_pairss &&
+       valid_big_cr_amount_witness params k amount_witness &&
+       List.for_all (valid_big_cr_pair_witness params) pair_witnesses &&
+       List.for_all2 (valid_big_cr_amount_response params gamma k) challenges amount_zs &&
+       List.for_all2
+         (fun challenge responses -> List.for_all (valid_big_cr_pair_response params gamma challenge) responses)
+         challenges
+         pair_zss
+    then Some (bits, comps, amount_as, amount_zs, pair_ass, pair_zss)
+    else None
+  with Invalid_argument _ -> None
+
+let big_cr_fs_verify params gamma k ck c_amount bits comps amount_as amount_zs pair_ass pair_zss =
+  try
+    let amount_commit = big_cr_amount_commitment params ck c_amount bits in
+    let pairs = big_cr_pair_commitments params ck bits comps in
+    let challenges = big_cr_fs_challenges ck c_amount bits comps amount_as pair_ass big_cb_fs_rounds in
+    k >= 0 &&
+    valid_big_cb_params params &&
+    valid_big_commit_key params ck &&
+    valid_big_vec params.big_cb_m c_amount &&
+    List.length bits = k &&
+    List.length comps = k &&
+    List.length amount_as = big_cb_fs_rounds &&
+    List.length amount_zs = big_cb_fs_rounds &&
+    List.length pair_ass = big_cb_fs_rounds &&
+    List.length pair_zss = big_cb_fs_rounds &&
+    List.for_all (fun round_ass -> List.length round_ass = k) pair_ass &&
+    List.for_all (fun round_zs -> List.length round_zs = k) pair_zss &&
+    List.for_all2
+      (fun a (challenge, z) ->
+         big_cr_sigma_verify
+           params
+           ck
+           amount_commit
+           a
+           challenge
+           z
+           (valid_big_cr_amount_response params gamma k))
+      amount_as
+      (List.combine challenges amount_zs) &&
+    List.for_all2
+      (fun round_ass (challenge, round_zs) ->
+         List.for_all2
+           (fun a (pair, z) ->
+              big_cr_sigma_verify
+                params
+                ck
+                pair
+                a
+                challenge
+                z
+                (valid_big_cr_pair_response params gamma))
+           round_ass
+           (List.combine pairs round_zs))
+      pair_ass
+      (List.combine challenges pair_zss)
   with Invalid_argument _ -> false
 
 let hex_of_bytes bytes =
@@ -1763,6 +2067,119 @@ let cmd_ct_balance_bigint_verify args =
          output_result "ct_balance_bigint_verify" (if result then "true" else "false")
      | _ -> output_error "Expected params, gamma, BigInt commitment key matrix, commitment vector, announcement matrix, and response matrix")
   | _ -> output_error "Usage: ct-balance-bigint-verify M N2 Q BETA GAMMA \"[[ck]]\" \"[c]\" \"[[a1],[a2],...]\" \"[[z1],[z2],...]\""
+
+let rec make_big_scalar_openings values rands =
+  match values, rands with
+  | [], [] -> Some []
+  | value :: rest_values, rand :: rest_rands ->
+      Option.map (fun rest -> big_opening [value] rand :: rest)
+        (make_big_scalar_openings rest_values rest_rands)
+  | _ -> None
+
+let cmd_ct_range_bigint_fs_fields args =
+  match args with
+  | [ck_str; c_amount_str; bits_str; comps_str; amount_as_str; pair_ass_str] ->
+    (match
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_amount_str,
+       parse_canonical_bigint_mat bits_str,
+       parse_canonical_bigint_mat comps_str,
+       parse_canonical_bigint_mat amount_as_str,
+       parse_canonical_bigint_cube pair_ass_str
+     with
+     | Some ck, Some c_amount, Some bits, Some comps, Some amount_as, Some pair_ass ->
+         let result = big_cr_fs_fields ck c_amount bits comps amount_as pair_ass in
+         (match !output_format with
+          | Human -> Printf.printf "ct_range_bigint_fs_fields = %s\n" (bigint_vec_text result)
+          | Json -> Printf.printf "{\"result\":%s}\n" (json_of_bigint_vec result))
+     | _ -> output_error "Expected BigInt commitment key, amount commitment, bit commitments, complement commitments, amount announcements, and pair announcements")
+  | _ -> output_error "Usage: ct-range-bigint-fs-fields \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[[pairAss]]]\""
+
+let cmd_ct_range_bigint_fs_challenges args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; ck_str; c_amount_str; bits_str; comps_str; amount_as_str; pair_ass_str; rounds_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_amount_str,
+       parse_canonical_bigint_mat bits_str,
+       parse_canonical_bigint_mat comps_str,
+       parse_canonical_bigint_mat amount_as_str,
+       parse_canonical_bigint_cube pair_ass_str,
+       parse_canonical_int rounds_str
+     with
+     | Some params, Some ck, Some c_amount, Some bits, Some comps, Some amount_as, Some pair_ass, Some rounds
+       when valid_big_cb_params params &&
+            valid_big_commit_key params ck &&
+            valid_big_vec params.big_cb_m c_amount &&
+            rounds >= 0 ->
+         let result = big_cr_fs_challenges ck c_amount bits comps amount_as pair_ass rounds in
+         output_result "ct_range_bigint_fs_challenges"
+           ("[" ^ String.concat "," (List.map string_of_int result) ^ "]")
+     | _ -> output_error "Expected params, BigInt range transcript fields, and round count")
+  | _ -> output_error "Usage: ct-range-bigint-fs-challenges M N2 Q BETA \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[[pairAss]]]\" ROUNDS"
+
+let cmd_ct_range_bigint_prove args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; c_amount_str; amount_str; amount_rand_str; bits_str; bit_rands_str; comps_str; comp_rands_str; y_amounts_str; y_pairss_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_int k_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_amount_str,
+       parse_canonical_bigint amount_str,
+       parse_canonical_bigint_vec amount_rand_str,
+       parse_canonical_bigint_vec bits_str,
+       parse_canonical_bigint_mat bit_rands_str,
+       parse_canonical_bigint_vec comps_str,
+       parse_canonical_bigint_mat comp_rands_str,
+       parse_canonical_bigint_mat y_amounts_str,
+       parse_canonical_bigint_cube y_pairss_str
+     with
+     | Some params, Some gamma, Some k, Some ck, Some c_amount, Some amount, Some amount_rand, Some bits, Some bit_rands, Some comps, Some comp_rands, Some y_amounts, Some y_pairss ->
+       (match make_big_scalar_openings bits bit_rands, make_big_scalar_openings comps comp_rands with
+        | Some bit_openings, Some comp_openings ->
+          (match big_cr_fs_prove params gamma k ck c_amount (big_opening [amount] amount_rand) bit_openings comp_openings y_amounts y_pairss with
+           | Some (bits, comps, amount_as, amount_zs, pair_ass, pair_zss) ->
+             (match !output_format with
+              | Human ->
+                Printf.printf
+                  "ct_range_bigint_proof = %s\n"
+                  (json_of_bigint_range_proof bits comps amount_as amount_zs pair_ass pair_zss)
+              | Json ->
+                Printf.printf
+                  "{\"result\":%s}\n"
+                  (json_of_bigint_range_proof bits comps amount_as amount_zs pair_ass pair_zss))
+           | None ->
+             (match !output_format with
+              | Human -> print_endline "ct_range_bigint_proof = null"
+              | Json -> print_endline "{\"result\":null}"))
+        | _ -> output_error "Bit/complement counts must match their randomness matrices")
+     | _ -> output_error "Expected params, gamma, BigInt commitment key, amount opening, bit openings, complement openings, and masks")
+  | _ -> output_error "Usage: ct-range-bigint-prove M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" AMOUNT \"[amountRand]\" \"[bits]\" \"[[bitRands]]\" \"[comps]\" \"[[compRands]]\" \"[[yAmounts]]\" \"[[[yPairss]]]\""
+
+let cmd_ct_range_bigint_verify args =
+  match args with
+  | [m_str; n2_str; q_str; beta_str; gamma_str; k_str; ck_str; c_amount_str; bits_str; comps_str; amount_as_str; amount_zs_str; pair_ass_str; pair_zss_str] ->
+    (match
+       make_big_cb_params m_str n2_str q_str beta_str,
+       parse_canonical_bigint gamma_str,
+       parse_canonical_int k_str,
+       parse_canonical_bigint_mat ck_str,
+       parse_canonical_bigint_vec c_amount_str,
+       parse_canonical_bigint_mat bits_str,
+       parse_canonical_bigint_mat comps_str,
+       parse_canonical_bigint_mat amount_as_str,
+       parse_canonical_bigint_mat amount_zs_str,
+       parse_canonical_bigint_cube pair_ass_str,
+       parse_canonical_bigint_cube pair_zss_str
+     with
+     | Some params, Some gamma, Some k, Some ck, Some c_amount, Some bits, Some comps, Some amount_as, Some amount_zs, Some pair_ass, Some pair_zss ->
+         let result = big_cr_fs_verify params gamma k ck c_amount bits comps amount_as amount_zs pair_ass pair_zss in
+         output_result "ct_range_bigint_verify" (if result then "true" else "false")
+     | _ -> output_error "Expected params, gamma, BigInt commitment key, amount commitment, and proof fields")
+  | _ -> output_error "Usage: ct-range-bigint-verify M N2 Q BETA GAMMA K \"[[ck]]\" \"[cAmount]\" \"[[bits]]\" \"[[comps]]\" \"[[amountAs]]\" \"[[amountZs]]\" \"[[[pairAss]]]\" \"[[[pairZss]]]\""
 
 (** {1 Confidential Range Commands} *)
 
@@ -2869,6 +3286,10 @@ let show_help () =
   print_endline "  ct-balance-bigint-fs-challenges M N2 Q BETA CK C AS ROUNDS  Expand widened balance challenges";
   print_endline "  ct-balance-bigint-prove M N2 Q BETA G CK C R YS  Build widened balance proof";
   print_endline "  ct-balance-bigint-verify M N2 Q BETA G CK C AS ZS  Verify widened balance proof";
+  print_endline "  ct-range-bigint-fs-fields CK C BITS COMPS AMOUNT_AS PAIR_ASS  Compute widened range Fiat-Shamir fields";
+  print_endline "  ct-range-bigint-fs-challenges M N2 Q BETA CK C BITS COMPS AMOUNT_AS PAIR_ASS ROUNDS  Expand widened range challenges";
+  print_endline "  ct-range-bigint-prove M N2 Q BETA G K CK C AMOUNT RAND BITS BIT_RANDS COMPS COMP_RANDS YAMOUNTS YPAIRSS  Build widened range proof";
+  print_endline "  ct-range-bigint-verify M N2 Q BETA G K CK C BITS COMPS AMOUNT_AS AMOUNT_ZS PAIR_ASS PAIR_ZSS  Verify widened range proof";
   print_endline "";
   print_endline "Confidential Range Commands:";
   print_endline "  cr-amount-commitment M N2 Q BETA CK C BITS  Build the amount residual commitment";
@@ -2983,6 +3404,10 @@ let run_command cmd args =
   | "ct-balance-bigint-fs-challenges" -> cmd_ct_balance_bigint_fs_challenges args
   | "ct-balance-bigint-prove" -> cmd_ct_balance_bigint_prove args
   | "ct-balance-bigint-verify" -> cmd_ct_balance_bigint_verify args
+  | "ct-range-bigint-fs-fields" -> cmd_ct_range_bigint_fs_fields args
+  | "ct-range-bigint-fs-challenges" -> cmd_ct_range_bigint_fs_challenges args
+  | "ct-range-bigint-prove" -> cmd_ct_range_bigint_prove args
+  | "ct-range-bigint-verify" -> cmd_ct_range_bigint_verify args
   | "cr-amount-commitment" -> cmd_cr_amount_commitment args
   | "cr-prove" -> cmd_cr_prove args
   | "cr-verify" -> cmd_cr_verify args

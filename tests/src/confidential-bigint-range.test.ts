@@ -117,7 +117,7 @@ describe('Confidential range BigInt vectors', () => {
     const sdk = await import(pathToFileURL(typeScriptEntry).href);
     expect(vectors.version).toBe(1);
     expect(vectors.algorithm).toBe('SHA3-256-counter-mode-low-bit');
-    expect(vectors.status).toBe('typescript-reference-only');
+    expect(vectors.status).toBe('typescript-reference-with-native-preview-parity');
     expect(vectors.transcript.dst).toBe('ISABELLA-CT-FS-v1');
     expect(vectors.transcript.domain).toBe(2001);
     expect(vectors.params.k).toBe(64);

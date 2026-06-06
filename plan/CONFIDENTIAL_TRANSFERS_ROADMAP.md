@@ -87,12 +87,14 @@ benchmarks are independently checked.
   q-sized commitment-key entries, canonical bignum transcript fields, a
   128-round proof, and OCaml/Haskell multiprecision preview parity commands.
 - `tests/fixtures/confidential-bigint-range-vectors.json` now pins a q83
-  TypeScript BigInt confidential-range reference path with `k = 64`, including
-  the `2^64 * beta` amount witness bound that drives the q83 runtime-integer
-  blocker.
+  confidential-range reference path with `k = 64`, including the
+  `2^64 * beta` amount witness bound that drives the q83 runtime-integer
+  blocker, and OCaml/Haskell multiprecision preview commands rebuild and verify
+  its compact proof commitment.
   These are concrete progress on widened execution semantics, but they are not
-  launch parity: native range multiprecision parity, full native launch
-  integration, and every widened transaction/runtime integer field remain open.
+  launch parity: the preview commands are not production APIs, full native
+  launch integration and every widened transaction/runtime integer field remain
+  open.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
   assumptions for HVZK, narrower programmed-schedule HVZK assumptions, and a
@@ -334,10 +336,11 @@ additionally exceeds those limits at the modulus itself. Production for these
 parameters therefore needs BigInt or multiprecision proof arithmetic across
 TypeScript, OCaml, and Haskell. The balance slice now has a q83 BigInt
 reference vector with OCaml/Haskell multiprecision preview parity, and the range
-slice now has a q83 `k = 64` TypeScript BigInt reference vector, but production
-still needs native range multiprecision parity, full native launch parity,
-canonical bignum serialization for every proof API and transaction/runtime
-integer field that can carry widened values, and regenerated parity vectors.
+slice now has a q83 `k = 64` BigInt reference vector with OCaml/Haskell
+multiprecision preview parity, but production still needs full native launch
+parity, canonical bignum serialization for every proof API and
+transaction/runtime integer field that can carry widened values, and regenerated
+parity vectors.
 External estimator evidence alone is not enough to
 mark the candidate launchable.
 

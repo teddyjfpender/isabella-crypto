@@ -35,14 +35,22 @@
       "ct-balance-bigint-fs-fields",
       "ct-balance-bigint-fs-challenges",
       "ct-balance-bigint-prove",
-      "ct-balance-bigint-verify"
+      "ct-balance-bigint-verify",
+      "ct-range-bigint-fs-fields",
+      "ct-range-bigint-fs-challenges",
+      "ct-range-bigint-prove",
+      "ct-range-bigint-verify"
     ],
     "ocamlPreviewCommands": [
       "ct-balance-bigint-rand-commit",
       "ct-balance-bigint-fs-fields",
       "ct-balance-bigint-fs-challenges",
       "ct-balance-bigint-prove",
-      "ct-balance-bigint-verify"
+      "ct-balance-bigint-verify",
+      "ct-range-bigint-fs-fields",
+      "ct-range-bigint-fs-challenges",
+      "ct-range-bigint-prove",
+      "ct-range-bigint-verify"
     ],
     "scaffoldCommands": [
       "ct-member-prove",

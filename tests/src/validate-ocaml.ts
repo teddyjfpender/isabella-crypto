@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -76,6 +77,7 @@ const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
   : path.join(projectRoot, 'isabella.ts', 'dist', 'index.mjs');
 const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
 const bigintBalanceVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-balance-vectors.json');
+const bigintRangeVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bigint-range-vectors.json');
 
 function ensureFileExists(filePath: string, hint: string): void {
   if (!fs.existsSync(filePath)) {
@@ -98,6 +100,15 @@ const bignumVectors = JSON.parse(fs.readFileSync(bignumVectorsPath, 'utf8')) as 
 
 type SampleOpening = { msg: number[]; rand: number[] };
 type BigintBalanceProofJson = { as: string[][]; zs: string[][] };
+type DecimalOpening = { msg: string[]; rand: string[] };
+type BigintRangeProofJson = {
+  bits: string[][];
+  comps: string[][];
+  amountAs: string[][];
+  amountZs: string[][];
+  pairAss: string[][][];
+  pairZss: string[][][];
+};
 
 function expectOcamlCommandRejected(args: string[], label: string): void {
   const output = runCli(args);
@@ -125,6 +136,32 @@ function integerVecText(values: string[]): string {
 
 function integerMatText(rows: string[][]): string {
   return `[${rows.map(integerVecText).join(',')}]`;
+}
+
+function integerCubeText(cubes: string[][][]): string {
+  return `[${cubes.map(integerMatText).join(',')}]`;
+}
+
+function rangeProofDigest(proof: BigintRangeProofJson): { digest: string; bytes: number } {
+  const canonical = JSON.stringify(proof);
+  return {
+    digest: createHash('sha3-256').update(canonical).digest('hex'),
+    bytes: Buffer.byteLength(canonical, 'utf8'),
+  };
+}
+
+function rangeAmountMask(round: number): string[] {
+  return [
+    (BigInt((round + 1) % 11) - 5n).toString(),
+    (4n - BigInt((round * 3 + 1) % 9)).toString(),
+  ];
+}
+
+function rangePairMask(round: number, bit: number): string[] {
+  return [
+    (BigInt((round + bit + 7) % 11) - 5n).toString(),
+    (4n - BigInt((round * 3 + bit + 7) % 9)).toString(),
+  ];
 }
 
 function allBounded(values: number[], bound: number): boolean {
@@ -178,6 +215,34 @@ const bigintBalanceVectors = JSON.parse(fs.readFileSync(bigintBalanceVectorsPath
     commitment: string[];
     masks: string[][];
     proof: BigintBalanceProofJson;
+  };
+};
+
+const bigintRangeVectors = JSON.parse(fs.readFileSync(bigintRangeVectorsPath, 'utf8')) as {
+  status: string;
+  params: { m: number; n2: number; q: string; beta: string; gamma: string; k: number };
+  transcript: { fields: string[]; firstRounds: Array<{ round: number; challenge: number }> };
+  proofCommitment: {
+    digest: string;
+    canonicalJsonBytes: number;
+    amountRows: number;
+    pairRounds: number;
+    pairRowsPerRound: number;
+    sample: {
+      firstAmountAnnouncement: string[];
+      firstAmountResponse: string[];
+      firstPairAnnouncement: string[];
+      firstPairResponse: string[];
+    };
+  };
+  case: {
+    name: string;
+    commitmentKey: string[][];
+    amount: string;
+    amountOpening: DecimalOpening;
+    amountCommitment: string[];
+    bitOpenings: DecimalOpening[];
+    compOpenings: DecimalOpening[];
   };
 };
 
@@ -271,6 +336,127 @@ assert.equal(
   `ct-balance-bigint-verify OCaml rejects tampered q83 commitment for ${bigintBalanceVectors.case.name}`
 );
 console.log('validate-ocaml: confidential BigInt balance q83 preview surface passed');
+
+const bigRangeParamsArgs = [
+  bigintRangeVectors.params.m.toString(),
+  bigintRangeVectors.params.n2.toString(),
+  bigintRangeVectors.params.q,
+  bigintRangeVectors.params.beta,
+];
+const bigRangeGamma = bigintRangeVectors.params.gamma;
+const bigRangeK = bigintRangeVectors.params.k.toString();
+const bigRangeCommitmentKey = integerMatText(bigintRangeVectors.case.commitmentKey);
+const bigRangeAmountCommitment = integerVecText(bigintRangeVectors.case.amountCommitment);
+const bigRangeAmountRand = integerVecText(bigintRangeVectors.case.amountOpening.rand);
+const bigRangeBits = integerVecText(bigintRangeVectors.case.bitOpenings.map((entry) => entry.msg[0]));
+const bigRangeBitRands = integerMatText(bigintRangeVectors.case.bitOpenings.map((entry) => entry.rand));
+const bigRangeComps = integerVecText(bigintRangeVectors.case.compOpenings.map((entry) => entry.msg[0]));
+const bigRangeCompRands = integerMatText(bigintRangeVectors.case.compOpenings.map((entry) => entry.rand));
+const bigRangeAmountMasks = Array.from(
+  { length: bigintRangeVectors.transcript.firstRounds.length === 0 ? 128 : bigintRangeVectors.proofCommitment.amountRows },
+  (_, round) => rangeAmountMask(round)
+);
+const bigRangePairMasks = Array.from({ length: bigintRangeVectors.proofCommitment.pairRounds }, (_, round) =>
+  Array.from({ length: bigintRangeVectors.params.k }, (_, bit) => rangePairMask(round, bit))
+);
+const bigRangeAmountMasksText = integerMatText(bigRangeAmountMasks);
+const bigRangePairMasksText = integerCubeText(bigRangePairMasks);
+
+assert.equal(bigintRangeVectors.status, 'typescript-reference-with-native-preview-parity');
+const bigRangeProof = parseCliResult<{ result: BigintRangeProofJson }>(runCli([
+  'ct-range-bigint-prove',
+  ...bigRangeParamsArgs,
+  bigRangeGamma,
+  bigRangeK,
+  bigRangeCommitmentKey,
+  bigRangeAmountCommitment,
+  bigintRangeVectors.case.amount,
+  bigRangeAmountRand,
+  bigRangeBits,
+  bigRangeBitRands,
+  bigRangeComps,
+  bigRangeCompRands,
+  bigRangeAmountMasksText,
+  bigRangePairMasksText,
+])).result;
+const bigRangeProofDigest = rangeProofDigest(bigRangeProof);
+assert.equal(bigRangeProofDigest.digest, bigintRangeVectors.proofCommitment.digest);
+assert.equal(bigRangeProofDigest.bytes, bigintRangeVectors.proofCommitment.canonicalJsonBytes);
+assert.equal(bigRangeProof.amountAs.length, bigintRangeVectors.proofCommitment.amountRows);
+assert.equal(bigRangeProof.pairAss.length, bigintRangeVectors.proofCommitment.pairRounds);
+assert.equal(bigRangeProof.pairAss[0].length, bigintRangeVectors.proofCommitment.pairRowsPerRound);
+assert.deepEqual(bigRangeProof.amountAs[0], bigintRangeVectors.proofCommitment.sample.firstAmountAnnouncement);
+assert.deepEqual(bigRangeProof.amountZs[0], bigintRangeVectors.proofCommitment.sample.firstAmountResponse);
+assert.deepEqual(bigRangeProof.pairAss[0][0], bigintRangeVectors.proofCommitment.sample.firstPairAnnouncement);
+assert.deepEqual(bigRangeProof.pairZss[0][0], bigintRangeVectors.proofCommitment.sample.firstPairResponse);
+assert.deepEqual(
+  parseCliResult<{ result: string[] }>(runCli([
+    'ct-range-bigint-fs-fields',
+    bigRangeCommitmentKey,
+    bigRangeAmountCommitment,
+    integerMatText(bigRangeProof.bits),
+    integerMatText(bigRangeProof.comps),
+    integerMatText(bigRangeProof.amountAs),
+    integerCubeText(bigRangeProof.pairAss),
+  ])).result,
+  bigintRangeVectors.transcript.fields,
+  `ct-range-bigint-fs-fields OCaml/fixture parity for ${bigintRangeVectors.case.name}`
+);
+assert.deepEqual(
+  parseCliResult<{ result: number[] }>(runCli([
+    'ct-range-bigint-fs-challenges',
+    ...bigRangeParamsArgs,
+    bigRangeCommitmentKey,
+    bigRangeAmountCommitment,
+    integerMatText(bigRangeProof.bits),
+    integerMatText(bigRangeProof.comps),
+    integerMatText(bigRangeProof.amountAs),
+    integerCubeText(bigRangeProof.pairAss),
+    bigintRangeVectors.transcript.firstRounds.length.toString(),
+  ])).result,
+  bigintRangeVectors.transcript.firstRounds.map((entry) => entry.challenge),
+  `ct-range-bigint-fs-challenges OCaml/fixture parity for ${bigintRangeVectors.case.name}`
+);
+assert.equal(
+  parseCliResult<{ result: boolean }>(runCli([
+    'ct-range-bigint-verify',
+    ...bigRangeParamsArgs,
+    bigRangeGamma,
+    bigRangeK,
+    bigRangeCommitmentKey,
+    bigRangeAmountCommitment,
+    integerMatText(bigRangeProof.bits),
+    integerMatText(bigRangeProof.comps),
+    integerMatText(bigRangeProof.amountAs),
+    integerMatText(bigRangeProof.amountZs),
+    integerCubeText(bigRangeProof.pairAss),
+    integerCubeText(bigRangeProof.pairZss),
+  ])).result,
+  true,
+  `ct-range-bigint-verify OCaml accepts ${bigintRangeVectors.case.name}`
+);
+assert.equal(
+  parseCliResult<{ result: boolean }>(runCli([
+    'ct-range-bigint-verify',
+    ...bigRangeParamsArgs,
+    bigRangeGamma,
+    bigRangeK,
+    bigRangeCommitmentKey,
+    integerVecText([
+      (BigInt(bigintRangeVectors.case.amountCommitment[0]) + 1n).toString(),
+      ...bigintRangeVectors.case.amountCommitment.slice(1),
+    ]),
+    integerMatText(bigRangeProof.bits),
+    integerMatText(bigRangeProof.comps),
+    integerMatText(bigRangeProof.amountAs),
+    integerMatText(bigRangeProof.amountZs),
+    integerCubeText(bigRangeProof.pairAss),
+    integerCubeText(bigRangeProof.pairZss),
+  ])).result,
+  false,
+  `ct-range-bigint-verify OCaml rejects tampered q83 amount commitment for ${bigintRangeVectors.case.name}`
+);
+console.log('validate-ocaml: confidential BigInt range q83 preview surface passed');
 
 const modCenteredCases = [
   { x: 7, q: 5 },
