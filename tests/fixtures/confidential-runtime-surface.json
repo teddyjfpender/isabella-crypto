@@ -11,6 +11,8 @@
       "ct-merkle-root",
       "ct-merkle-member-prove",
       "ct-merkle-member-verify",
+      "ct-bignum-encode",
+      "ct-bignum-vector-encode",
       "ct-transaction-context",
       "ct-merkle-proof-digest",
       "ct-merkle-envelope-digest",
@@ -59,6 +61,8 @@
       "ctMerkleRoot",
       "ctMerkleMemberProve",
       "ctMerkleMemberVerify",
+      "ctBignumEncode",
+      "ctBignumVectorEncode",
       "ctTransactionContext",
       "ctWalletProofRequestDigest",
       "ctProveScaffold",
@@ -78,6 +82,14 @@
   "typescriptSdk": {
     "file": "isabella.ts/src/index.ts",
     "namespaces": {
+      "ConfidentialBignum": [
+        "encodeInteger",
+        "encodeIntegerHex",
+        "encodeIntegerVector",
+        "encodeIntegerVectorHex",
+        "digestInteger",
+        "digestIntegerVector"
+      ],
       "ConfidentialSampling": [
         "boundedInt",
         "intVector",
@@ -136,6 +148,8 @@
       "ct-merkle-root",
       "ct-merkle-member-prove",
       "ct-merkle-member-verify",
+      "ct-bignum-encode",
+      "ct-bignum-vector-encode",
       "ct-transaction-context",
       "ct-wallet-proof-request-digest",
       "ct-sample-opening",
@@ -161,6 +175,8 @@
       "ct-merkle-root",
       "ct-merkle-member-prove",
       "ct-merkle-member-verify",
+      "ct-bignum-encode",
+      "ct-bignum-vector-encode",
       "ct-transaction-context",
       "ct-wallet-proof-request-digest",
       "ct-sample-opening",

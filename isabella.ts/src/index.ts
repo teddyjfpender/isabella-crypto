@@ -1034,6 +1034,10 @@ const CT_TRANSACTION_TAGS = {
   walletProofRequest: 3,
   acceptedRootWindow: 4,
 } as const;
+const CT_BIGNUM_DST = 'ISABELLA-CT-BIGNUM-v1';
+const CT_BIGNUM_ENCODING = 'sign_u8 || len_i64_le || magnitude_le_minimal';
+
+export type ConfidentialBigIntInput = bigint | number | string;
 
 function assertSafeI64(value: number, label: string): void {
   if (!Number.isSafeInteger(value)) {
@@ -1077,6 +1081,51 @@ function encodeI64LE(value: number, label: string): Buffer {
   const out = Buffer.alloc(8);
   out.writeBigInt64LE(BigInt(value), 0);
   return out;
+}
+
+function normalizeConfidentialBigInt(value: ConfidentialBigIntInput, label: string): bigint {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    assertSafeI64(value, label);
+    return BigInt(value);
+  }
+  if (typeof value === 'string') {
+    if (!/^(0|-?[1-9][0-9]*)$/.test(value)) {
+      throw new Error(`${label} must be a canonical decimal integer`);
+    }
+    return BigInt(value);
+  }
+  throw new Error(`${label} must be bigint, number, or canonical decimal string`);
+}
+
+function encodeConfidentialBigInt(value: ConfidentialBigIntInput, label: string): Buffer {
+  const normalized = normalizeConfidentialBigInt(value, label);
+  const negative = normalized < 0n;
+  let magnitude = negative ? -normalized : normalized;
+  const bytes: number[] = [];
+  while (magnitude > 0n) {
+    bytes.push(Number(magnitude & 0xffn));
+    magnitude >>= 8n;
+  }
+  assertNonNegativeSafeI64(bytes.length, `${label}.magnitude_length`);
+  return Buffer.concat([
+    Buffer.from([negative ? 1 : 0]),
+    encodeI64LE(bytes.length, `${label}.magnitude_length`),
+    Buffer.from(bytes),
+  ]);
+}
+
+function encodeConfidentialBigIntVector(
+  values: readonly ConfidentialBigIntInput[],
+  label: string
+): Buffer {
+  assertNonNegativeSafeI64(values.length, `${label}.length`);
+  return Buffer.concat([
+    encodeI64LE(values.length, `${label}.length`),
+    ...values.map((value, index) => encodeConfidentialBigInt(value, `${label}[${index}]`)),
+  ]);
 }
 
 function encodeIntVector(values: IntVec, label: string): Buffer {
@@ -2004,6 +2053,42 @@ export namespace Dilithium {
  * sampling. They are runtime conveniences for mask generation; callers still
  * pass the sampled masks into the checked proof APIs.
  */
+export namespace ConfidentialBignum {
+  export const dst = CT_BIGNUM_DST;
+  export const integerEncoding = CT_BIGNUM_ENCODING;
+  export const vectorEncoding = 'len_i64_le || bignum...';
+
+  export function encodeInteger(value: ConfidentialBigIntInput): Uint8Array {
+    return Uint8Array.from(encodeConfidentialBigInt(value, 'value'));
+  }
+
+  export function encodeIntegerHex(value: ConfidentialBigIntInput): string {
+    return encodeConfidentialBigInt(value, 'value').toString('hex');
+  }
+
+  export function encodeIntegerVector(values: readonly ConfidentialBigIntInput[]): Uint8Array {
+    return Uint8Array.from(encodeConfidentialBigIntVector(values, 'values'));
+  }
+
+  export function encodeIntegerVectorHex(values: readonly ConfidentialBigIntInput[]): string {
+    return encodeConfidentialBigIntVector(values, 'values').toString('hex');
+  }
+
+  export function digestInteger(value: ConfidentialBigIntInput): MerkleDigest {
+    return sha3Hex(Buffer.concat([
+      Buffer.from(CT_BIGNUM_DST, 'ascii'),
+      encodeConfidentialBigInt(value, 'value'),
+    ]));
+  }
+
+  export function digestIntegerVector(values: readonly ConfidentialBigIntInput[]): MerkleDigest {
+    return sha3Hex(Buffer.concat([
+      Buffer.from(CT_BIGNUM_DST, 'ascii'),
+      encodeConfidentialBigIntVector(values, 'values'),
+    ]));
+  }
+}
+
 export namespace ConfidentialSampling {
   /**
    * Sample uniformly from the centered interval [-bound, bound].

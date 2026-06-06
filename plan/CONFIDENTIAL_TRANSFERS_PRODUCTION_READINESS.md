@@ -28,6 +28,13 @@ Normal CI treats it as an honesty gate; strict launch/release mode fails until
 the manifest permits production claims, the parameter screen is ready, and no
 launch blocker remains open.
 
+The canonical bignum codec target now has a vector fixture at
+`tests/fixtures/confidential-bignum-vectors.json` and TypeScript/OCaml/Haskell
+parity commands for `ct-bignum-encode` and `ct-bignum-vector-encode`. This is
+progress on the runtime integer blocker, not closure: the production
+transaction/proof transcript surfaces still use signed-64-bit integers until
+the codec is integrated there and all vectors/benchmarks are regenerated.
+
 ## Current Stabilization Commands
 
 Use this target before treating a confidential-transfer branch as review-ready:

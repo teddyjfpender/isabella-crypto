@@ -102,9 +102,17 @@
       "id": "runtime_bignum_representation",
       "category": "implementation_boundary",
       "status": "open",
-      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number and signed-64-bit runtime representation.",
+      "summary": "The q83 candidate clears the formal modulus precondition but exceeds the current TypeScript number and signed-64-bit runtime representation. A standalone canonical bignum codec now has TypeScript/OCaml/Haskell parity vectors, but the transaction/proof transcript surfaces still need to consume it.",
       "acceptanceGate": "Move the production proof/transcript/runtime integer surface to canonical bignum serialization across TypeScript, OCaml, and Haskell, regenerate vectors, and re-run benchmarks.",
       "evidence": [
+        {
+          "file": "tests/fixtures/confidential-bignum-vectors.json",
+          "snippets": [
+            "ISABELLA-CT-BIGNUM-v1",
+            "q83-modulus",
+            "Existing transaction/proof transcript surfaces still use signed-64-bit integers"
+          ]
+        },
         {
           "file": "bench/data/confidential-parameter-screen.json",
           "snippets": [

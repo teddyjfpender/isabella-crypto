@@ -19,6 +19,8 @@ import {
   cbValidResponse,
   cbValidWitness,
   cbVerify,
+  ctBignumEncode,
+  ctBignumVectorEncode,
   ctMemberProve,
   ctMemberVerify,
   ctMerkleEmpty,
@@ -72,6 +74,7 @@ const projectRoot = process.env.ISABELLA_PROJECT_ROOT
 const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
   ? path.resolve(process.env.ISABELLA_TS_ENTRY)
   : path.join(projectRoot, 'isabella.ts', 'dist', 'index.mjs');
+const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
 
 function ensureFileExists(filePath: string, hint: string): void {
   if (!fs.existsSync(filePath)) {
@@ -86,6 +89,11 @@ async function loadSdk() {
 
 const sdk = await loadSdk();
 const trace = process.env.ISABELLA_VALIDATE_TRACE === '1';
+const bignumVectors = JSON.parse(fs.readFileSync(bignumVectorsPath, 'utf8')) as {
+  scalarCases: Array<{ name: string; decimal: string; encodedHex: string; digest: string }>;
+  vectorCases: Array<{ name: string; decimals: string[]; encodedHex: string; digest: string }>;
+  rejectedDecimals: string[];
+};
 
 type SampleOpening = { msg: number[]; rand: number[] };
 
@@ -117,6 +125,36 @@ function logProgress(message: string): void {
   if (trace) {
     console.log(message);
   }
+}
+
+for (const entry of bignumVectors.scalarCases) {
+  assert.equal(
+    ctBignumEncode(entry.decimal),
+    entry.encodedHex,
+    `ct-bignum-encode OCaml/fixture parity for ${entry.name}`
+  );
+  assert.equal(
+    sdk.ConfidentialBignum.encodeIntegerHex(entry.decimal),
+    entry.encodedHex,
+    `ct-bignum-encode TypeScript/fixture parity for ${entry.name}`
+  );
+}
+
+for (const entry of bignumVectors.vectorCases) {
+  assert.equal(
+    ctBignumVectorEncode(entry.decimals),
+    entry.encodedHex,
+    `ct-bignum-vector-encode OCaml/fixture parity for ${entry.name}`
+  );
+  assert.equal(
+    sdk.ConfidentialBignum.encodeIntegerVectorHex(entry.decimals),
+    entry.encodedHex,
+    `ct-bignum-vector-encode TypeScript/fixture parity for ${entry.name}`
+  );
+}
+
+for (const decimal of bignumVectors.rejectedDecimals) {
+  expectOcamlCommandRejected(['ct-bignum-encode', decimal], `ct-bignum-encode OCaml rejects ${decimal}`);
 }
 
 const modCenteredCases = [

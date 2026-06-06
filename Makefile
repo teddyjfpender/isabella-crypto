@@ -185,6 +185,8 @@ check-confidential-production-readiness:
 test-confidential-production: check-formalization build-cool ocaml haskell typescript
 	@echo "Generating confidential transcript vectors..."
 	@node scripts/generate_confidential_transcript_vectors.mjs
+	@echo "Generating confidential bignum vectors..."
+	@node scripts/generate_confidential_bignum_vectors.mjs
 	@echo "Generating confidential Merkle vectors..."
 	@node scripts/generate_confidential_merkle_vectors.mjs
 	@echo "Generating confidential transaction context vectors..."
@@ -199,6 +201,8 @@ test-confidential-production: check-formalization build-cool ocaml haskell types
 	@python3 scripts/check_confidential_scaffold_quarantine.py
 	@echo "Running confidential transcript vector tests..."
 	@cd tests && bun test confidential-transcript
+	@echo "Running confidential bignum vector tests..."
+	@cd tests && bun test confidential-bignum
 	@echo "Running confidential CSPRNG sampling tests..."
 	@cd tests && bun test confidential-sampling
 	@echo "Running confidential Merkle vector tests..."

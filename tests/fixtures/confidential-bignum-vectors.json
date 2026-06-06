@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "algorithm": "canonical-signed-magnitude-little-endian",
+  "dst": "ISABELLA-CT-BIGNUM-v1",
+  "integerEncoding": "sign_u8 || len_i64_le || magnitude_le_minimal",
+  "vectorEncoding": "len_i64_le || bignum...",
+  "notes": [
+    "This fixture defines the production bignum codec target for widened confidential-transfer parameters.",
+    "Existing transaction/proof transcript surfaces still use signed-64-bit integers until the bignum codec is integrated there."
+  ],
+  "scalarCases": [
+    {
+      "name": "zero",
+      "decimal": "0",
+      "encodedHex": "000000000000000000",
+      "digest": "24c446a85b5d16469f7fa61fbb70b8348d7af1d1e465e90deefa3043a1ae65ae"
+    },
+    {
+      "name": "one",
+      "decimal": "1",
+      "encodedHex": "00010000000000000001",
+      "digest": "4524766871ada7d78dfe54684ad33f09fa4e3b3952189d3c128b61695e13622f"
+    },
+    {
+      "name": "minus-one",
+      "decimal": "-1",
+      "encodedHex": "01010000000000000001",
+      "digest": "8d0251975319fea9962290f71597e10b92ef3d99a7e310b1f9ec91176af89dcc"
+    },
+    {
+      "name": "byte-boundary-255",
+      "decimal": "255",
+      "encodedHex": "000100000000000000ff",
+      "digest": "87164c9665ef4b3ed79b22b2c8c8f2297eee850c32ee9f6906be1087096c231e"
+    },
+    {
+      "name": "byte-boundary-256",
+      "decimal": "256",
+      "encodedHex": "0002000000000000000001",
+      "digest": "cc58fd653aeb46f196fc7ce7a53aa2bf833e13551af44d480d07f84357153ff8"
+    },
+    {
+      "name": "minus-byte-boundary-256",
+      "decimal": "-256",
+      "encodedHex": "0102000000000000000001",
+      "digest": "0aee83ce3b7a3b65d066cc20708830231e36037d88ecacdfbb9fbabdcdfff645"
+    },
+    {
+      "name": "typescript-max-safe",
+      "decimal": "9007199254740991",
+      "encodedHex": "000700000000000000ffffffffffff1f",
+      "digest": "cc4f77720b0dd72e73be9e53d9b7261a2c585d1123354082fa774ea5813e8587"
+    },
+    {
+      "name": "minus-typescript-max-safe",
+      "decimal": "-9007199254740991",
+      "encodedHex": "010700000000000000ffffffffffff1f",
+      "digest": "5b1c2c1fe68c12f4f194515f194057217f7bd8657789cab80f5148753dcdee2e"
+    },
+    {
+      "name": "q83-modulus",
+      "decimal": "4835703278458516765933661",
+      "encodedHex": "000b000000000000005d00000400000000000004",
+      "digest": "bd567edb27c3f64e0a9689f26e8c8ce14509e5d52f68cc7c5a0676cd10eee7ec"
+    },
+    {
+      "name": "largest-sis-bound",
+      "decimal": "2417851639229258382966784",
+      "encodedHex": "000b000000000000000000000200000000000002",
+      "digest": "b34a24953711e92f164cfdf25ebd68186103a456be76be7384471d9e25f48356"
+    },
+    {
+      "name": "minus-largest-sis-bound",
+      "decimal": "-2417851639229258382966784",
+      "encodedHex": "010b000000000000000000000200000000000002",
+      "digest": "bb4c7bd35cb5fbaa309f75fa67f87d8a5efb0b73724b68f14aeb8caf69f02ed8"
+    },
+    {
+      "name": "range-extracted-response",
+      "decimal": "1208925819614629208260608",
+      "encodedHex": "000b000000000000000000000200000000000001",
+      "digest": "1f72193800de94ddba225c3f3e3c8fc763b64a3c135b6f4bc19cde9e870a0d50"
+    }
+  ],
+  "vectorCases": [
+    {
+      "name": "empty",
+      "decimals": [],
+      "encodedHex": "0000000000000000",
+      "digest": "2d15a93e3132bc33c8d11209befcb21d86720b28a500b11fd71d658dc1e3b798"
+    },
+    {
+      "name": "small-mixed",
+      "decimals": [
+        "0",
+        "1",
+        "-1",
+        "255",
+        "256",
+        "-256"
+      ],
+      "encodedHex": "06000000000000000000000000000000000001000000000000000101010000000000000001000100000000000000ff00020000000000000000010102000000000000000001",
+      "digest": "0ef371289796bfd186ad46b600feb7d21a677d4cad3a22fabd31aa6940ae9366"
+    },
+    {
+      "name": "q83-runtime-blocker",
+      "decimals": [
+        "4835703278458516765933661",
+        "2417851639229258382966784",
+        "-2417851639229258382966784",
+        "1208925819614629208260608"
+      ],
+      "encodedHex": "0400000000000000000b000000000000005d00000400000000000004000b000000000000000000000200000000000002010b000000000000000000000200000000000002000b000000000000000000000200000000000001",
+      "digest": "72efb06b7e9752ffe393630e95fe59913f2d2403fa919bd2c2caa2853316d395"
+    }
+  ],
+  "rejectedDecimals": [
+    "",
+    "+1",
+    "-0",
+    "00",
+    "01",
+    "-01",
+    "1.0",
+    " 1",
+    "1 "
+  ]
+}

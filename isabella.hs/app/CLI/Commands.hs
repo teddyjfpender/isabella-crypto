@@ -65,6 +65,8 @@ runCommand format cmd args = case cmd of
     "ct-merkle-root" -> cmdCtMerkleRoot format args
     "ct-merkle-member-prove" -> cmdCtMerkleMemberProve format args
     "ct-merkle-member-verify" -> cmdCtMerkleMemberVerify format args
+    "ct-bignum-encode" -> cmdCtBignumEncode format args
+    "ct-bignum-vector-encode" -> cmdCtBignumVectorEncode format args
     "ct-transaction-context" -> cmdCtTransactionContext format args
     "ct-merkle-proof-digest" -> cmdCtMerkleProofDigest format args
     "ct-merkle-envelope-digest" -> cmdCtMerkleEnvelopeDigest format args
@@ -122,6 +124,11 @@ parseCanonicalInt s = do
     value <- parseCanonicalRead s
     if safeProtocolInt value then Just value else Nothing
 
+parseCanonicalInteger :: String -> Maybe Integer
+parseCanonicalInteger s = do
+    value <- readMaybe s
+    if show (value :: Integer) == s then Just value else Nothing
+
 parseCanonicalVec :: String -> Maybe [Int]
 parseCanonicalVec s = do
     value <- parseCanonicalRead s
@@ -161,6 +168,38 @@ parseCanonicalBoolVec01 s =
     toBool 0 = Just False
     toBool 1 = Just True
     toBool _ = Nothing
+
+bignumHexByte :: Int -> String
+bignumHexByte byte =
+    let alphabet = "0123456789abcdef"
+        hi = (byte `div` 16) `mod` 16
+        lo = byte `mod` 16
+     in [alphabet !! hi, alphabet !! lo]
+
+bignumMagnitudeLeBytes :: Integer -> [Int]
+bignumMagnitudeLeBytes 0 = []
+bignumMagnitudeLeBytes value =
+    fromInteger (value `mod` 256) : bignumMagnitudeLeBytes (value `div` 256)
+
+bignumLengthLeBytes :: Int -> [Int]
+bignumLengthLeBytes value =
+    [ (value `div` (256 ^ i)) `mod` 256
+    | i <- [0 :: Int .. 7]
+    ]
+
+encodeBignumInteger :: Integer -> [Int]
+encodeBignumInteger value =
+    let negative = value < 0
+        magnitude = bignumMagnitudeLeBytes (abs value)
+        sign = if negative then 1 else 0
+     in sign : bignumLengthLeBytes (length magnitude) ++ magnitude
+
+encodeBignumIntegerVector :: [Integer] -> [Int]
+encodeBignumIntegerVector values =
+    bignumLengthLeBytes (length values) ++ concatMap encodeBignumInteger values
+
+bignumHex :: [Int] -> String
+bignumHex = concatMap bignumHexByte
 
 parseStringList :: String -> Maybe [String]
 parseStringList = readMaybe
@@ -1258,6 +1297,24 @@ cmdCtMerkleMemberVerify format [ledgerStr, commitmentStr] =
         _ -> outputError format "Expected ledger matrix and commitment vector"
 cmdCtMerkleMemberVerify format _ =
     outputUsage format "Usage: ct-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
+
+cmdCtBignumEncode :: OutputFormat -> [String] -> IO ()
+cmdCtBignumEncode format [valueStr] =
+    case parseCanonicalInteger valueStr of
+        Just value ->
+            outputStringResult format "ct_bignum_encode = " $
+                bignumHex (encodeBignumInteger value)
+        Nothing -> outputError format "Expected canonical decimal integer"
+cmdCtBignumEncode format _ =
+    outputUsage format "Usage: ct-bignum-encode INTEGER"
+
+cmdCtBignumVectorEncode :: OutputFormat -> [String] -> IO ()
+cmdCtBignumVectorEncode format valueStrs =
+    case traverse parseCanonicalInteger valueStrs of
+        Just values ->
+            outputStringResult format "ct_bignum_vector_encode = " $
+                bignumHex (encodeBignumIntegerVector values)
+        Nothing -> outputError format "Expected canonical decimal integers"
 
 cmdCtTransactionContext :: OutputFormat -> [String] -> IO ()
 cmdCtTransactionContext format

@@ -72,6 +72,14 @@ benchmarks are independently checked.
   Fiat-Shamir, Merkle, and transaction-envelope domains/tags. The
   `scripts/check_confidential_domain_registry.py` gate checks uniqueness and
   fixture/source agreement across OCaml, Haskell, TypeScript, and generators.
+- `tests/fixtures/confidential-bignum-vectors.json` now defines the canonical
+  signed arbitrary-precision integer codec target for widened confidential
+  parameters: `sign_u8 || len_i64_le || magnitude_le_minimal`. TypeScript,
+  OCaml, and Haskell expose matching `ct-bignum-encode` /
+  `ct-bignum-vector-encode` parity surfaces, including the q83 modulus and the
+  current largest SIS response bound. This is a codec target only; the
+  transaction/proof transcript surfaces still need to consume it before the
+  runtime bignum blocker can close.
 - `Confidential_Transaction.thy` now states concrete extractor-correctness
   predicates for balance/range/nullifier soundness, explicit simulator
   assumptions for HVZK, narrower programmed-schedule HVZK assumptions, and a

@@ -315,6 +315,11 @@ jobs:
           node scripts/generate_confidential_transcript_vectors.mjs
           git diff --exit-code -- tests/fixtures/confidential-transcript-vectors.json
 
+      - name: Check confidential bignum vectors
+        run: |
+          node scripts/generate_confidential_bignum_vectors.mjs
+          git diff --exit-code -- tests/fixtures/confidential-bignum-vectors.json
+
       - name: Check confidential Merkle vectors
         run: |
           node scripts/generate_confidential_merkle_vectors.mjs

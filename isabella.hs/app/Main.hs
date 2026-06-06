@@ -75,6 +75,8 @@ showHelp = do
     putStrLn "  ct-merkle-root LEDGER        Compute cryptographic Merkle root"
     putStrLn "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof"
     putStrLn "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof"
+    putStrLn "  ct-bignum-encode INTEGER     Encode a canonical signed arbitrary-precision integer"
+    putStrLn "  ct-bignum-vector-encode INTS... Encode canonical signed arbitrary-precision integers"
     putStrLn "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2"
     putStrLn "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes"
     putStrLn "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes"

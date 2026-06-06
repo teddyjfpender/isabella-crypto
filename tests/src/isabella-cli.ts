@@ -2021,3 +2021,19 @@ export function ctVerifyMerkleEnvelope(
   ]);
   return parseCliBool(output);
 }
+
+export type BigIntCliInput = string | number | bigint;
+
+function cliBigIntText(value: BigIntCliInput): string {
+  return value.toString();
+}
+
+export function ctBignumEncode(value: BigIntCliInput): string {
+  const output = runCli(['ct-bignum-encode', cliBigIntText(value)]);
+  return parseCliResult<{ result: string }>(output).result;
+}
+
+export function ctBignumVectorEncode(values: BigIntCliInput[]): string {
+  const output = runCli(['ct-bignum-vector-encode', ...values.map(cliBigIntText)]);
+  return parseCliResult<{ result: string }>(output).result;
+}

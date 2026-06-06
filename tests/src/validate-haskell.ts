@@ -28,6 +28,7 @@ const haskellDir = process.env.ISABELLA_HASKELL_DIR
 const typeScriptEntry = process.env.ISABELLA_TS_ENTRY
   ? path.resolve(process.env.ISABELLA_TS_ENTRY)
   : path.join(projectRoot, 'isabella.ts', 'dist', 'index.mjs');
+const bignumVectorsPath = path.join(projectRoot, 'tests/fixtures/confidential-bignum-vectors.json');
 const ghcFallbackBinary = path.join('/tmp', `isabella-hs-validate-cli-${process.pid}`);
 const ghcFallbackBuildDir = path.join('/tmp', `isabella-hs-validate-build-${process.pid}`);
 let cachedHaskellCli: string | null | undefined;
@@ -237,6 +238,41 @@ function runHaskell(args: string[]): string {
 }
 
 const sdk = await loadSdk();
+const bignumVectors = JSON.parse(fs.readFileSync(bignumVectorsPath, 'utf8')) as {
+  scalarCases: Array<{ name: string; decimal: string; encodedHex: string; digest: string }>;
+  vectorCases: Array<{ name: string; decimals: string[]; encodedHex: string; digest: string }>;
+  rejectedDecimals: string[];
+};
+
+for (const entry of bignumVectors.scalarCases) {
+  assert.equal(
+    parseResult<string>(runHaskell(['ct-bignum-encode', entry.decimal])),
+    entry.encodedHex,
+    `ct-bignum-encode Haskell/fixture parity for ${entry.name}`
+  );
+  assert.equal(
+    sdk.ConfidentialBignum.encodeIntegerHex(entry.decimal),
+    entry.encodedHex,
+    `ct-bignum-encode TypeScript/fixture parity for ${entry.name}`
+  );
+}
+
+for (const entry of bignumVectors.vectorCases) {
+  assert.equal(
+    parseResult<string>(runHaskell(['ct-bignum-vector-encode', ...entry.decimals])),
+    entry.encodedHex,
+    `ct-bignum-vector-encode Haskell/fixture parity for ${entry.name}`
+  );
+  assert.equal(
+    sdk.ConfidentialBignum.encodeIntegerVectorHex(entry.decimals),
+    entry.encodedHex,
+    `ct-bignum-vector-encode TypeScript/fixture parity for ${entry.name}`
+  );
+}
+
+for (const decimal of bignumVectors.rejectedDecimals) {
+  expectHaskellCommandRejected(['ct-bignum-encode', decimal], `ct-bignum-encode Haskell rejects ${decimal}`);
+}
 
 const modCenteredCases = [
   { x: 7, q: 5 },

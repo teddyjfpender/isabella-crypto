@@ -181,6 +181,82 @@ let parse_canonical_bool_vec01 s =
     loop [] values
   | _ -> None
 
+let is_decimal_digit c =
+  c >= '0' && c <= '9'
+
+let canonical_bignum_parts label value =
+  let len = String.length value in
+  if len = 0 then invalid_arg (label ^ " must be a canonical decimal integer");
+  let negative, first =
+    if value.[0] = '-' then
+      if len = 1 then invalid_arg (label ^ " must be a canonical decimal integer")
+      else (true, 1)
+    else if value.[0] = '+' then
+      invalid_arg (label ^ " must be a canonical decimal integer")
+    else (false, 0)
+  in
+  for index = first to len - 1 do
+    if not (is_decimal_digit value.[index]) then
+      invalid_arg (label ^ " must be a canonical decimal integer")
+  done;
+  if len - first > 1 && value.[first] = '0' then
+    invalid_arg (label ^ " must be a canonical decimal integer");
+  if negative && value.[first] = '0' then
+    invalid_arg (label ^ " must be a canonical decimal integer");
+  (negative, String.sub value first (len - first))
+
+let decimal_divmod_256 digits =
+  let carry = ref 0 in
+  let quotient = Buffer.create (String.length digits) in
+  let started = ref false in
+  String.iter
+    (fun c ->
+       let value = (!carry * 10) + (Char.code c - Char.code '0') in
+       let q = value / 256 in
+       let r = value mod 256 in
+       if q <> 0 || !started then begin
+         Buffer.add_char quotient (Char.chr (Char.code '0' + q));
+         started := true
+       end;
+       carry := r)
+    digits;
+  let q = if Buffer.length quotient = 0 then "0" else Buffer.contents quotient in
+  (q, !carry)
+
+let bignum_magnitude_le_bytes digits =
+  let rec loop current acc =
+    if current = "0" then List.rev acc
+    else
+      let quotient, remainder = decimal_divmod_256 current in
+      loop quotient (remainder :: acc)
+  in
+  loop digits []
+
+let bignum_length_le_bytes value =
+  let rec loop remaining count acc =
+    if count = 0 then List.rev acc
+    else loop (remaining / 256) (count - 1) ((remaining mod 256) :: acc)
+  in
+  loop value 8 []
+
+let encode_bignum_decimal label value =
+  let negative, digits = canonical_bignum_parts label value in
+  let magnitude = bignum_magnitude_le_bytes digits in
+  let sign = if negative then 1 else 0 in
+  [sign]
+  @ bignum_length_le_bytes (List.length magnitude)
+  @ magnitude
+
+let encode_bignum_decimal_vec values =
+  bignum_length_le_bytes (List.length values)
+  @ List.concat
+      (List.mapi
+         (fun index value -> encode_bignum_decimal (Printf.sprintf "values[%d]" index) value)
+         values)
+
+let hex_of_bytes bytes =
+  String.concat "" (List.map (Printf.sprintf "%02x") bytes)
+
 let json_of_cb_params params =
   Printf.sprintf
     "{\"n1\":%d,\"n2\":%d,\"m\":%d,\"q\":%d,\"beta\":%d}"
@@ -1269,6 +1345,17 @@ let cmd_ct_merkle_member_verify args =
      | _ -> output_error "Expected ledger matrix and commitment vector")
   | _ -> output_error "Usage: ct-merkle-member-verify \"[[commitment],...]\" \"[commitment]\""
 
+let cmd_ct_bignum_encode args =
+  match args with
+  | [value] ->
+    (try output_string_result "ct_bignum_encode" (hex_of_bytes (encode_bignum_decimal "value" value))
+     with Invalid_argument msg -> output_error msg)
+  | _ -> output_error "Usage: ct-bignum-encode INTEGER"
+
+let cmd_ct_bignum_vector_encode args =
+  try output_string_result "ct_bignum_vector_encode" (hex_of_bytes (encode_bignum_decimal_vec args))
+  with Invalid_argument msg -> output_error msg
+
 let cmd_ct_transaction_context args =
   match args with
   | [protocol_version_str; network_id; asset_id_str; ledger_epoch_str; root; root_depth_str;
@@ -2240,6 +2327,8 @@ let show_help () =
   print_endline "  ct-merkle-root LEDGER        Compute cryptographic Merkle root";
   print_endline "  ct-merkle-member-prove LEDGER C   Build cryptographic Merkle membership proof";
   print_endline "  ct-merkle-member-verify LEDGER C  Verify cryptographic Merkle membership proof";
+  print_endline "  ct-bignum-encode INTEGER     Encode a canonical signed arbitrary-precision integer";
+  print_endline "  ct-bignum-vector-encode INTS... Encode canonical signed arbitrary-precision integers";
   print_endline "  ct-transaction-context VERSION NETWORK ASSET EPOCH ROOT ROOT_DEPTH FEE C1 C2 C3 C4 NF1 NF2";
   print_endline "  ct-merkle-proof-digest ... Hash canonical Merkle transaction proof bytes";
   print_endline "  ct-merkle-envelope-digest ... Hash canonical context digest and proof digest bytes";
@@ -2343,6 +2432,8 @@ let run_command cmd args =
   | "ct-merkle-root" -> cmd_ct_merkle_root args
   | "ct-merkle-member-prove" -> cmd_ct_merkle_member_prove args
   | "ct-merkle-member-verify" -> cmd_ct_merkle_member_verify args
+  | "ct-bignum-encode" -> cmd_ct_bignum_encode args
+  | "ct-bignum-vector-encode" -> cmd_ct_bignum_vector_encode args
   | "ct-transaction-context" -> cmd_ct_transaction_context args
   | "ct-merkle-proof-digest" -> cmd_ct_merkle_proof_digest args
   | "ct-merkle-envelope-digest" -> cmd_ct_merkle_envelope_digest args
