@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isabelle/HOL Proof Optimisation"
+  short_description: "Speed up and harden Isabelle/HOL proofs"
+  default_prompt: "Use $isabelle-hol-proof-optimisation to optimize this Isabelle/HOL proof hotspot for speed and robustness while preserving semantics."

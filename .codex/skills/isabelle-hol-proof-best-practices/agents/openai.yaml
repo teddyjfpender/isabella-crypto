@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isabelle/HOL Proof Best Practices"
+  short_description: "Write short, robust Isabelle/HOL proofs"
+  default_prompt: "Use $isabelle-hol-proof-best-practices to rewrite Isabelle/HOL proofs to be shorter, readable, and robust under library changes."

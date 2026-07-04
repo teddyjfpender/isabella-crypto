@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isabelle/HOL Build + Codegen Optimisation"
+  short_description: "Profile build and optimize code generation"
+  default_prompt: "Use $isabelle-hol-build-and-codegen-optimisation to profile Isabelle/HOL build hotspots, tune parallel settings, and optimize code generation/runtime evaluation choices."

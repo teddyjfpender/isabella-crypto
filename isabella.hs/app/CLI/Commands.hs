@@ -13,7 +13,7 @@ import qualified Canon.Dilithium as Dilithium
 import qualified Canon.Listvec as Listvec
 import qualified Canon.ZK.Internal.RepeatedFS as RepeatedFS
 import qualified Canon.Zq as Zq
-import Data.Bits ((.&.))
+import Data.Bits ((.&.), shiftL)
 import Data.Char (ord)
 import Data.List (findIndex, intercalate, sort, zip4)
 import Data.Word (Word8)
@@ -93,6 +93,7 @@ runCommand format cmd args = case cmd of
     "ct-bignum-merkle-member-prove" -> cmdCtBignumMerkleMemberProve format args
     "ct-bignum-merkle-member-verify" -> cmdCtBignumMerkleMemberVerify format args
     "ct-bignum-prove-merkle" -> cmdCtBignumProveMerkle format args
+    "ct-bignum-wallet-prove-merkle" -> cmdCtBignumWalletProveMerkle format args
     "ct-bignum-transaction-context" -> cmdCtBignumTransactionContext format args
     "ct-bignum-merkle-proof-digest" -> cmdCtBignumMerkleProofDigest format args
     "ct-bignum-merkle-envelope-digest" -> cmdCtBignumMerkleEnvelopeDigest format args

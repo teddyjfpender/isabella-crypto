@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isabelle/HOL Library Discovery"
+  short_description: "Find existing Isabelle/HOL libraries fast"
+  default_prompt: "Use $isabelle-hol-library-discovery to find existing Isabelle/HOL definitions, lemmas, and sessions before implementing anything new."
